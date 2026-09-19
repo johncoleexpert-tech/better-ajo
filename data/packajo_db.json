@@ -1,0 +1,3331 @@
+{
+  "profiles": [
+    {
+      "id": "user_2",
+      "full_name": "Babajide Ogundimu",
+      "phone": "08098765432",
+      "bank_name": "Access Bank",
+      "account_number": "0691234567",
+      "verification_type": "NIN",
+      "verification_number": "11223344556",
+      "created_at": "2026-08-31T18:02:59.901Z",
+      "email": "babajide@example.com",
+      "role": "MEMBER"
+    },
+    {
+      "id": "user_admin_demo",
+      "full_name": "Chidinma Eze",
+      "phone": "08012345678",
+      "email": "chidinma@example.com",
+      "bank_name": "First Bank of Nigeria",
+      "account_number": "3012345678",
+      "verification_type": "BVN",
+      "verification_number": "22334455667",
+      "created_at": "2026-08-28T18:02:59.901Z",
+      "role": "GROUP_ADMIN",
+      "password": "Password123!"
+    },
+    {
+      "full_name": "Akinyele Paul",
+      "phone": "08069702566",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "79086754321",
+      "id": "usr_1788382012410_urddl",
+      "created_at": "2026-09-02T20:46:52.410Z",
+      "role": "MEMBER"
+    },
+    {
+      "full_name": "Adewale Test User",
+      "phone": "08199990001",
+      "bank_name": "Guaranty Trust Bank",
+      "account_number": "0123456789",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "id": "usr_1788383254809_7ztqt",
+      "created_at": "2026-09-02T21:07:34.809Z",
+      "role": "MEMBER"
+    },
+    {
+      "full_name": "Chioma Adeyemi",
+      "phone": "08022223344",
+      "bank_name": "Zenith Bank",
+      "account_number": "2081234567",
+      "verification_type": "BVN",
+      "verification_number": "22334455667",
+      "email": "chioma@example.com",
+      "id": "usr_1788383267693_m5jh2",
+      "created_at": "2026-09-02T21:07:47.693Z",
+      "role": "MEMBER"
+    },
+    {
+      "full_name": "Yetunde Akinyele",
+      "phone": "08152100808",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "98765423156",
+      "id": "usr_1788436105038_ld9tb",
+      "created_at": "2026-09-03T11:48:25.038Z",
+      "role": "GROUP_ADMIN"
+    },
+    {
+      "full_name": "Lololadrbola",
+      "phone": "08069702580",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702577",
+      "verification_type": "NIN",
+      "verification_number": "89076543219",
+      "id": "usr_1788622347795_0pl9y",
+      "created_at": "2026-09-05T15:32:27.795Z",
+      "role": "GROUP_ADMIN"
+    },
+    {
+      "full_name": "Mobolape ojo",
+      "phone": "08069702581",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702567",
+      "verification_type": "NIN",
+      "verification_number": "90765432180",
+      "id": "usr_1788622719654_fpet7",
+      "created_at": "2026-09-05T15:38:39.654Z",
+      "role": "MEMBER"
+    },
+    {
+      "full_name": "Nonolboy",
+      "phone": "08069702582",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "80776655443",
+      "id": "usr_1788623015525_o63fx",
+      "created_at": "2026-09-05T15:43:35.525Z",
+      "role": "MEMBER"
+    },
+    {
+      "full_name": "Test Member 1",
+      "phone": "08011111111",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "role": "MEMBER",
+      "id": "usr_1788866653157_993d4",
+      "created_at": "2026-09-08T11:24:13.157Z"
+    },
+    {
+      "full_name": "Group Admin",
+      "phone": "08033333333",
+      "bank_name": "Zenith Bank",
+      "account_number": "1122334455",
+      "verification_type": "NIN",
+      "verification_number": "11223344556",
+      "role": "GROUP_ADMIN",
+      "id": "usr_1788866653157_dyvk6",
+      "created_at": "2026-09-08T11:24:13.157Z"
+    },
+    {
+      "full_name": "Test Member 2",
+      "phone": "08022222222",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "verification_type": "BVN",
+      "verification_number": "98765432109",
+      "role": "MEMBER",
+      "id": "usr_1788866653157_mn993",
+      "created_at": "2026-09-08T11:24:13.157Z"
+    },
+    {
+      "full_name": "Hacker User",
+      "phone": "08099998888",
+      "bank_name": "Test Bank",
+      "account_number": "1234567890",
+      "verification_type": "NIN",
+      "verification_number": "00000000000",
+      "role": "MEMBER",
+      "id": "usr_1788866674652_u2nnm",
+      "created_at": "2026-09-08T11:24:34.652Z"
+    },
+    {
+      "full_name": "Group Admin User",
+      "phone": "08036774920",
+      "bank_name": "Zenith Bank",
+      "account_number": "1122334455",
+      "verification_type": "NIN",
+      "verification_number": "11223344556",
+      "role": "GROUP_ADMIN",
+      "id": "usr_1788866774921_2g8b9",
+      "created_at": "2026-09-08T11:26:14.921Z"
+    },
+    {
+      "full_name": "Test Contributor 2",
+      "phone": "08026774920",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "verification_type": "BVN",
+      "verification_number": "98765432109",
+      "role": "MEMBER",
+      "id": "usr_1788866774921_4spg8",
+      "created_at": "2026-09-08T11:26:14.921Z"
+    },
+    {
+      "full_name": "Test Contributor 1",
+      "phone": "08016774920",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "role": "MEMBER",
+      "id": "usr_1788866774921_9jvfv",
+      "created_at": "2026-09-08T11:26:14.921Z"
+    },
+    {
+      "full_name": "Hacker User",
+      "phone": "08096774920",
+      "bank_name": "Test Bank",
+      "account_number": "1234567890",
+      "verification_type": "NIN",
+      "verification_number": "00000000000",
+      "role": "MEMBER",
+      "id": "usr_1788866774950_tudv9",
+      "created_at": "2026-09-08T11:26:14.950Z"
+    },
+    {
+      "full_name": "Admin",
+      "phone": "08036779956",
+      "bank_name": "Zenith",
+      "account_number": "1234567890",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "role": "GROUP_ADMIN",
+      "id": "usr_1788866779956_s2441",
+      "created_at": "2026-09-08T11:26:19.957Z"
+    },
+    {
+      "full_name": "User 2",
+      "phone": "08026779956",
+      "bank_name": "GTBank",
+      "account_number": "1234567892",
+      "verification_type": "BVN",
+      "verification_number": "12345678903",
+      "role": "MEMBER",
+      "id": "usr_1788866779957_58k4n",
+      "created_at": "2026-09-08T11:26:19.957Z"
+    },
+    {
+      "full_name": "User 1",
+      "phone": "08016779956",
+      "bank_name": "Access",
+      "account_number": "1234567891",
+      "verification_type": "NIN",
+      "verification_number": "12345678902",
+      "role": "MEMBER",
+      "id": "usr_1788866779957_ye6n4",
+      "created_at": "2026-09-08T11:26:19.957Z"
+    },
+    {
+      "full_name": "Test Contributor 1",
+      "phone": "08016791240",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "role": "MEMBER",
+      "id": "usr_1788866791240_u0kkq",
+      "created_at": "2026-09-08T11:26:31.240Z"
+    },
+    {
+      "full_name": "Group Admin User",
+      "phone": "08036791240",
+      "bank_name": "Zenith Bank",
+      "account_number": "1122334455",
+      "verification_type": "NIN",
+      "verification_number": "11223344556",
+      "role": "GROUP_ADMIN",
+      "id": "usr_1788866791241_dlyxz",
+      "created_at": "2026-09-08T11:26:31.241Z"
+    },
+    {
+      "full_name": "Test Contributor 2",
+      "phone": "08026791240",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "verification_type": "BVN",
+      "verification_number": "98765432109",
+      "role": "MEMBER",
+      "id": "usr_1788866791241_feyyw",
+      "created_at": "2026-09-08T11:26:31.241Z"
+    },
+    {
+      "full_name": "Hacker User",
+      "phone": "08096791240",
+      "bank_name": "Test Bank",
+      "account_number": "1234567890",
+      "verification_type": "NIN",
+      "verification_number": "00000000000",
+      "role": "MEMBER",
+      "id": "usr_1788866791270_xask5",
+      "created_at": "2026-09-08T11:26:31.270Z"
+    },
+    {
+      "id": "usr_superadmin_08154267469",
+      "full_name": "Super Administrator",
+      "phone": "08154267469",
+      "email": "superadmin@packajo.ng",
+      "bank_name": "Guaranty Trust Bank (GTB)",
+      "account_number": "0123456789",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "role": "SUPER_ADMIN",
+      "created_at": "2026-08-01T00:00:00.000Z",
+      "password": "admin123"
+    },
+    {
+      "full_name": "Chidi Okafor",
+      "email": "chidi@packajo.ng",
+      "password": "password123",
+      "phone": "08099989230",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "verification_type": "BVN",
+      "verification_number": "12345678901",
+      "role": "MEMBER",
+      "id": "usr_1789718974920_cc4xe",
+      "created_at": "2026-09-18T08:09:34.920Z"
+    },
+    {
+      "full_name": "Emeka Obi",
+      "phone": "08010001567",
+      "bank_name": "Zenith Bank",
+      "account_number": "1234567890",
+      "verification_type": "BVN",
+      "verification_number": "22334455667",
+      "email": "emeka@packajo.ng",
+      "password": "password123",
+      "role": "MEMBER",
+      "id": "usr_1789719007770_pk1wp",
+      "created_at": "2026-09-18T08:10:07.770Z"
+    },
+    {
+      "full_name": "KOLA OYEWO",
+      "phone": "08029623685",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "77889900452",
+      "email": "olalekanpodcast@gmail.com",
+      "password": "199999",
+      "role": "MEMBER",
+      "id": "usr_1789719435722_ym18a",
+      "created_at": "2026-09-18T08:17:15.722Z"
+    },
+    {
+      "full_name": "oMOLADE FUNMI",
+      "phone": "08025581179",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "88664433112",
+      "email": "realheavenict@gmail.com",
+      "password": "199999",
+      "role": "GROUP_ADMIN",
+      "id": "usr_1789719734281_ij90z",
+      "created_at": "2026-09-18T08:22:14.281Z"
+    },
+    {
+      "full_name": "OLAMIDE KUNLE",
+      "phone": "08099560129",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "99887766445",
+      "email": "olamidekunle1@gmail.com",
+      "password": "199999",
+      "role": "MEMBER",
+      "id": "usr_1789719966454_iwksc",
+      "created_at": "2026-09-18T08:26:06.454Z"
+    },
+    {
+      "full_name": "FUNMILAYO OJO",
+      "phone": "08085764072",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "verification_type": "NIN",
+      "verification_number": "77665544331",
+      "email": "funmiojo@gmail.com",
+      "password": "199999",
+      "role": "MEMBER",
+      "id": "usr_1789720111954_buxv5",
+      "created_at": "2026-09-18T08:28:31.954Z"
+    }
+  ],
+  "personal_ajo": [
+    {
+      "id": "pajo_1788382012410_su2t",
+      "user_id": "usr_1788382012410_urddl",
+      "balance": 95000,
+      "total_deposited": 200000,
+      "total_withdrawn": 105000,
+      "status": "pending_fee",
+      "created_at": "2026-09-02T20:46:52.410Z"
+    },
+    {
+      "id": "pajo_1788383254809_1mqw",
+      "user_id": "usr_1788383254809_7ztqt",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "active",
+      "created_at": "2026-09-02T21:07:34.809Z"
+    },
+    {
+      "id": "pajo_1788383267693_5vxd",
+      "user_id": "usr_1788383267693_m5jh2",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "pending_fee",
+      "created_at": "2026-09-02T21:07:47.693Z"
+    },
+    {
+      "id": "pajo_1788383294740_wl2l",
+      "user_id": "user_2",
+      "balance": 12000,
+      "total_deposited": 20000,
+      "total_withdrawn": 8000,
+      "status": "active",
+      "created_at": "2026-09-02T21:08:14.740Z"
+    },
+    {
+      "id": "pajo_1788866674653_5ag7",
+      "user_id": "usr_1788866653157_993d4",
+      "balance": 50000,
+      "total_deposited": 50000,
+      "total_withdrawn": 0,
+      "status": "active",
+      "created_at": "2026-09-08T11:24:34.653Z"
+    },
+    {
+      "id": "pajo_1788866774950_j6cx",
+      "user_id": "usr_1788866774921_9jvfv",
+      "balance": 50000,
+      "total_deposited": 50000,
+      "total_withdrawn": 0,
+      "status": "active",
+      "created_at": "2026-09-08T11:26:14.950Z"
+    },
+    {
+      "id": "pajo_1788866791270_009o",
+      "user_id": "usr_1788866791240_u0kkq",
+      "balance": 50000,
+      "total_deposited": 50000,
+      "total_withdrawn": 0,
+      "status": "active",
+      "created_at": "2026-09-08T11:26:31.270Z"
+    },
+    {
+      "id": "pajo_1789719435744_or8x",
+      "user_id": "usr_1789719435722_ym18a",
+      "balance": 0,
+      "total_deposited": 100000,
+      "total_withdrawn": 100000,
+      "status": "active",
+      "created_at": "2026-09-18T08:17:15.744Z"
+    }
+  ],
+  "groups": [
+    {
+      "id": "grp_1788436105228_mu8o",
+      "admin_id": "usr_1788436105038_ld9tb",
+      "admin_name": "Yetunde Akinyele",
+      "group_name": "Widow Ajo",
+      "member_limit": 5,
+      "contribution_amount": 50000,
+      "cycle_type": "Every 3 Days",
+      "packing_amount": 250000,
+      "packing_fee": 2000,
+      "group_code": "PAK-NPTX2",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-09-03T11:48:25.228Z",
+      "withdrawalFee": 2000,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788622347979_71p3",
+      "admin_id": "usr_1788622347795_0pl9y",
+      "admin_name": "Lololadrbola",
+      "group_name": "Figure two",
+      "member_limit": 2,
+      "contribution_amount": 50000,
+      "cycle_type": "Every 3 Days",
+      "packing_amount": 100000,
+      "packing_fee": 3000,
+      "group_code": "PAK-T3X3Y",
+      "status": "active",
+      "current_round": 2,
+      "created_at": "2026-09-05T15:32:27.979Z",
+      "withdrawalFee": 3000,
+      "currentRound": 2,
+      "round_started_at": "2026-09-21T12:00:00.000Z",
+      "roundStartedAt": "2026-09-21T12:00:00.000Z",
+      "nextPackDate": "2026-09-21",
+      "next_packing_date": "2026-09-21"
+    },
+    {
+      "id": "grp_1788866653157_q75p",
+      "admin_id": "usr_1788866653157_dyvk6",
+      "admin_name": "Group Admin",
+      "group_name": "Security Test Thrift",
+      "member_limit": 2,
+      "contribution_amount": 10000,
+      "cycle_type": "Daily",
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "group_code": "PAK-VR7B2",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:24:13.157Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866674625_77cd",
+      "admin_id": "usr_1788866653157_dyvk6",
+      "admin_name": "Group Admin",
+      "group_name": "Security Test Thrift",
+      "member_limit": 2,
+      "contribution_amount": 10000,
+      "cycle_type": "Daily",
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "group_code": "PAK-J34ZK",
+      "status": "active",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:24:34.625Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866674651_wjma",
+      "admin_id": "usr_1788866653157_dyvk6",
+      "admin_name": "Group Admin",
+      "group_name": "Fee Test Thrift",
+      "member_limit": 3,
+      "contribution_amount": 5000,
+      "cycle_type": "Daily",
+      "packing_amount": 15000,
+      "packing_fee": 500,
+      "group_code": "PAK-3PVEC",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:24:34.651Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866774922_tudi",
+      "admin_id": "usr_1788866774921_2g8b9",
+      "admin_name": "Group Admin User",
+      "group_name": "Security Suite Group 1788866774920",
+      "member_limit": 2,
+      "contribution_amount": 10000,
+      "cycle_type": "Daily",
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "group_code": "PAK-F3DH5",
+      "status": "active",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:26:14.922Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866774949_gnwp",
+      "admin_id": "usr_1788866774921_2g8b9",
+      "admin_name": "Group Admin User",
+      "group_name": "Fee Test Thrift 1788866774920",
+      "member_limit": 3,
+      "contribution_amount": 5000,
+      "cycle_type": "Daily",
+      "packing_amount": 15000,
+      "packing_fee": 500,
+      "group_code": "PAK-SF86Q",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:26:14.949Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866779958_5fmd",
+      "admin_id": "usr_1788866779956_s2441",
+      "admin_name": "Admin",
+      "group_name": "E1 Test",
+      "member_limit": 2,
+      "contribution_amount": 10000,
+      "cycle_type": "Daily",
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "group_code": "PAK-FM3TF",
+      "status": "active",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:26:19.958Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866791242_ttyu",
+      "admin_id": "usr_1788866791241_dlyxz",
+      "admin_name": "Group Admin User",
+      "group_name": "Security Suite Group 1788866791240",
+      "member_limit": 2,
+      "contribution_amount": 10000,
+      "cycle_type": "Daily",
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "group_code": "PAK-VXGR6",
+      "status": "active",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:26:31.242Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788866791268_kojj",
+      "admin_id": "usr_1788866791241_dlyxz",
+      "admin_name": "Group Admin User",
+      "group_name": "Fee Test Thrift 1788866791240",
+      "member_limit": 3,
+      "contribution_amount": 5000,
+      "cycle_type": "Daily",
+      "packing_amount": 15000,
+      "packing_fee": 500,
+      "group_code": "PAK-BH4AD",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-09-08T11:26:31.268Z",
+      "withdrawalFee": 500,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1788949183236_jo3b",
+      "admin_id": "usr_test_verification",
+      "admin_name": "Test Group Leader",
+      "group_name": "Thrift Prosperity Circle",
+      "member_limit": 5,
+      "contribution_amount": 5000,
+      "cycle_type": "Every Month",
+      "packing_amount": 25000,
+      "packing_fee": 1000,
+      "group_code": "PAK-FZBK5",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-09-09T10:19:43.236Z",
+      "withdrawalFee": 1000,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_family_demo",
+      "admin_id": "user_admin_demo",
+      "admin_name": "Babatunde Adeleke",
+      "group_name": "Family Monthly Pack",
+      "member_limit": 10,
+      "contribution_amount": 50000,
+      "cycle_type": "Every Month",
+      "packing_amount": 500000,
+      "group_code": "PAK-82K4M",
+      "status": "recruiting",
+      "current_round": 1,
+      "created_at": "2026-08-30T18:02:59.901Z",
+      "packing_fee": 3000,
+      "withdrawalFee": 3000,
+      "currentRound": 1
+    },
+    {
+      "id": "grp_1789719735648_gopg",
+      "admin_id": "usr_1789719734281_ij90z",
+      "admin_name": "oMOLADE FUNMI",
+      "group_name": "KAJOLOWO AJO",
+      "member_limit": 2,
+      "contribution_amount": 50000,
+      "cycle_type": "Every 4 Days",
+      "packing_amount": 100000,
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "group_code": "PAK-6AFJG",
+      "status": "active",
+      "current_round": 1,
+      "currentRound": 1,
+      "created_at": "2026-09-18T08:22:15.648Z",
+      "superAdminRevenue": 667,
+      "groupAdminRevenue": 1333
+    }
+  ],
+  "group_members": [
+    {
+      "id": "mem_1788622719655_1",
+      "group_id": "grp_1788622347979_71p3",
+      "user_id": "usr_1788622719654_fpet7",
+      "full_name": "Mobolape ojo",
+      "phone": "08069702581",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702567",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-09-05T15:38:39.655Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1788623015525_2",
+      "group_id": "grp_1788622347979_71p3",
+      "user_id": "usr_1788623015525_o63fx",
+      "full_name": "Nonolboy",
+      "phone": "08069702582",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-09-05T15:43:35.525Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1788866653158_1",
+      "group_id": "grp_1788866653157_q75p",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-09-08T11:24:13.158Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1788866674625_1",
+      "group_id": "grp_1788866674625_77cd",
+      "user_id": "usr_1788866653157_993d4",
+      "full_name": "Test Member 1",
+      "phone": "08011111111",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "packed",
+      "joined_at": "2026-09-08T11:24:34.625Z",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_1788866674625_2",
+      "group_id": "grp_1788866674625_77cd",
+      "user_id": "usr_1788866653157_mn993",
+      "full_name": "Test Member 2",
+      "phone": "08022222222",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "contributed",
+      "joined_at": "2026-09-08T11:24:34.625Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1788866774922_1",
+      "group_id": "grp_1788866774922_tudi",
+      "user_id": "usr_1788866774921_9jvfv",
+      "full_name": "Test Contributor 1",
+      "phone": "08016774920",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "packed",
+      "joined_at": "2026-09-08T11:26:14.922Z",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_1788866774922_2",
+      "group_id": "grp_1788866774922_tudi",
+      "user_id": "usr_1788866774921_4spg8",
+      "full_name": "Test Contributor 2",
+      "phone": "08026774920",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "contributed",
+      "joined_at": "2026-09-08T11:26:14.922Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1788866779958_1",
+      "group_id": "grp_1788866779958_5fmd",
+      "user_id": "usr_1788866779957_ye6n4",
+      "full_name": "User 1",
+      "phone": "08016779956",
+      "bank_name": "Access",
+      "account_number": "1234567891",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "packed",
+      "joined_at": "2026-09-08T11:26:19.958Z",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_1788866779958_2",
+      "group_id": "grp_1788866779958_5fmd",
+      "user_id": "usr_1788866779957_58k4n",
+      "full_name": "User 2",
+      "phone": "08026779956",
+      "bank_name": "GTBank",
+      "account_number": "1234567892",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "contributed",
+      "joined_at": "2026-09-08T11:26:19.958Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1788866791242_1",
+      "group_id": "grp_1788866791242_ttyu",
+      "user_id": "usr_1788866791240_u0kkq",
+      "full_name": "Test Contributor 1",
+      "phone": "08016791240",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "packed",
+      "joined_at": "2026-09-08T11:26:31.242Z",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_1788866791242_2",
+      "group_id": "grp_1788866791242_ttyu",
+      "user_id": "usr_1788866791241_feyyw",
+      "full_name": "Test Contributor 2",
+      "phone": "08026791240",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "contributed",
+      "joined_at": "2026-09-08T11:26:31.242Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_2",
+      "group_id": "grp_family_demo",
+      "user_id": "user_2",
+      "full_name": "Ngozi Okonjo",
+      "phone": "08098765432",
+      "bank_name": "Guaranty Trust Bank (GTB)",
+      "account_number": "0234567891",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "contributed",
+      "joined_at": "2026-08-31T18:02:59.901Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1789719007771_2",
+      "group_id": "grp_family_demo",
+      "user_id": "usr_1789719007770_pk1wp",
+      "full_name": "Emeka Obi",
+      "phone": "08010001567",
+      "bank_name": "Zenith Bank",
+      "account_number": "1234567890",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-09-18T08:10:07.771Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1789719966456_1",
+      "group_id": "grp_1789719735648_gopg",
+      "user_id": "usr_1789719966454_iwksc",
+      "full_name": "OLAMIDE KUNLE",
+      "phone": "08099560129",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "position": 1,
+      "status": "active",
+      "current_round_status": "packed",
+      "joined_at": "2026-09-18T08:26:06.456Z",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_1789720111956_2",
+      "group_id": "grp_1789719735648_gopg",
+      "user_id": "usr_1789720111954_buxv5",
+      "full_name": "FUNMILAYO OJO",
+      "phone": "08085764072",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "position": 2,
+      "status": "active",
+      "current_round_status": "contributed",
+      "joined_at": "2026-09-18T08:28:31.956Z",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1789722473478_3",
+      "group_id": "grp_family_demo",
+      "user_id": "user_admin_demo",
+      "full_name": "Chidinma Eze",
+      "phone": "08012345678",
+      "bank_name": "First Bank of Nigeria",
+      "account_number": "3012345678",
+      "position": 3,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-09-18T09:07:53.478Z",
+      "hasPackedThisRound": false
+    }
+  ],
+  "contributions": [
+    {
+      "id": "cnt_1788622719655_mem_1788622719655_1",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788622719655_1",
+      "user_id": "usr_1788622719654_fpet7",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "pak_1788865688306_62brjc",
+      "paid_at": "2026-09-08T11:08:13.680Z"
+    },
+    {
+      "id": "cnt_1788623015525_mem_1788623015525_2",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788623015525_2",
+      "user_id": "usr_1788623015525_o63fx",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "pak_1788865803210_3n993x",
+      "paid_at": "2026-09-08T11:10:07.390Z"
+    },
+    {
+      "id": "cnt_1788866653158_mem_1788866653158_1",
+      "group_id": "grp_1788866653157_q75p",
+      "member_id": "mem_1788866653158_1",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Pending"
+    },
+    {
+      "id": "cnt_1788866674625_mem_1788866674625_1",
+      "group_id": "grp_1788866674625_77cd",
+      "member_id": "mem_1788866674625_1",
+      "user_id": "usr_1788866653157_993d4",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-09",
+      "reference": "REF_TEST_E1",
+      "paid_at": "2026-09-09T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1788866674625_mem_1788866674625_2",
+      "group_id": "grp_1788866674625_77cd",
+      "member_id": "mem_1788866674625_2",
+      "user_id": "usr_1788866653157_mn993",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-09",
+      "reference": "REF_TEST_E2",
+      "paid_at": "2026-09-09T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1788866774922_mem_1788866774922_1",
+      "group_id": "grp_1788866774922_tudi",
+      "member_id": "mem_1788866774922_1",
+      "user_id": "usr_1788866774921_9jvfv",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "REF_PAID_M1_1788866774920",
+      "paid_at": "2026-09-08T11:26:14.944Z"
+    },
+    {
+      "id": "cnt_1788866774922_mem_1788866774922_2",
+      "group_id": "grp_1788866774922_tudi",
+      "member_id": "mem_1788866774922_2",
+      "user_id": "usr_1788866774921_4spg8",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "REF_PAID_M2_1788866774920",
+      "paid_at": "2026-09-08T11:26:14.945Z"
+    },
+    {
+      "id": "cnt_1788866779958_mem_1788866779958_1",
+      "group_id": "grp_1788866779958_5fmd",
+      "member_id": "mem_1788866779958_1",
+      "user_id": "usr_1788866779957_ye6n4",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "REF1_1788866779956",
+      "paid_at": "2026-09-08T11:26:19.978Z"
+    },
+    {
+      "id": "cnt_1788866779958_mem_1788866779958_2",
+      "group_id": "grp_1788866779958_5fmd",
+      "member_id": "mem_1788866779958_2",
+      "user_id": "usr_1788866779957_58k4n",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "REF2_1788866779956",
+      "paid_at": "2026-09-08T11:26:19.979Z"
+    },
+    {
+      "id": "cnt_1788866791242_mem_1788866791242_1",
+      "group_id": "grp_1788866791242_ttyu",
+      "member_id": "mem_1788866791242_1",
+      "user_id": "usr_1788866791240_u0kkq",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "REF_PAID_M1_1788866791240",
+      "paid_at": "2026-09-08T11:26:31.263Z"
+    },
+    {
+      "id": "cnt_1788866791242_mem_1788866791242_2",
+      "group_id": "grp_1788866791242_ttyu",
+      "member_id": "mem_1788866791242_2",
+      "user_id": "usr_1788866791241_feyyw",
+      "round_number": 1,
+      "amount": 10000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-08",
+      "reference": "REF_PAID_M2_1788866791240",
+      "paid_at": "2026-09-08T11:26:31.264Z"
+    },
+    {
+      "id": "cnt_2",
+      "group_id": "grp_family_demo",
+      "member_id": "mem_2",
+      "user_id": "user_2",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Paid",
+      "paid_at": "2026-09-01T18:02:59.901Z"
+    },
+    {
+      "id": "cnt_1789250865412_mem_1788622719655_1",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788622719655_1",
+      "user_id": "usr_1788622719654_fpet7",
+      "round_number": 1,
+      "cycle_number": 2,
+      "calendar_date": "2026-09-12",
+      "amount": 50000,
+      "status": "Paid",
+      "reference": "ref_test_idempotent_1789250865393",
+      "paid_at": "2026-09-12T22:07:45.412Z"
+    },
+    {
+      "id": "cnt_1789380523938_mem_1788623015525_2",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788623015525_2",
+      "user_id": "usr_1788623015525_o63fx",
+      "round_number": 1,
+      "cycle_number": 2,
+      "calendar_date": "2026-09-14",
+      "amount": 50000,
+      "status": "Paid",
+      "reference": "pak_1789380522979_x6aa65",
+      "paid_at": "2026-09-14T10:08:43.938Z"
+    },
+    {
+      "member_id": "mem_1788623015525_2",
+      "paid_at": "2026-09-14T10:08:43.245Z",
+      "reference": "pak_1789380522979_x6aa65",
+      "round_number": 1,
+      "amount": 50000,
+      "cycle_number": 2,
+      "calendar_date": "2026-09-14",
+      "group_id": "grp_1788622347979_71p3",
+      "user_id": "usr_1788623015525_o63fx",
+      "id": "cnt_1789380523397_mem_1788623015525_2",
+      "status": "Paid"
+    },
+    {
+      "member_id": "mem_test",
+      "paid_at": "2026-09-12T22:37:28.233Z",
+      "reference": "test_batch_ref_1789252648233",
+      "round_number": 1,
+      "amount": 5000,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-12",
+      "group_id": "grp_test",
+      "user_id": "usr_test",
+      "id": "cnt_test_1789252648233",
+      "status": "Paid"
+    },
+    {
+      "id": "cnt_1789714472419_mem_1788622719655_1_r2",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788622719655_1",
+      "user_id": "usr_1788622719654_fpet7",
+      "round_number": 2,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-21",
+      "amount": 50000,
+      "status": "Pending",
+      "created_at": "2026-09-21T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1789714472419_mem_1788623015525_2_r2",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788623015525_2",
+      "user_id": "usr_1788623015525_o63fx",
+      "round_number": 2,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-21",
+      "amount": 50000,
+      "status": "Pending",
+      "created_at": "2026-09-21T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1789719007771_mem_1789719007771_2",
+      "group_id": "grp_family_demo",
+      "member_id": "mem_1789719007771_2",
+      "user_id": "usr_1789719007770_pk1wp",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Pending"
+    },
+    {
+      "id": "cnt_1789719966456_mem_1789719966456_1",
+      "group_id": "grp_1789719735648_gopg",
+      "member_id": "mem_1789719966456_1",
+      "user_id": "usr_1789719966454_iwksc",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-18",
+      "reference": "pak_1789720227998_ji6mr7",
+      "paid_at": "2026-09-18T08:30:33.611Z"
+    },
+    {
+      "id": "cnt_1789720111956_mem_1789720111956_2",
+      "group_id": "grp_1789719735648_gopg",
+      "member_id": "mem_1789720111956_2",
+      "user_id": "usr_1789720111954_buxv5",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Paid",
+      "cycle_number": 1,
+      "calendar_date": "2026-09-18",
+      "reference": "pak_1789720179491_ukj1w0",
+      "paid_at": "2026-09-18T08:29:44.512Z"
+    },
+    {
+      "id": "cnt_1789722473478_mem_1789722473478_3",
+      "group_id": "grp_family_demo",
+      "member_id": "mem_1789722473478_3",
+      "user_id": "user_admin_demo",
+      "round_number": 1,
+      "amount": 50000,
+      "status": "Pending"
+    }
+  ],
+  "pack_transactions": [
+    {
+      "id": "pck_1788865918132_mem_1788622719655_1",
+      "group_id": "grp_1788622347979_71p3",
+      "member_id": "mem_1788622719655_1",
+      "user_id": "usr_1788622719654_fpet7",
+      "member_name": "Mobolape ojo",
+      "round_number": 1,
+      "packing_amount": 100000,
+      "packing_fee": 3000,
+      "member_amount": 97000,
+      "status": "completed",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702567",
+      "created_at": "2026-09-08T11:11:58.132Z"
+    },
+    {
+      "id": "pck_1788866674649_mem_1788866674625_1",
+      "group_id": "grp_1788866674625_77cd",
+      "member_id": "mem_1788866674625_1",
+      "user_id": "usr_1788866653157_993d4",
+      "member_name": "Test Member 1",
+      "round_number": 1,
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "member_amount": 19500,
+      "status": "completed",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "created_at": "2026-09-09T12:00:00.000Z"
+    },
+    {
+      "id": "pck_1788866774947_mem_1788866774922_1",
+      "group_id": "grp_1788866774922_tudi",
+      "member_id": "mem_1788866774922_1",
+      "user_id": "usr_1788866774921_9jvfv",
+      "member_name": "Test Contributor 1",
+      "round_number": 1,
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "member_amount": 19500,
+      "status": "completed",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "created_at": "2026-09-08T11:26:14.947Z"
+    },
+    {
+      "id": "pck_1788866779982_mem_1788866779958_1",
+      "group_id": "grp_1788866779958_5fmd",
+      "member_id": "mem_1788866779958_1",
+      "user_id": "usr_1788866779957_ye6n4",
+      "member_name": "User 1",
+      "round_number": 1,
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "member_amount": 19500,
+      "status": "completed",
+      "bank_name": "Access",
+      "account_number": "1234567891",
+      "created_at": "2026-09-08T11:26:19.982Z"
+    },
+    {
+      "id": "pck_1788866791266_mem_1788866791242_1",
+      "group_id": "grp_1788866791242_ttyu",
+      "member_id": "mem_1788866791242_1",
+      "user_id": "usr_1788866791240_u0kkq",
+      "member_name": "Test Contributor 1",
+      "round_number": 1,
+      "packing_amount": 20000,
+      "packing_fee": 500,
+      "member_amount": 19500,
+      "status": "completed",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "created_at": "2026-09-08T11:26:31.266Z"
+    },
+    {
+      "member_id": "mem_1788623015525_2",
+      "account_number": "8069702566",
+      "round_number": 1,
+      "packing_fee": 3000,
+      "created_at": "2026-09-14T12:42:46.896Z",
+      "member_name": "Nonolboy",
+      "packing_amount": 100000,
+      "member_amount": 97000,
+      "group_id": "grp_1788622347979_71p3",
+      "user_id": "usr_1788623015525_o63fx",
+      "bank_name": "OPay Digital Services",
+      "id": "pck_1789389766896_mem_1788623015525_2",
+      "status": "completed"
+    },
+    {
+      "id": "pck_1789720297084_mem_1789719966456_1",
+      "group_id": "grp_1789719735648_gopg",
+      "member_id": "mem_1789719966456_1",
+      "user_id": "usr_1789719966454_iwksc",
+      "member_name": "OLAMIDE KUNLE",
+      "round_number": 1,
+      "packing_amount": 100000,
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "member_amount": 98000,
+      "memberPayout": 98000,
+      "status": "completed",
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "created_at": "2026-09-18T08:31:37.084Z"
+    }
+  ],
+  "commissions": [
+    {
+      "id": "com_1788865918132_pck_1788865918132_mem_1788622719655_1",
+      "group_id": "grp_1788622347979_71p3",
+      "pack_transaction_id": "pck_1788865918132_mem_1788622719655_1",
+      "packing_fee": 3000,
+      "admin_amount": 2000,
+      "super_admin_amount": 1000,
+      "created_at": "2026-09-08T11:11:58.132Z",
+      "withdrawalFee": 3000,
+      "groupAdminShare": 2000,
+      "superAdminShare": 1000
+    },
+    {
+      "id": "com_1788866674649_pck_1788866674649_mem_1788866674625_1",
+      "group_id": "grp_1788866674625_77cd",
+      "pack_transaction_id": "pck_1788866674649_mem_1788866674625_1",
+      "packing_fee": 500,
+      "admin_amount": 333,
+      "super_admin_amount": 167,
+      "created_at": "2026-09-09T12:00:00.000Z",
+      "withdrawalFee": 500,
+      "groupAdminShare": 333,
+      "superAdminShare": 167
+    },
+    {
+      "id": "com_1788866774947_pck_1788866774947_mem_1788866774922_1",
+      "group_id": "grp_1788866774922_tudi",
+      "pack_transaction_id": "pck_1788866774947_mem_1788866774922_1",
+      "packing_fee": 500,
+      "admin_amount": 333,
+      "super_admin_amount": 167,
+      "created_at": "2026-09-08T11:26:14.947Z",
+      "withdrawalFee": 500,
+      "groupAdminShare": 333,
+      "superAdminShare": 167
+    },
+    {
+      "id": "com_1788866779982_pck_1788866779982_mem_1788866779958_1",
+      "group_id": "grp_1788866779958_5fmd",
+      "pack_transaction_id": "pck_1788866779982_mem_1788866779958_1",
+      "packing_fee": 500,
+      "admin_amount": 333,
+      "super_admin_amount": 167,
+      "created_at": "2026-09-08T11:26:19.982Z",
+      "withdrawalFee": 500,
+      "groupAdminShare": 333,
+      "superAdminShare": 167
+    },
+    {
+      "id": "com_1788866791266_pck_1788866791266_mem_1788866791242_1",
+      "group_id": "grp_1788866791242_ttyu",
+      "pack_transaction_id": "pck_1788866791266_mem_1788866791242_1",
+      "packing_fee": 500,
+      "admin_amount": 333,
+      "super_admin_amount": 167,
+      "created_at": "2026-09-08T11:26:31.266Z",
+      "withdrawalFee": 500,
+      "groupAdminShare": 333,
+      "superAdminShare": 167
+    },
+    {
+      "pack_transaction_id": "pck_1789389766896_mem_1788623015525_2",
+      "packing_fee": 3000,
+      "group_id": "grp_1788622347979_71p3",
+      "created_at": "2026-09-14T12:42:46.896Z",
+      "id": "com_1789389766896_pck_1789389766896_mem_1788623015525_2",
+      "super_admin_amount": 1000,
+      "admin_amount": 2000,
+      "withdrawalFee": 3000,
+      "groupAdminShare": 2000,
+      "superAdminShare": 1000
+    },
+    {
+      "id": "com_1789720297084_pck_1789720297084_mem_1789719966456_1",
+      "group_id": "grp_1789719735648_gopg",
+      "pack_transaction_id": "pck_1789720297084_mem_1789719966456_1",
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "admin_amount": 1333,
+      "groupAdminShare": 1333,
+      "super_admin_amount": 667,
+      "superAdminShare": 667,
+      "created_at": "2026-09-18T08:31:37.084Z"
+    }
+  ],
+  "withdrawals": [
+    {
+      "id": "wth_1789380473312_78kv",
+      "user_id": "user_2",
+      "withdrawal_type": "personal",
+      "amount": 2000,
+      "fee": 32,
+      "net_amount": 1968,
+      "bank_name": "Access Bank",
+      "account_number": "0691234567",
+      "status": "completed",
+      "created_at": "2026-09-14T10:07:53.312Z"
+    },
+    {
+      "id": "wth_1789380522293_7qfa",
+      "user_id": "user_2",
+      "withdrawal_type": "personal",
+      "amount": 2000,
+      "fee": 32,
+      "net_amount": 1968,
+      "bank_name": "Access Bank",
+      "account_number": "0691234567",
+      "status": "completed",
+      "created_at": "2026-09-14T10:08:42.293Z"
+    },
+    {
+      "id": "wth_1789380541368_p2jr",
+      "user_id": "user_2",
+      "withdrawal_type": "personal",
+      "amount": 2000,
+      "fee": 32,
+      "net_amount": 1968,
+      "bank_name": "Access Bank",
+      "account_number": "0691234567",
+      "status": "completed",
+      "created_at": "2026-09-14T10:09:01.368Z"
+    },
+    {
+      "id": "wth_1789380557943_706r",
+      "user_id": "user_2",
+      "withdrawal_type": "personal",
+      "amount": 2000,
+      "fee": 32,
+      "net_amount": 1968,
+      "bank_name": "Access Bank",
+      "account_number": "0691234567",
+      "status": "completed",
+      "created_at": "2026-09-14T10:09:17.943Z"
+    },
+    {
+      "id": "wth_sa_1789380561726",
+      "user_id": "usr_superadmin_08154267469",
+      "withdrawal_type": "super_admin_revenue",
+      "amount": 1000,
+      "fee": 0,
+      "net_amount": 1000,
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "account_name": "Super Admin Revenue",
+      "status": "completed",
+      "reference": "wth_sa_usr_superadmin_08154267469_100000",
+      "created_at": "2026-09-14T10:09:21.726Z"
+    },
+    {
+      "account_number": "8069702566",
+      "amount": 5000,
+      "user_id": "usr_1788382012410_urddl",
+      "fee": 80,
+      "bank_name": "OPay Digital Services",
+      "created_at": "2026-09-14T12:56:19.735Z",
+      "withdrawal_type": "personal",
+      "id": "wth_1789390579735_19rg",
+      "net_amount": 4920,
+      "status": "completed"
+    },
+    {
+      "account_number": "8069702566",
+      "amount": 100000,
+      "user_id": "usr_1788382012410_urddl",
+      "fee": 1600,
+      "bank_name": "OPay Digital Services",
+      "created_at": "2026-09-14T12:56:50.145Z",
+      "withdrawal_type": "personal",
+      "id": "wth_1789390610145_6tx7",
+      "net_amount": 98400,
+      "status": "completed"
+    },
+    {
+      "account_number": "8069702577",
+      "amount": 4000,
+      "fee": 0,
+      "created_at": "2026-09-14T12:45:31.740Z",
+      "reference": "TRF_1789389929151_ynfuh",
+      "group_id": "grp_1788622347979_71p3",
+      "user_id": "usr_1788622347795_0pl9y",
+      "account_name": "Lololadrbola",
+      "bank_name": "OPay Digital Services",
+      "withdrawal_type": "admin_commission",
+      "id": "wth_grp_1789389931740",
+      "net_amount": 4000,
+      "status": "completed"
+    },
+    {
+      "reference": "wth_sa_1789389703577_ksjly",
+      "account_number": "0123456789",
+      "amount": 4266,
+      "user_id": "usr_superadmin_08154267469",
+      "account_name": "Super Administrator",
+      "fee": 0,
+      "bank_name": "Guaranty Trust Bank (GTB)",
+      "created_at": "2026-09-14T12:41:45.945Z",
+      "withdrawal_type": "super_admin_revenue",
+      "id": "wth_sa_1789389705945",
+      "net_amount": 4266,
+      "status": "completed"
+    },
+    {
+      "id": "wth_sa_1789714414973",
+      "user_id": "usr_superadmin_08154267469",
+      "withdrawal_type": "super_admin_revenue",
+      "amount": 144,
+      "fee": 0,
+      "net_amount": 144,
+      "bank_name": "Guaranty Trust Bank (GTB)",
+      "account_number": "0123456789",
+      "account_name": "Super Administrator",
+      "status": "completed",
+      "reference": "wth_sa_1789714412439_j4ops",
+      "created_at": "2026-09-18T06:53:34.973Z"
+    },
+    {
+      "id": "wth_1789719572877_bjg6",
+      "user_id": "usr_1789719435722_ym18a",
+      "withdrawal_type": "personal",
+      "amount": 50000,
+      "fee": 800,
+      "net_amount": 49200,
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "status": "completed",
+      "created_at": "2026-09-18T08:19:32.877Z"
+    },
+    {
+      "id": "wth_sa_1789720437390",
+      "user_id": "usr_superadmin_08154267469",
+      "withdrawal_type": "super_admin_revenue",
+      "amount": 2125,
+      "fee": 0,
+      "net_amount": 2125,
+      "bank_name": "Guaranty Trust Bank (GTB)",
+      "account_number": "0123456789",
+      "account_name": "Super Administrator",
+      "status": "completed",
+      "reference": "wth_sa_1789720431966_6didy",
+      "created_at": "2026-09-18T08:33:57.390Z"
+    },
+    {
+      "id": "wth_ga_grp_1789719735648_gopg_usr_1789719734281_ij90z_133300",
+      "user_id": "usr_1789719734281_ij90z",
+      "group_id": "grp_1789719735648_gopg",
+      "withdrawal_type": "admin_commission",
+      "amount": 1333,
+      "fee": 0,
+      "net_amount": 1333,
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "account_name": "oMOLADE FUNMI",
+      "status": "completed",
+      "reference": "wth_ga_grp_1789719735648_gopg_usr_1789719734281_ij90z_133300",
+      "created_at": "2026-09-18T08:36:05.025Z"
+    },
+    {
+      "id": "wth_1789808323637_61e0",
+      "user_id": "usr_1789719435722_ym18a",
+      "withdrawal_type": "personal",
+      "amount": 50000,
+      "fee": 800,
+      "net_amount": 49200,
+      "bank_name": "OPay Digital Services",
+      "account_number": "8069702566",
+      "status": "completed",
+      "created_at": "2026-09-19T08:58:43.637Z"
+    }
+  ],
+  "otps": [
+    {
+      "phone": "08069702566",
+      "code": "856559",
+      "purpose": "login",
+      "expires_at": 1789245797067,
+      "attempts": 0
+    },
+    {
+      "phone": "08012345678",
+      "code": "788971",
+      "purpose": "withdrawal",
+      "expires_at": 1789381124139,
+      "attempts": 0
+    },
+    {
+      "phone": "08023456789",
+      "code": "158257",
+      "purpose": "login",
+      "expires_at": 1789386040299,
+      "attempts": 0
+    }
+  ],
+  "payments": [
+    {
+      "id": "pay_1788383255249_y657h",
+      "user_id": "usr_1788383254809_7ztqt",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_1788383254810_8gua08",
+      "status": "success",
+      "created_at": "2026-09-02T21:07:35.249Z",
+      "gateway_response": "Successful (Test Charge)",
+      "updated_at": "2026-09-02T21:07:35.250Z"
+    },
+    {
+      "id": "pay_1788383268104_p3xy2",
+      "user_id": "usr_1788383267693_m5jh2",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_1788383267700_4lytwy",
+      "status": "success",
+      "created_at": "2026-09-02T21:07:48.104Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-02T21:07:48.137Z"
+    },
+    {
+      "id": "pay_1788383295194_ojci8",
+      "user_id": "user_2",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_1788383294748_erbd0t",
+      "status": "success",
+      "created_at": "2026-09-02T21:08:15.194Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-02T21:08:15.224Z"
+    },
+    {
+      "id": "pay_1788865688705_vaoem",
+      "user_id": "usr_1788622719654_fpet7",
+      "purpose": "group_contribution",
+      "amount": 50060,
+      "amount_kobo": 5006000,
+      "currency": "NGN",
+      "reference": "pak_1788865688306_62brjc",
+      "status": "success",
+      "created_at": "2026-09-08T11:08:08.705Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-08T11:08:13.674Z"
+    },
+    {
+      "id": "pay_1788865803672_dkm6i",
+      "user_id": "usr_1788623015525_o63fx",
+      "purpose": "group_contribution",
+      "amount": 50060,
+      "amount_kobo": 5006000,
+      "currency": "NGN",
+      "reference": "pak_1788865803210_3n993x",
+      "status": "success",
+      "created_at": "2026-09-08T11:10:03.672Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-08T11:10:07.389Z"
+    },
+    {
+      "id": "pay_reg_pajo_1788866674653_5ag7",
+      "user_id": "usr_1788866653157_993d4",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_reg_pajo_1788866674653_5ag7",
+      "status": "success",
+      "created_at": "2026-09-08T11:24:34.653Z",
+      "gateway_response": "Successful (Personal Ajo Activation)"
+    },
+    {
+      "id": "pay_reg_pajo_1788866774950_j6cx",
+      "user_id": "usr_1788866774921_9jvfv",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_reg_pajo_1788866774950_j6cx",
+      "status": "success",
+      "created_at": "2026-09-08T11:26:14.950Z",
+      "gateway_response": "Successful (Personal Ajo Activation)"
+    },
+    {
+      "id": "pay_reg_pajo_1788866791270_009o",
+      "user_id": "usr_1788866791240_u0kkq",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_reg_pajo_1788866791270_009o",
+      "status": "success",
+      "created_at": "2026-09-08T11:26:31.270Z",
+      "gateway_response": "Successful (Personal Ajo Activation)"
+    },
+    {
+      "id": "pay_1789380377054_p5cox",
+      "user_id": "user_2",
+      "purpose": "personal_deposit",
+      "amount": 5060,
+      "amount_kobo": 506000,
+      "currency": "NGN",
+      "reference": "pak_1789380376711_0waeiu",
+      "status": "pending",
+      "created_at": "2026-09-14T10:06:17.054Z"
+    },
+    {
+      "id": "pay_1789380392374_gpv0b",
+      "user_id": "user_2",
+      "purpose": "personal_deposit",
+      "amount": 5060,
+      "amount_kobo": 506000,
+      "currency": "NGN",
+      "reference": "pak_1789380392114_wlk5a4",
+      "status": "pending",
+      "created_at": "2026-09-14T10:06:32.374Z"
+    },
+    {
+      "id": "pay_1789380472583_mv4rs",
+      "user_id": "user_2",
+      "purpose": "personal_deposit",
+      "amount": 5060,
+      "amount_kobo": 506000,
+      "currency": "NGN",
+      "reference": "pak_1789380472239_0lal1o",
+      "status": "success",
+      "created_at": "2026-09-14T10:07:52.583Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-14T10:07:52.591Z"
+    },
+    {
+      "id": "pay_1789380520959_8sik5",
+      "user_id": "user_2",
+      "purpose": "personal_deposit",
+      "amount": 5060,
+      "amount_kobo": 506000,
+      "currency": "NGN",
+      "reference": "pak_1789380520566_svjiai",
+      "status": "success",
+      "created_at": "2026-09-14T10:08:40.959Z",
+      "gateway_response": "Successful",
+      "paid_at": "2026-09-14T10:08:40.976Z",
+      "channel": "card",
+      "updated_at": "2026-09-14T10:08:40.976Z"
+    },
+    {
+      "id": "pay_1789380523235_196js",
+      "user_id": "usr_1788623015525_o63fx",
+      "purpose": "group_contribution",
+      "amount": 50060,
+      "amount_kobo": 5006000,
+      "currency": "NGN",
+      "reference": "pak_1789380522979_x6aa65",
+      "status": "success",
+      "created_at": "2026-09-14T10:08:43.235Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-14T10:08:43.936Z",
+      "paid_at": "2026-09-14T10:08:43.245Z",
+      "channel": "card"
+    },
+    {
+      "id": "pay_1789380540004_mdsnn",
+      "user_id": "user_2",
+      "purpose": "personal_deposit",
+      "amount": 5060,
+      "amount_kobo": 506000,
+      "currency": "NGN",
+      "reference": "pak_1789380539738_ahxmtk",
+      "status": "success",
+      "created_at": "2026-09-14T10:09:00.004Z",
+      "gateway_response": "Successful",
+      "paid_at": "2026-09-14T10:09:00.013Z",
+      "channel": "card",
+      "updated_at": "2026-09-14T10:09:00.013Z"
+    },
+    {
+      "id": "pay_1789380557068_xhxue",
+      "user_id": "user_2",
+      "purpose": "personal_deposit",
+      "amount": 5060,
+      "amount_kobo": 506000,
+      "currency": "NGN",
+      "reference": "pak_1789380556781_g8drjm",
+      "status": "success",
+      "created_at": "2026-09-14T10:09:17.068Z",
+      "gateway_response": "Successful",
+      "paid_at": "2026-09-14T10:09:17.076Z",
+      "channel": "card",
+      "updated_at": "2026-09-14T10:09:17.076Z"
+    },
+    {
+      "id": "pay_wth_sa_1789380561726",
+      "user_id": "usr_superadmin_08154267469",
+      "purpose": "Super Admin Revenue Withdrawal",
+      "reference": "wth_sa_usr_superadmin_08154267469_100000",
+      "amount": 1000,
+      "amount_kobo": 100000,
+      "currency": "NGN",
+      "type": "Super Admin Withdrawal",
+      "status": "success",
+      "created_at": "2026-09-14T10:09:21.726Z"
+    },
+    {
+      "reference": "test_batch_ref_1789252648233",
+      "amount": 5060,
+      "purpose": "group_contribution",
+      "user_id": "usr_test",
+      "amount_kobo": 506000,
+      "created_at": "2026-09-12T22:37:28.233Z",
+      "currency": "NGN",
+      "id": "pay_test_1789252648233",
+      "status": "success"
+    },
+    {
+      "reference": "TRF_1789389929151_ynfuh",
+      "amount": 4000,
+      "purpose": "Group Admin Commission Withdrawal",
+      "user_id": "usr_1788622347795_0pl9y",
+      "amount_kobo": 400000,
+      "created_at": "2026-09-14T12:45:31.740Z",
+      "currency": "NGN",
+      "id": "pay_wth_grp_1789389931740",
+      "type": "Group Admin Withdrawal",
+      "status": "success"
+    },
+    {
+      "reference": "wth_sa_1789389703577_ksjly",
+      "amount": 4266,
+      "purpose": "Super Admin Revenue Withdrawal",
+      "user_id": "usr_superadmin_08154267469",
+      "amount_kobo": 426600,
+      "created_at": "2026-09-14T12:41:45.945Z",
+      "currency": "NGN",
+      "id": "pay_wth_sa_1789389705945",
+      "type": "Super Admin Withdrawal",
+      "status": "success"
+    },
+    {
+      "id": "pay_wth_sa_1789714414973",
+      "user_id": "usr_superadmin_08154267469",
+      "purpose": "Super Admin Revenue Withdrawal",
+      "reference": "wth_sa_1789714412439_j4ops",
+      "amount": 144,
+      "amount_kobo": 14400,
+      "currency": "NGN",
+      "type": "Super Admin Withdrawal",
+      "status": "success",
+      "created_at": "2026-09-18T06:53:34.973Z"
+    },
+    {
+      "id": "pay_1789719436230_irpvx",
+      "user_id": "usr_1789719435722_ym18a",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_1789719435747_fubbvy",
+      "status": "success",
+      "created_at": "2026-09-18T08:17:16.230Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-18T08:17:25.081Z"
+    },
+    {
+      "id": "pay_1789719472569_rwi6o",
+      "user_id": "usr_1789719435722_ym18a",
+      "purpose": "personal_deposit",
+      "amount": 100060,
+      "amount_kobo": 10006000,
+      "currency": "NGN",
+      "reference": "pak_1789719472171_sscyv1",
+      "status": "success",
+      "created_at": "2026-09-18T08:17:52.569Z",
+      "gateway_response": "Successful",
+      "paid_at": "2026-09-18T08:17:55.904Z",
+      "channel": "card",
+      "updated_at": "2026-09-18T08:17:55.904Z"
+    },
+    {
+      "id": "pay_1789720179803_1jay6",
+      "user_id": "usr_1789720111954_buxv5",
+      "purpose": "group_contribution",
+      "amount": 50060,
+      "amount_kobo": 5006000,
+      "currency": "NGN",
+      "reference": "pak_1789720179491_ukj1w0",
+      "status": "success",
+      "created_at": "2026-09-18T08:29:39.803Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-18T08:29:44.510Z"
+    },
+    {
+      "id": "pay_1789720229194_r4way",
+      "user_id": "usr_1789719966454_iwksc",
+      "purpose": "group_contribution",
+      "amount": 50060,
+      "amount_kobo": 5006000,
+      "currency": "NGN",
+      "reference": "pak_1789720227998_ji6mr7",
+      "status": "success",
+      "created_at": "2026-09-18T08:30:29.194Z",
+      "gateway_response": "Successful",
+      "updated_at": "2026-09-18T08:30:33.608Z"
+    },
+    {
+      "id": "pay_wth_sa_1789720437390",
+      "user_id": "usr_superadmin_08154267469",
+      "purpose": "Super Admin Revenue Withdrawal",
+      "reference": "wth_sa_1789720431966_6didy",
+      "amount": 2125,
+      "amount_kobo": 212500,
+      "currency": "NGN",
+      "type": "Super Admin Withdrawal",
+      "status": "success",
+      "created_at": "2026-09-18T08:33:57.390Z"
+    },
+    {
+      "id": "pay_wth_ga_grp_1789719735648_gopg_usr_1789719734281_ij90z_133300",
+      "user_id": "usr_1789719734281_ij90z",
+      "purpose": "Group Admin Commission Withdrawal",
+      "reference": "wth_ga_grp_1789719735648_gopg_usr_1789719734281_ij90z_133300",
+      "amount": 1333,
+      "amount_kobo": 133300,
+      "currency": "NGN",
+      "type": "Group Admin Withdrawal",
+      "status": "success",
+      "created_at": "2026-09-18T08:36:05.025Z"
+    }
+  ],
+  "audit_logs": [
+    {
+      "id": "aud_1789244580119_fi8dd",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-12T20:23:00.119Z"
+    },
+    {
+      "id": "aud_1789380364154_hxt8m",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:04.154Z"
+    },
+    {
+      "id": "aud_1789380364161_3bywy",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:04.161Z"
+    },
+    {
+      "id": "aud_1789380376683_4e72h",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:16.683Z"
+    },
+    {
+      "id": "aud_1789380376691_wl0tc",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:16.691Z"
+    },
+    {
+      "id": "aud_1789380376698_21njp",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:16.698Z"
+    },
+    {
+      "id": "aud_1789380392084_u3ezg",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:32.084Z"
+    },
+    {
+      "id": "aud_1789380392092_dp029",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:32.092Z"
+    },
+    {
+      "id": "aud_1789380392097_b5wb0",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:32.097Z"
+    },
+    {
+      "id": "aud_1789380401503_s1yi7",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:06:41.503Z"
+    },
+    {
+      "id": "aud_1789380472218_8cyl3",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:07:52.218Z"
+    },
+    {
+      "id": "aud_1789380472223_a46kz",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:07:52.223Z"
+    },
+    {
+      "id": "aud_1789380472229_cn6uc",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:07:52.229Z"
+    },
+    {
+      "id": "aud_1789380472833_dco93",
+      "event_type": "PERSONAL_DEPOSIT_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 5000,
+        "reference": "pak_1789380472239_0lal1o",
+        "newBalance": 5000
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:07:52.833Z"
+    },
+    {
+      "id": "aud_1789380473536_9oq6h",
+      "event_type": "PERSONAL_WITHDRAWAL_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 2000,
+        "fee": 32,
+        "netAmount": 1968,
+        "bank": "Access Bank",
+        "account": "0691234567"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:07:53.536Z"
+    },
+    {
+      "id": "aud_1789380519663_ghdf1",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:39.663Z"
+    },
+    {
+      "id": "aud_1789380519861_3qour",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:39.861Z"
+    },
+    {
+      "id": "aud_1789380520550_f5pu3",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:40.550Z"
+    },
+    {
+      "id": "aud_1789380521194_k7e27",
+      "event_type": "PERSONAL_DEPOSIT_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 5000,
+        "reference": "pak_1789380520566_svjiai",
+        "newBalance": 8000
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:41.194Z"
+    },
+    {
+      "id": "aud_1789380522955_4qmo8",
+      "event_type": "PERSONAL_WITHDRAWAL_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 2000,
+        "fee": 32,
+        "netAmount": 1968,
+        "bank": "Access Bank",
+        "account": "0691234567"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:42.955Z"
+    },
+    {
+      "id": "aud_1789380523939_l2iad",
+      "event_type": "GROUP_CONTRIBUTION_PAID",
+      "user_id": "usr_1788623015525_o63fx",
+      "group_id": "grp_1788622347979_71p3",
+      "details": {
+        "round_number": 1,
+        "amount": 50000,
+        "reference": "pak_1789380522979_x6aa65",
+        "member_id": "mem_1788623015525_2"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:43.939Z"
+    },
+    {
+      "id": "aud_1789380539368_vksi0",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:59.368Z"
+    },
+    {
+      "id": "aud_1789380539552_864ye",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:59.552Z"
+    },
+    {
+      "id": "aud_1789380539726_lgrgj",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:08:59.726Z"
+    },
+    {
+      "id": "aud_1789380540687_x4fo3",
+      "event_type": "PERSONAL_DEPOSIT_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 5000,
+        "reference": "pak_1789380539738_ahxmtk",
+        "newBalance": 11000
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:00.687Z"
+    },
+    {
+      "id": "aud_1789380541529_kvfho",
+      "event_type": "PERSONAL_WITHDRAWAL_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 2000,
+        "fee": 32,
+        "netAmount": 1968,
+        "bank": "Access Bank",
+        "account": "0691234567"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:01.529Z"
+    },
+    {
+      "id": "aud_1789380556428_cu78s",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:16.428Z"
+    },
+    {
+      "id": "aud_1789380556583_65dyy",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:16.583Z"
+    },
+    {
+      "id": "aud_1789380556763_0mya3",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:16.763Z"
+    },
+    {
+      "id": "aud_1789380557272_9xkv3",
+      "event_type": "PERSONAL_DEPOSIT_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 5000,
+        "reference": "pak_1789380556781_g8drjm",
+        "newBalance": 14000
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:17.272Z"
+    },
+    {
+      "id": "aud_1789380558109_qwdxv",
+      "event_type": "PERSONAL_WITHDRAWAL_COMPLETED",
+      "user_id": "user_2",
+      "details": {
+        "amount": 2000,
+        "fee": 32,
+        "netAmount": 1968,
+        "bank": "Access Bank",
+        "account": "0691234567"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-14T10:09:18.109Z"
+    },
+    {
+      "id": "aud_1789380561899_2tial",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 1000,
+        "status": "completed",
+        "bank": "Access Bank",
+        "account": "0123456789",
+        "reference": "wth_sa_usr_superadmin_08154267469_100000"
+      },
+      "created_at": "2026-09-14T10:09:21.899Z"
+    },
+    {
+      "id": "aud_1789385501598_m50dc",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "::ffff:127.0.0.1",
+      "created_at": "2026-09-14T11:31:41.598Z"
+    },
+    {
+      "id": "aud_1789385522411_togmb",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_2",
+      "details": {
+        "phone": "08098765432",
+        "role": "MEMBER"
+      },
+      "ip_address": "::ffff:127.0.0.1",
+      "created_at": "2026-09-14T11:32:02.411Z"
+    },
+    {
+      "id": "aud_1789385522422_me1qb",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "::ffff:127.0.0.1",
+      "created_at": "2026-09-14T11:32:02.422Z"
+    },
+    {
+      "id": "aud_1789385522936_1zaar",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "user_admin_demo",
+      "details": {
+        "phone": "08012345678",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "::ffff:127.0.0.1",
+      "created_at": "2026-09-14T11:32:02.936Z"
+    },
+    {
+      "id": "aud_1789714272669_8y7af",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "phone": "08154267469",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T06:51:12.669Z"
+    },
+    {
+      "id": "aud_1789714415169_rz26y",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 144,
+        "status": "completed",
+        "bank": "Guaranty Trust Bank (GTB)",
+        "account": "0123456789",
+        "reference": "wth_sa_1789714412439_j4ops"
+      },
+      "created_at": "2026-09-18T06:53:35.169Z"
+    },
+    {
+      "id": "aud_1789714436691_q57zq",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1788622347795_0pl9y",
+      "details": {
+        "phone": "08069702580",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T06:53:56.691Z"
+    },
+    {
+      "id": "aud_1789714500203_avamw",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1788622719654_fpet7",
+      "details": {
+        "phone": "08069702581",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T06:55:00.203Z"
+    },
+    {
+      "id": "aud_1789714566589_gpx1p",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1788623015525_o63fx",
+      "details": {
+        "phone": "08069702582",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T06:56:06.589Z"
+    },
+    {
+      "id": "aud_1789714648758_yn9yi",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1788622347795_0pl9y",
+      "details": {
+        "phone": "08069702580",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T06:57:28.758Z"
+    },
+    {
+      "id": "aud_1789718974935_lt8bm",
+      "event_type": "AUTH_REGISTER_SUCCESS",
+      "user_id": "usr_1789718974920_cc4xe",
+      "details": {
+        "email": "chidi@packajo.ng",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:09:34.935Z"
+    },
+    {
+      "id": "aud_1789718977006_xcms5",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789718974920_cc4xe",
+      "details": {
+        "email": "chidi@packajo.ng",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:09:37.006Z"
+    },
+    {
+      "id": "aud_1789718998522_ftdr4",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:09:58.522Z"
+    },
+    {
+      "id": "aud_1789719009837_63jjb",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789719007770_pk1wp",
+      "details": {
+        "email": "emeka@packajo.ng",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:10:09.837Z"
+    },
+    {
+      "id": "aud_1789719223970_2jqka",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:13:43.970Z"
+    },
+    {
+      "id": "aud_1789719445303_t22h5",
+      "event_type": "PERSONAL_AJO_ACTIVATED",
+      "user_id": "usr_1789719435722_ym18a",
+      "details": {
+        "reference": "pak_1789719435747_fubbvy",
+        "fee": 600
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:17:25.303Z"
+    },
+    {
+      "id": "aud_1789719476097_3wkuf",
+      "event_type": "PERSONAL_DEPOSIT_COMPLETED",
+      "user_id": "usr_1789719435722_ym18a",
+      "details": {
+        "amount": 100000,
+        "reference": "pak_1789719472171_sscyv1",
+        "newBalance": 100000
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:17:56.097Z"
+    },
+    {
+      "id": "aud_1789719573086_mepci",
+      "event_type": "PERSONAL_WITHDRAWAL_COMPLETED",
+      "user_id": "usr_1789719435722_ym18a",
+      "details": {
+        "amount": 50000,
+        "fee": 800,
+        "netAmount": 49200,
+        "bank": "OPay Digital Services",
+        "account": "8069702566"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:19:33.086Z"
+    },
+    {
+      "id": "aud_1789719992018_kekb9",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789719966454_iwksc",
+      "details": {
+        "email": "olamidekunle1@gmail.com",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:26:32.018Z"
+    },
+    {
+      "id": "aud_1789720164746_pkvno",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789720111954_buxv5",
+      "details": {
+        "email": "funmiojo@gmail.com",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:29:24.746Z"
+    },
+    {
+      "id": "aud_1789720184514_xaimj",
+      "event_type": "GROUP_CONTRIBUTION_PAID",
+      "user_id": "usr_1789720111954_buxv5",
+      "group_id": "grp_1789719735648_gopg",
+      "details": {
+        "round_number": 1,
+        "amount": 50000,
+        "reference": "pak_1789720179491_ukj1w0",
+        "member_id": "mem_1789720111956_2"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:29:44.514Z"
+    },
+    {
+      "id": "aud_1789720221597_szqyi",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789719966454_iwksc",
+      "details": {
+        "email": "olamidekunle1@gmail.com",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:30:21.597Z"
+    },
+    {
+      "id": "aud_1789720233613_rosac",
+      "event_type": "GROUP_CONTRIBUTION_PAID",
+      "user_id": "usr_1789719966454_iwksc",
+      "group_id": "grp_1789719735648_gopg",
+      "details": {
+        "round_number": 1,
+        "amount": 50000,
+        "reference": "pak_1789720227998_ji6mr7",
+        "member_id": "mem_1789719966456_1"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:30:33.613Z"
+    },
+    {
+      "id": "aud_1789720297084_1jfvc",
+      "event_type": "GROUP_PACK_COMPLETED",
+      "user_id": "usr_1789719966454_iwksc",
+      "group_id": "grp_1789719735648_gopg",
+      "details": {
+        "round_number": 1,
+        "member_name": "OLAMIDE KUNLE",
+        "packing_amount": 100000,
+        "packing_fee": 2000,
+        "member_amount": 98000,
+        "admin_commission": 1333,
+        "super_admin_commission": 667,
+        "destination_bank": "OPay Digital Services",
+        "destination_account": "8069702566"
+      },
+      "created_at": "2026-09-18T08:31:37.084Z"
+    },
+    {
+      "id": "aud_1789720335619_hpjv1",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:32:15.619Z"
+    },
+    {
+      "id": "aud_1789720437591_r8g2p",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 2125,
+        "status": "completed",
+        "bank": "Guaranty Trust Bank (GTB)",
+        "account": "0123456789",
+        "reference": "wth_sa_1789720431966_6didy"
+      },
+      "created_at": "2026-09-18T08:33:57.591Z"
+    },
+    {
+      "id": "aud_1789720534327_mavml",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789719734281_ij90z",
+      "details": {
+        "email": "realheavenict@gmail.com",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:35:34.327Z"
+    },
+    {
+      "id": "aud_1789720565231_j285s",
+      "event_type": "FINANCIAL_GROUP_ADMIN_WITHDRAWAL",
+      "user_id": "usr_1789719734281_ij90z",
+      "group_id": "grp_1789719735648_gopg",
+      "details": {
+        "amount": 1333,
+        "status": "completed",
+        "bank": "OPay Digital Services",
+        "account": "8069702566",
+        "reference": "wth_ga_grp_1789719735648_gopg_usr_1789719734281_ij90z_133300"
+      },
+      "created_at": "2026-09-18T08:36:05.231Z"
+    },
+    {
+      "id": "aud_1789720921074_rwl64",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T08:42:01.074Z"
+    },
+    {
+      "id": "aud_1789722459188_5m536",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-18T09:07:39.188Z"
+    },
+    {
+      "id": "aud_1789807511541_1x1e4",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 100,
+        "status": "completed",
+        "bank": "Access Bank",
+        "account": "0815426746",
+        "reference": "test_sa_wth_1789807508912"
+      },
+      "created_at": "2026-09-19T08:45:11.541Z"
+    },
+    {
+      "id": "aud_1789807531808_2c1w2",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 50,
+        "status": "completed",
+        "bank": "Access Bank",
+        "account": "0815426746",
+        "reference": "test_sa_wth_1789807529231"
+      },
+      "created_at": "2026-09-19T08:45:31.808Z"
+    },
+    {
+      "id": "aud_1789807537139_wqlzc",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 50,
+        "status": "completed",
+        "bank": "Access Bank",
+        "account": "0815426746",
+        "reference": "test_err_1789807534912"
+      },
+      "created_at": "2026-09-19T08:45:37.139Z"
+    },
+    {
+      "id": "aud_1789807565107_fidpw",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 100,
+        "status": "completed",
+        "bank": "Access Bank",
+        "account": "0815426746",
+        "reference": "sa_test_payout_1789807562463"
+      },
+      "created_at": "2026-09-19T08:46:05.107Z"
+    },
+    {
+      "id": "aud_1789808132819_mi3ad",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-19T08:55:32.820Z"
+    },
+    {
+      "id": "aud_1789808172903_iniir",
+      "event_type": "FINANCIAL_SUPER_ADMIN_WITHDRAWAL",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "amount": 7108,
+        "status": "completed",
+        "bank": "Guaranty Trust Bank (GTB)",
+        "account": "0123456789",
+        "reference": "wth_sa_1789808169706_w7hoa"
+      },
+      "created_at": "2026-09-19T08:56:12.903Z"
+    },
+    {
+      "id": "aud_1789808286631_i3bef",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1789719435722_ym18a",
+      "details": {
+        "email": "olalekanpodcast@gmail.com",
+        "role": "MEMBER"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-19T08:58:06.631Z"
+    },
+    {
+      "id": "aud_1789808324344_fjjpg",
+      "event_type": "PERSONAL_WITHDRAWAL_COMPLETED",
+      "user_id": "usr_1789719435722_ym18a",
+      "details": {
+        "amount": 50000,
+        "fee": 800,
+        "netAmount": 49200,
+        "bank": "OPay Digital Services",
+        "account": "8069702566"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-19T08:58:44.344Z"
+    },
+    {
+      "id": "aud_1789808336365_09g71",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-19T08:58:56.365Z"
+    }
+  ],
+  "support_messages": [
+    {
+      "id": "smsg_1789247469300_dtxl9",
+      "session_id": "sess_test",
+      "user_name": "Customer",
+      "sender": "user",
+      "sender_name": "Customer",
+      "text": "Hello, how does group ajo work?",
+      "created_at": "2026-09-12T21:11:09.300Z",
+      "read_by_support": false
+    },
+    {
+      "id": "smsg_1789247469550_wu346",
+      "session_id": "sess_test",
+      "user_name": "Customer",
+      "sender": "assistant",
+      "sender_name": "Better Ajo Support",
+      "text": "**Group Better Ajo** offers seamless rotating thrift contributions:\n\n• **₦0 Joining Fee**: Free for all contributors to join with an invite code.\n• **₦0 Group Creation**: Free for Admins to create and manage their groups.\n• **Transparent Rotations**: Positions are locked based on join order (Position 1, 2, etc.) to guarantee zero favoritism.\n• **Lump Sum Packing**: When each round's pool is complete, the scheduled member packs their payout.",
+      "created_at": "2026-09-12T21:11:09.550Z",
+      "read_by_support": true
+    },
+    {
+      "id": "smsg_1789249372987_xgkej",
+      "session_id": "guest_chat_session",
+      "user_name": "Customer",
+      "sender": "user",
+      "sender_name": "Customer",
+      "text": "Hello, is my account active?",
+      "created_at": "2026-09-12T21:42:52.987Z",
+      "read_by_support": false
+    },
+    {
+      "id": "smsg_1789249373162_530m3",
+      "session_id": "guest_chat_session",
+      "user_name": "Customer",
+      "sender": "assistant",
+      "sender_name": "Better Ajo Support",
+      "text": "**Withdrawals on Better Ajo**:\n\n• For Personal Ajo, you can request a withdrawal at any time from your Personal Dashboard.\n• Payouts are made directly into your registered Nigerian bank account.\n• Every withdrawal requires instant one-time verification (OTP) sent to your registered phone number.",
+      "created_at": "2026-09-12T21:42:53.162Z",
+      "read_by_support": true
+    },
+    {
+      "id": "smsg_1789380561903_34rd9",
+      "session_id": "test-session-1789380561901",
+      "user_id": "user_2",
+      "user_name": "Babajide Ogundimu",
+      "user_phone": "08098765432",
+      "sender": "user",
+      "sender_name": "Babajide Ogundimu",
+      "text": "Hello, how does group ajo work?",
+      "created_at": "2026-09-14T10:09:21.903Z",
+      "read_by_support": false
+    },
+    {
+      "id": "smsg_1789380562107_jp13x",
+      "session_id": "test-session-1789380561901",
+      "user_id": "user_2",
+      "user_name": "Babajide Ogundimu",
+      "user_phone": "08098765432",
+      "sender": "assistant",
+      "sender_name": "Better Ajo Support",
+      "text": "**Group Better Ajo** offers seamless rotating thrift contributions:\n\n• **₦0 Joining Fee**: Free for all contributors to join with an invite code.\n• **₦0 Group Creation**: Free for Admins to create and manage their groups.\n• **Transparent Rotations**: Positions are locked based on join order (Position 1, 2, etc.) to guarantee zero favoritism.\n• **Lump Sum Packing**: When each round's pool is complete, the scheduled member packs their payout.",
+      "created_at": "2026-09-14T10:09:22.107Z",
+      "read_by_support": true
+    },
+    {
+      "id": "smsg_1789385524597_m9v4q",
+      "session_id": "guest_chat_session",
+      "user_name": "Customer",
+      "sender": "user",
+      "sender_name": "Customer",
+      "text": "Hello, what is Better Ajo?",
+      "created_at": "2026-09-14T11:32:04.597Z",
+      "read_by_support": false
+    },
+    {
+      "id": "smsg_1789385524775_r3mxo",
+      "session_id": "guest_chat_session",
+      "user_name": "Customer",
+      "sender": "assistant",
+      "sender_name": "Better Ajo Support",
+      "text": "Welcome to **Better Ajo Customer Support**!\n\nBetter Ajo makes Nigerian personal savings and rotating group ajo reliable, automated, and secure.\n\n• **Personal Ajo**: ₦600 one-time activation, daily/weekly/monthly savings.\n• **Group Ajo**: ₦0 joining fee, automatic rotation positions, and transparent lump-sum payouts.\n• **Live Customer Care**: We are right here in this chat to answer your questions or assist with your account.",
+      "created_at": "2026-09-14T11:32:04.776Z",
+      "read_by_support": true
+    }
+  ],
+  "group_notifications": [],
+  "superAdminRevenue": 667,
+  "groupAdminRevenue": 1333,
+  "superAdminEarnings": {
+    "totalEarnings": 0,
+    "totalWithdrawn": 14943,
+    "lifetimeEarned": 14943,
+    "updated_at": "2026-09-19T08:56:12.905Z",
+    "history": [
+      {
+        "id": "sa_wth_1789808172905_fqigo",
+        "amount": -7108,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Withdrawal to Guaranty Trust Bank (GTB)",
+        "reference": "wth_sa_1789808169706_w7hoa",
+        "created_at": "2026-09-19T08:56:12.905Z",
+        "balance_after": 0
+      },
+      {
+        "id": "sa_wth_1789807565110_qot36",
+        "amount": -100,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Withdrawal to Access Bank",
+        "reference": "sa_test_payout_1789807562463",
+        "created_at": "2026-09-19T08:46:05.110Z",
+        "balance_after": 7108
+      },
+      {
+        "id": "sa_wth_1789807537142_kjpcu",
+        "amount": -50,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Withdrawal to Access Bank",
+        "reference": "test_err_1789807534912",
+        "created_at": "2026-09-19T08:45:37.142Z",
+        "balance_after": 7208
+      },
+      {
+        "id": "sa_wth_1789807531811_mtfz1",
+        "amount": -50,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Withdrawal to Access Bank",
+        "reference": "test_sa_wth_1789807529231",
+        "created_at": "2026-09-19T08:45:31.811Z",
+        "balance_after": 7258
+      },
+      {
+        "id": "sa_wth_1789807511543_z7bmn",
+        "amount": -100,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Withdrawal to Access Bank",
+        "reference": "test_sa_wth_1789807508912",
+        "created_at": "2026-09-19T08:45:11.543Z",
+        "balance_after": 7308
+      },
+      {
+        "id": "sa_init_sawth_wth_sa_1789720437390",
+        "amount": -2125,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Payout",
+        "reference": "wth_sa_1789720431966_6didy",
+        "user_id": "usr_superadmin_08154267469",
+        "created_at": "2026-09-18T08:33:57.390Z",
+        "balance_after": 2608
+      },
+      {
+        "id": "sa_init_com_com_1789720297084_pck_1789720297084_mem_1789719966456_1",
+        "amount": 667,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1789720297084_mem_1789719966456_1",
+        "created_at": "2026-09-18T08:31:37.084Z",
+        "balance_after": 10143
+      },
+      {
+        "id": "sa_init_cnt_cnt_1789719966456_mem_1789719966456_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "pak_1789720227998_ji6mr7",
+        "user_id": "usr_1789719966454_iwksc",
+        "created_at": "2026-09-18T08:30:33.611Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1789720111956_mem_1789720111956_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "pak_1789720179491_ukj1w0",
+        "user_id": "usr_1789720111954_buxv5",
+        "created_at": "2026-09-18T08:29:44.512Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_wth_wth_1789719572877_bjg6",
+        "amount": 800,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
+        "reference": "wth_1789719572877_bjg6",
+        "user_id": "usr_1789719435722_ym18a",
+        "created_at": "2026-09-18T08:19:32.877Z",
+        "balance_after": 6808
+      },
+      {
+        "id": "sa_init_pay_1789719436230_irpvx",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_1789719435747_fubbvy",
+        "user_id": "usr_1789719435722_ym18a",
+        "created_at": "2026-09-18T08:17:16.230Z",
+        "balance_after": 4200
+      },
+      {
+        "id": "sa_init_reg_pajo_1789719435744_or8x",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - KOLA OYEWO",
+        "reference": "pak_reg_pajo_1789719435744_or8x",
+        "user_id": "usr_1789719435722_ym18a",
+        "created_at": "2026-09-18T08:17:15.744Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_sawth_wth_sa_1789714414973",
+        "amount": -144,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Payout",
+        "reference": "wth_sa_1789714412439_j4ops",
+        "user_id": "usr_superadmin_08154267469",
+        "created_at": "2026-09-18T06:53:34.973Z",
+        "balance_after": 4733
+      },
+      {
+        "id": "sa_init_wth_wth_1789390610145_6tx7",
+        "amount": 1600,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦100,000)",
+        "reference": "wth_1789390610145_6tx7",
+        "user_id": "usr_1788382012410_urddl",
+        "created_at": "2026-09-14T12:56:50.145Z",
+        "balance_after": 6008
+      },
+      {
+        "id": "sa_init_wth_wth_1789390579735_19rg",
+        "amount": 80,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦5,000)",
+        "reference": "wth_1789390579735_19rg",
+        "user_id": "usr_1788382012410_urddl",
+        "created_at": "2026-09-14T12:56:19.735Z",
+        "balance_after": 4408
+      },
+      {
+        "id": "sa_init_com_com_1789389766896_pck_1789389766896_mem_1788623015525_2",
+        "amount": 1000,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1789389766896_mem_1788623015525_2",
+        "created_at": "2026-09-14T12:42:46.896Z",
+        "balance_after": 9476
+      },
+      {
+        "id": "sa_init_sawth_wth_sa_1789389705945",
+        "amount": -4266,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Payout",
+        "reference": "wth_sa_1789389703577_ksjly",
+        "user_id": "usr_superadmin_08154267469",
+        "created_at": "2026-09-14T12:41:45.945Z",
+        "balance_after": 4877
+      },
+      {
+        "id": "sa_init_sawth_wth_sa_1789380561726",
+        "amount": -1000,
+        "type": "super_admin_withdrawal",
+        "description": "Super Admin Revenue Payout",
+        "reference": "wth_sa_usr_superadmin_08154267469_100000",
+        "user_id": "usr_superadmin_08154267469",
+        "created_at": "2026-09-14T10:09:21.726Z",
+        "balance_after": 9143
+      },
+      {
+        "id": "sa_init_wth_wth_1789380557943_706r",
+        "amount": 32,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "reference": "wth_1789380557943_706r",
+        "user_id": "user_2",
+        "created_at": "2026-09-14T10:09:17.943Z",
+        "balance_after": 4328
+      },
+      {
+        "id": "sa_init_wth_wth_1789380541368_p2jr",
+        "amount": 32,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "reference": "wth_1789380541368_p2jr",
+        "user_id": "user_2",
+        "created_at": "2026-09-14T10:09:01.368Z",
+        "balance_after": 4296
+      },
+      {
+        "id": "sa_init_cnt_cnt_1789380523938_mem_1788623015525_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "pak_1789380522979_x6aa65",
+        "user_id": "usr_1788623015525_o63fx",
+        "created_at": "2026-09-14T10:08:43.938Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_wth_wth_1789380522293_7qfa",
+        "amount": 32,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "reference": "wth_1789380522293_7qfa",
+        "user_id": "user_2",
+        "created_at": "2026-09-14T10:08:42.293Z",
+        "balance_after": 4264
+      },
+      {
+        "id": "sa_init_wth_wth_1789380473312_78kv",
+        "amount": 32,
+        "type": "personal_ajo_withdrawal_commission",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "reference": "wth_1789380473312_78kv",
+        "user_id": "user_2",
+        "created_at": "2026-09-14T10:07:53.312Z",
+        "balance_after": 4232
+      },
+      {
+        "id": "sa_init_cnt_cnt_test_1789252648233",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "test_batch_ref_1789252648233",
+        "user_id": "usr_test",
+        "created_at": "2026-09-12T22:37:28.233Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1789250865412_mem_1788622719655_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "ref_test_idempotent_1789250865393",
+        "user_id": "usr_1788622719654_fpet7",
+        "created_at": "2026-09-12T22:07:45.412Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_com_com_1788866674649_pck_1788866674649_mem_1788866674625_1",
+        "amount": 167,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1788866674649_mem_1788866674625_1",
+        "created_at": "2026-09-09T12:00:00.000Z",
+        "balance_after": 7975
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866674625_mem_1788866674625_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF_TEST_E1",
+        "user_id": "usr_1788866653157_993d4",
+        "created_at": "2026-09-09T12:00:00.000Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866674625_mem_1788866674625_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF_TEST_E2",
+        "user_id": "usr_1788866653157_mn993",
+        "created_at": "2026-09-09T12:00:00.000Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_pay_reg_pajo_1788866791270_009o",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_reg_pajo_1788866791270_009o",
+        "user_id": "usr_1788866791240_u0kkq",
+        "created_at": "2026-09-08T11:26:31.270Z",
+        "balance_after": 3600
+      },
+      {
+        "id": "sa_init_com_com_1788866791266_pck_1788866791266_mem_1788866791242_1",
+        "amount": 167,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1788866791266_mem_1788866791242_1",
+        "created_at": "2026-09-08T11:26:31.266Z",
+        "balance_after": 8476
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866791242_mem_1788866791242_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF_PAID_M2_1788866791240",
+        "user_id": "usr_1788866791241_feyyw",
+        "created_at": "2026-09-08T11:26:31.264Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866791242_mem_1788866791242_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF_PAID_M1_1788866791240",
+        "user_id": "usr_1788866791240_u0kkq",
+        "created_at": "2026-09-08T11:26:31.263Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_com_com_1788866779982_pck_1788866779982_mem_1788866779958_1",
+        "amount": 167,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1788866779982_mem_1788866779958_1",
+        "created_at": "2026-09-08T11:26:19.982Z",
+        "balance_after": 8309
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866779958_mem_1788866779958_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF2_1788866779956",
+        "user_id": "usr_1788866779957_58k4n",
+        "created_at": "2026-09-08T11:26:19.979Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866779958_mem_1788866779958_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF1_1788866779956",
+        "user_id": "usr_1788866779957_ye6n4",
+        "created_at": "2026-09-08T11:26:19.978Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_pay_reg_pajo_1788866774950_j6cx",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_reg_pajo_1788866774950_j6cx",
+        "user_id": "usr_1788866774921_9jvfv",
+        "created_at": "2026-09-08T11:26:14.950Z",
+        "balance_after": 3000
+      },
+      {
+        "id": "sa_init_com_com_1788866774947_pck_1788866774947_mem_1788866774922_1",
+        "amount": 167,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1788866774947_mem_1788866774922_1",
+        "created_at": "2026-09-08T11:26:14.947Z",
+        "balance_after": 8142
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866774922_mem_1788866774922_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF_PAID_M2_1788866774920",
+        "user_id": "usr_1788866774921_4spg8",
+        "created_at": "2026-09-08T11:26:14.945Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788866774922_mem_1788866774922_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "REF_PAID_M1_1788866774920",
+        "user_id": "usr_1788866774921_9jvfv",
+        "created_at": "2026-09-08T11:26:14.944Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_pay_reg_pajo_1788866674653_5ag7",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_reg_pajo_1788866674653_5ag7",
+        "user_id": "usr_1788866653157_993d4",
+        "created_at": "2026-09-08T11:24:34.653Z",
+        "balance_after": 2400
+      },
+      {
+        "id": "sa_init_com_com_1788865918132_pck_1788865918132_mem_1788622719655_1",
+        "amount": 1000,
+        "type": "group_packing_commission",
+        "description": "33.33% Share of Group Packing Fee",
+        "reference": "pck_1788865918132_mem_1788622719655_1",
+        "created_at": "2026-09-08T11:11:58.132Z",
+        "balance_after": 7808
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788623015525_mem_1788623015525_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "pak_1788865803210_3n993x",
+        "user_id": "usr_1788623015525_o63fx",
+        "created_at": "2026-09-08T11:10:07.390Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_1788622719655_mem_1788622719655_1",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "pak_1788865688306_62brjc",
+        "user_id": "usr_1788622719654_fpet7",
+        "created_at": "2026-09-08T11:08:13.680Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_pay_1788383295194_ojci8",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_1788383294748_erbd0t",
+        "user_id": "user_2",
+        "created_at": "2026-09-02T21:08:15.194Z",
+        "balance_after": 1800
+      },
+      {
+        "id": "sa_init_reg_pajo_1788383294740_wl2l",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Babajide Ogundimu",
+        "reference": "pak_reg_pajo_1788383294740_wl2l",
+        "user_id": "user_2",
+        "created_at": "2026-09-02T21:08:14.740Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_pay_1788383268104_p3xy2",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_1788383267700_4lytwy",
+        "user_id": "usr_1788383267693_m5jh2",
+        "created_at": "2026-09-02T21:07:48.104Z",
+        "balance_after": 1200
+      },
+      {
+        "id": "sa_init_reg_pajo_1788383267693_5vxd",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Chioma Adeyemi",
+        "reference": "pak_reg_pajo_1788383267693_5vxd",
+        "user_id": "usr_1788383267693_m5jh2",
+        "created_at": "2026-09-02T21:07:47.693Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_pay_1788383255249_y657h",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "reference": "pak_1788383254810_8gua08",
+        "user_id": "usr_1788383254809_7ztqt",
+        "created_at": "2026-09-02T21:07:35.249Z",
+        "balance_after": 600
+      },
+      {
+        "id": "sa_init_reg_pajo_1788383254809_1mqw",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Adewale Test User",
+        "reference": "pak_reg_pajo_1788383254809_1mqw",
+        "user_id": "usr_1788383254809_7ztqt",
+        "created_at": "2026-09-02T21:07:34.809Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_reg_pajo_1788382012410_su2t",
+        "amount": 600,
+        "type": "personal_ajo_activation",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Akinyele Paul",
+        "reference": "pak_reg_pajo_1788382012410_su2t",
+        "user_id": "usr_1788382012410_urddl",
+        "created_at": "2026-09-02T20:46:52.410Z",
+        "balance_after": 7408
+      },
+      {
+        "id": "sa_init_cnt_cnt_2",
+        "amount": 60,
+        "type": "group_contribution_fee",
+        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "reference": "cnt_2",
+        "user_id": "user_2",
+        "created_at": "2026-09-01T18:02:59.901Z",
+        "balance_after": 7408
+      }
+    ],
+    "personalPlatformFeesMerged": true
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Better Ajo",
+  "description": "Simple, professional and reliable Nigerian personal and group savings platform with rotating ajo cycles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
