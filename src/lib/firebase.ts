@@ -6,6 +6,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  increment,
   collection,
   onSnapshot,
   query,
@@ -92,9 +93,45 @@ export function subscribeToUserPersonalBalance(
   );
 }
 
+export interface PlatformRevenueMainData {
+  stream1: number;
+  stream2: number;
+  stream3: number;
+  stream4: number;
+  totalGross: number;
+  totalWithdrawn: number;
+  unifiedAvailable: number;
+  lastUpdated?: any;
+}
+
 /**
- * Real-time listener for platformRevenue collection directly from Firestore.
- * Calculates Stream 1, Stream 2, Stream 3, Stream 4, and Unified Available Revenue.
+ * 3. Super Admin page should ONLY do ONE thing on load:
+ * const doc = await getDoc(doc(db, 'platformRevenue', 'main'))
+ * setRevenue(doc.data())
+ * NO calculation, NO sum.
+ */
+export async function getPlatformRevenueMain(): Promise<PlatformRevenueMainData | null> {
+  const docRef = doc(db, 'platformRevenue', 'main');
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+    const d = snap.data();
+    return {
+      stream1: Number(d.stream1 || 0),
+      stream2: Number(d.stream2 || 0),
+      stream3: Number(d.stream3 || 0),
+      stream4: Number(d.stream4 || 0),
+      totalGross: Number(d.totalGross || 0),
+      totalWithdrawn: Number(d.totalWithdrawn || 0),
+      unifiedAvailable: Number(d.unifiedAvailable || 0),
+      lastUpdated: d.lastUpdated
+    };
+  }
+  return null;
+}
+
+/**
+ * Real-time listener for the permanent platformRevenue/main document directly.
+ * Zero calculation, zero iteration, pure document snapshot state.
  */
 export function subscribeToPlatformRevenue(
   onRevenueUpdate: (stats: {
@@ -102,65 +139,97 @@ export function subscribeToPlatformRevenue(
     stream2_contribution: number;
     stream3_packing: number;
     stream4_withdrawal: number;
+    stream1: number;
+    stream2: number;
+    stream3: number;
+    stream4: number;
     totalGross: number;
     totalWithdrawn: number;
     availableBalance: number;
-    docsCount: number;
+    unifiedAvailable: number;
   }) => void,
   onError?: (err: Error) => void
 ): Unsubscribe {
-  const revCol = collection(db, 'platformRevenue');
+  const mainDocRef = doc(db, 'platformRevenue', 'main');
 
   return onSnapshot(
-    revCol,
-    (snap) => {
-      let reg600 = 0;
-      let contrib60 = 0;
-      let packing33 = 0;
-      let wth1_6 = 0;
-      let withdrawnTotal = 0;
-
-      snap.forEach((docSnap) => {
+    mainDocRef,
+    (docSnap) => {
+      if (docSnap.exists()) {
         const d = docSnap.data();
-        const amt = Number(d.amount || 0);
-        const stream = d.stream || '';
-        const type = d.type || '';
+        const s1 = Number(d.stream1 || 0);
+        const s2 = Number(d.stream2 || 0);
+        const s3 = Number(d.stream3 || 0);
+        const s4 = Number(d.stream4 || 0);
+        const gross = Number(d.totalGross || 0);
+        const withdrawn = Number(d.totalWithdrawn || 0);
+        const available = Number(d.unifiedAvailable ?? (gross - withdrawn) ?? 0);
 
-        if (stream === 'STREAM_1_REGISTRATION' || type === 'registration_600' || type === 'personal_registration_fee') {
-          reg600 += Math.max(0, amt);
-        } else if (
-          stream === 'STREAM_2_CONTRIBUTION' ||
-          type === 'contribution_60' ||
-          type === 'personal_savings_fee' ||
-          type === 'group_contribution_fee'
-        ) {
-          contrib60 += Math.max(0, amt);
-        } else if (stream === 'STREAM_3_PACKING' || type === 'packing_33' || type === 'group_packing_fee') {
-          packing33 += Math.max(0, amt);
-        } else if (stream === 'STREAM_4_WITHDRAWAL' || type === 'withdrawal_1_6' || type === 'personal_withdrawal_fee') {
-          wth1_6 += Math.max(0, amt);
-        } else if (stream === 'WITHDRAWAL_DEDUCTION' || type === 'super_admin_withdrawal') {
-          withdrawnTotal += Math.abs(amt);
-        }
-      });
-
-      const totalGross = reg600 + contrib60 + packing33 + wth1_6;
-      const availableBalance = Math.max(0, totalGross - withdrawnTotal);
-
-      onRevenueUpdate({
-        stream1_registration: reg600,
-        stream2_contribution: contrib60,
-        stream3_packing: packing33,
-        stream4_withdrawal: wth1_6,
-        totalGross,
-        totalWithdrawn: withdrawnTotal,
-        availableBalance,
-        docsCount: snap.size
-      });
+        onRevenueUpdate({
+          stream1_registration: s1,
+          stream2_contribution: s2,
+          stream3_packing: s3,
+          stream4_withdrawal: s4,
+          stream1: s1,
+          stream2: s2,
+          stream3: s3,
+          stream4: s4,
+          totalGross: gross,
+          totalWithdrawn: withdrawn,
+          availableBalance: available,
+          unifiedAvailable: available
+        });
+      }
     },
     (err) => {
-      console.warn('[Firestore Listener] platformRevenue snapshot error:', err);
+      console.warn('[Firestore Listener] platformRevenue/main snapshot error:', err);
       if (onError) onError(err);
     }
   );
+}
+
+/**
+ * 4. For new money to add correctly, use ONLY increment in transaction:
+ * On Personal Ajo save of N5000 with 1.6% fee (N80):
+ * transaction.update(platformRevenue/main, {
+ *   stream4: increment(80),
+ *   totalGross: increment(80),
+ *   unifiedAvailable: increment(80)
+ * })
+ */
+export async function incrementPlatformRevenueClient(
+  stream: 'stream1' | 'stream2' | 'stream3' | 'stream4',
+  amount: number
+): Promise<void> {
+  if (!amount || isNaN(amount) || amount <= 0) return;
+  const mainRef = doc(db, 'platformRevenue', 'main');
+  await runTransaction(db, async (transaction) => {
+    transaction.update(mainRef, {
+      [stream]: increment(amount),
+      totalGross: increment(amount),
+      unifiedAvailable: increment(amount),
+      lastUpdated: serverTimestamp()
+    });
+  });
+}
+
+/**
+ * 5. On Super Admin withdraw N9,888:
+ * transaction.update(platformRevenue/main, {
+ *   totalWithdrawn: increment(9888),
+ *   unifiedAvailable: increment(-9888)
+ * })
+ */
+export async function deductPlatformRevenueWithdrawalClient(
+  amount: number
+): Promise<void> {
+  if (!amount || isNaN(amount) || amount <= 0) return;
+  const mainRef = doc(db, 'platformRevenue', 'main');
+  await runTransaction(db, async (transaction) => {
+    transaction.update(mainRef, {
+      totalWithdrawn: increment(amount),
+      unifiedAvailable: increment(-amount),
+      lastUpdated: serverTimestamp()
+    });
+  });
 }

@@ -412,6 +412,13 @@ export interface SuperAdminFullData {
     available_balance: number;
     total_withdrawn: number;
     pending_withdrawals: number;
+    stream1_registration?: number;
+    stream2_contribution?: number;
+    stream3_packing?: number;
+    stream4_withdrawal?: number;
+    total_gross?: number;
+    lifetimeEarned?: number;
+    unifiedAvailable?: number;
     breakdown: Array<{
       date: string;
       source: string;
@@ -429,6 +436,12 @@ export interface SuperAdminWallet {
   total_gross_earnings: number;
   total_withdrawn: number;
   available_balance: number;
+  stream1_registration?: number;
+  stream2_contribution?: number;
+  stream3_packing?: number;
+  stream4_withdrawal?: number;
+  total_gross?: number;
+  unifiedAvailable?: number;
   breakdown: {
     reg_600_total: number;
     contrib_60_total: number;

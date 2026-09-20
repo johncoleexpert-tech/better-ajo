@@ -1,6 +1,6 @@
 import { createRequire } from 'module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
-import { getFirestore, initializeFirestore, Firestore } from 'firebase-admin/firestore';
+import { getFirestore, initializeFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
 import type { Auth } from 'firebase-admin/auth';
 
 // Safe module loader for both ESM and CommonJS (esbuild/Vercel serverless bundled) runtimes
@@ -1424,7 +1424,30 @@ export async function fsExecutePersonalDepositTransaction(
         createdAt: new Date()
       });
 
-      // 5. Create platformRevenue collection document for STREAM_2_CONTRIBUTION
+      // 5. Update platformRevenue/main directly in the transaction with increment!
+      const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+      const mainDoc = await transaction.get(mainRef);
+      if (mainDoc.exists) {
+        transaction.update(mainRef, {
+          stream2: FieldValue.increment(fee),
+          totalGross: FieldValue.increment(fee),
+          unifiedAvailable: FieldValue.increment(fee),
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      } else {
+        transaction.set(mainRef, {
+          stream1: 0,
+          stream2: fee,
+          stream3: 0,
+          stream4: 0,
+          totalGross: fee,
+          totalWithdrawn: 0,
+          unifiedAvailable: fee,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+
+      // Also record individual audit entry
       const revenueRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
       transaction.set(revenueRef, {
         stream: 'STREAM_2_CONTRIBUTION',
@@ -2347,6 +2370,49 @@ export async function deductFromSuperAdminEarnings(
 }
 
 /**
+ * Get permanent platformRevenue/main document
+ */
+export async function fsGetPlatformRevenueMain(): Promise<{
+  stream1: number;
+  stream2: number;
+  stream3: number;
+  stream4: number;
+  totalGross: number;
+  totalWithdrawn: number;
+  unifiedAvailable: number;
+  lastUpdated?: any;
+} | null> {
+  const db = getFirestoreDb();
+  if (!db) return null;
+  try {
+    const docSnap = await db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main').get();
+    if (docSnap.exists) {
+      const d = docSnap.data() || {};
+      const s1 = Number(d.stream1 || 0);
+      const s2 = Number(d.stream2 || 0);
+      const s3 = Number(d.stream3 || 0);
+      const s4 = Number(d.stream4 || 0);
+      const gross = Number(d.totalGross || 0);
+      const withdrawn = Number(d.totalWithdrawn || 0);
+      const avail = Number(d.unifiedAvailable ?? (gross - withdrawn) ?? 0);
+      return {
+        stream1: s1,
+        stream2: s2,
+        stream3: s3,
+        stream4: s4,
+        totalGross: gross,
+        totalWithdrawn: withdrawn,
+        unifiedAvailable: avail,
+        lastUpdated: d.lastUpdated
+      };
+    }
+  } catch (err: any) {
+    console.error('[Firestore] Error getting platformRevenue/main:', err);
+  }
+  return null;
+}
+
+/**
  * Record Personal Ajo ₦600 registration fee to Firestore platformRevenue collection (STREAM_1_REGISTRATION).
  */
 export async function fsRecordRegistrationRevenue(
@@ -2358,6 +2424,30 @@ export async function fsRecordRegistrationRevenue(
   const db = getFirestoreDb();
   if (!db) return false;
   try {
+    const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(mainRef);
+      if (doc.exists) {
+        t.update(mainRef, {
+          stream1: FieldValue.increment(fee),
+          totalGross: FieldValue.increment(fee),
+          unifiedAvailable: FieldValue.increment(fee),
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      } else {
+        t.set(mainRef, {
+          stream1: fee,
+          stream2: 0,
+          stream3: 0,
+          stream4: 0,
+          totalGross: fee,
+          totalWithdrawn: 0,
+          unifiedAvailable: fee,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+    });
+
     const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
     await revRef.set({
       stream: 'STREAM_1_REGISTRATION',
@@ -2390,6 +2480,30 @@ export async function fsRecordPackingRevenue(
   const db = getFirestoreDb();
   if (!db) return false;
   try {
+    const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(mainRef);
+      if (doc.exists) {
+        t.update(mainRef, {
+          stream3: FieldValue.increment(superAdminShare),
+          totalGross: FieldValue.increment(superAdminShare),
+          unifiedAvailable: FieldValue.increment(superAdminShare),
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      } else {
+        t.set(mainRef, {
+          stream1: 0,
+          stream2: 0,
+          stream3: superAdminShare,
+          stream4: 0,
+          totalGross: superAdminShare,
+          totalWithdrawn: 0,
+          unifiedAvailable: superAdminShare,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+    });
+
     const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
     await revRef.set({
       stream: 'STREAM_3_PACKING',
@@ -2423,6 +2537,30 @@ export async function fsRecordWithdrawalFeeRevenue(
   const db = getFirestoreDb();
   if (!db) return false;
   try {
+    const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(mainRef);
+      if (doc.exists) {
+        t.update(mainRef, {
+          stream4: FieldValue.increment(fee),
+          totalGross: FieldValue.increment(fee),
+          unifiedAvailable: FieldValue.increment(fee),
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      } else {
+        t.set(mainRef, {
+          stream1: 0,
+          stream2: 0,
+          stream3: 0,
+          stream4: fee,
+          totalGross: fee,
+          totalWithdrawn: 0,
+          unifiedAvailable: fee,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+    });
+
     const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
     await revRef.set({
       stream: 'STREAM_4_WITHDRAWAL',
@@ -2453,11 +2591,24 @@ export async function fsRecordSuperAdminWithdrawalDeduction(
   const db = getFirestoreDb();
   if (!db) return false;
   try {
+    const deduction = Math.abs(Number(withdrawal.amount));
+    const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(mainRef);
+      if (doc.exists) {
+        t.update(mainRef, {
+          totalWithdrawn: FieldValue.increment(deduction),
+          unifiedAvailable: FieldValue.increment(-deduction),
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+    });
+
     const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
     await revRef.set({
       stream: 'WITHDRAWAL_DEDUCTION',
       type: 'super_admin_withdrawal',
-      amount: -Math.abs(Number(withdrawal.amount)),
+      amount: -deduction,
       reference: withdrawal.reference || withdrawal.id || '',
       description: `Super Admin Revenue Payout to ${withdrawal.bank_name || 'Bank'}`,
       createdAt: new Date()

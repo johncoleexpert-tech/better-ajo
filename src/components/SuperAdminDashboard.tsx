@@ -28,7 +28,8 @@ import {
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
-import { subscribeToPlatformRevenue } from '../lib/firebase.js';
+import { doc, getDoc } from 'firebase/firestore';
+import { db, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
 
 interface SuperAdminDashboardProps {
   onBack: () => void;
@@ -44,6 +45,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   userId
 }) => {
   const [data, setData] = useState<SuperAdminFullData | null>(null);
+  const [revenue, setRevenue] = useState<{
+    stream1: number;
+    stream2: number;
+    stream3: number;
+    stream4: number;
+    totalGross: number;
+    totalWithdrawn: number;
+    unifiedAvailable: number;
+    lastUpdated?: any;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -127,37 +138,79 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   };
 
   useEffect(() => {
-    fetchSuperAdminData();
+    // 3. Super Admin page should ONLY do ONE thing on load:
+    // const doc = await getDoc(doc(db, 'platformRevenue', 'main'))
+    // setRevenue(doc.data())
+    // NO calculation, NO sum.
+    const loadRevenueDoc = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'platformRevenue', 'main'));
+        if (snap.exists()) {
+          const rev = snap.data();
+          const s1 = Number(rev.stream1 || 0);
+          const s2 = Number(rev.stream2 || 0);
+          const s3 = Number(rev.stream3 || 0);
+          const s4 = Number(rev.stream4 || 0);
+          const gross = Number(rev.totalGross || 0);
+          const withdrawn = Number(rev.totalWithdrawn || 0);
+          const avail = Number(rev.unifiedAvailable ?? (gross - withdrawn) ?? 0);
+          setRevenue({
+            stream1: s1,
+            stream2: s2,
+            stream3: s3,
+            stream4: s4,
+            totalGross: gross,
+            totalWithdrawn: withdrawn,
+            unifiedAvailable: avail,
+            lastUpdated: rev.lastUpdated
+          });
+        }
+      } catch (err) {
+        console.warn('[Super Admin] Error loading platformRevenue/main doc:', err);
+      }
+    };
+    loadRevenueDoc();
 
-    // Durable Real-Time Firestore platformRevenue synchronization
+    // Direct listener to the permanent platformRevenue/main document
     const unsub = subscribeToPlatformRevenue((revStats) => {
+      setRevenue({
+        stream1: revStats.stream1,
+        stream2: revStats.stream2,
+        stream3: revStats.stream3,
+        stream4: revStats.stream4,
+        totalGross: revStats.totalGross,
+        totalWithdrawn: revStats.totalWithdrawn,
+        unifiedAvailable: revStats.unifiedAvailable
+      });
       setData((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           superAdminEarnings: {
             ...prev.superAdminEarnings,
-            stream1_registration: revStats.stream1_registration,
-            stream2_contribution: revStats.stream2_contribution,
-            stream3_packing: revStats.stream3_packing,
-            stream4_withdrawal: revStats.stream4_withdrawal,
+            stream1_registration: revStats.stream1,
+            stream2_contribution: revStats.stream2,
+            stream3_packing: revStats.stream3,
+            stream4_withdrawal: revStats.stream4,
             total_gross: revStats.totalGross,
             total_withdrawn: revStats.totalWithdrawn,
-            available_balance: revStats.availableBalance
+            available_balance: revStats.unifiedAvailable
           },
           superAdminWallet: {
             ...prev.superAdminWallet,
-            stream1_registration: revStats.stream1_registration,
-            stream2_contribution: revStats.stream2_contribution,
-            stream3_packing: revStats.stream3_packing,
-            stream4_withdrawal: revStats.stream4_withdrawal,
+            stream1_registration: revStats.stream1,
+            stream2_contribution: revStats.stream2,
+            stream3_packing: revStats.stream3,
+            stream4_withdrawal: revStats.stream4,
             total_gross: revStats.totalGross,
             total_withdrawn: revStats.totalWithdrawn,
-            available_balance: revStats.availableBalance
+            available_balance: revStats.unifiedAvailable
           }
         };
       });
     });
+
+    fetchSuperAdminData();
 
     return () => unsub();
   }, [userPhone, userId]);
@@ -173,7 +226,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       return;
     }
 
-    const maxAvailable = data.superAdminWallet?.available_balance ?? data.superAdminEarnings.available_balance ?? data.metrics?.superAdminAvailableBalance ?? 0;
+    const maxAvailable = revenue?.unifiedAvailable ?? data.superAdminWallet?.available_balance ?? data.superAdminEarnings.available_balance ?? data.metrics?.superAdminAvailableBalance ?? 0;
     if (amount > maxAvailable) {
       setWithdrawError(`Amount cannot exceed available revenue balance of ${formatNaira(maxAvailable)}.`);
       return;
@@ -270,9 +323,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     ledger = []
   } = data;
 
-  const availableRevenue = superAdminWallet?.available_balance ?? superAdminEarnings?.available_balance ?? metrics.superAdminAvailableBalance ?? 0;
-  const lifetimeRevenue = superAdminWallet?.total_gross_earnings ?? superAdminEarnings?.total_earned ?? superAdminEarnings?.totalEarnings ?? 0;
-  const withdrawnRevenue = superAdminWallet?.total_withdrawn ?? superAdminEarnings?.total_withdrawn ?? metrics.superAdminWithdrawnAmount ?? 0;
+  const availableRevenue = revenue?.unifiedAvailable ?? superAdminWallet?.available_balance ?? superAdminEarnings?.available_balance ?? metrics?.superAdminAvailableBalance ?? 0;
+  const lifetimeRevenue = revenue?.totalGross ?? superAdminWallet?.total_gross_earnings ?? superAdminEarnings?.total_earned ?? superAdminEarnings?.totalEarnings ?? 0;
+  const withdrawnRevenue = revenue?.totalWithdrawn ?? superAdminWallet?.total_withdrawn ?? superAdminEarnings?.total_withdrawn ?? metrics?.superAdminWithdrawnAmount ?? 0;
+
+  const stream1Total = revenue?.stream1 ?? superAdminEarnings?.stream1_registration ?? superAdminWallet?.breakdown?.reg_600_total ?? metrics?.totalPersonalPlatformFees ?? 0;
+  const stream2Total = revenue?.stream2 ?? superAdminEarnings?.stream2_contribution ?? superAdminWallet?.breakdown?.contrib_60_total ?? metrics?.totalContributionFees ?? 0;
+  const stream3Total = revenue?.stream3 ?? superAdminEarnings?.stream3_packing ?? superAdminWallet?.breakdown?.packing_33_total ?? metrics?.superAdminCommission ?? 0;
+  const stream4Total = revenue?.stream4 ?? superAdminEarnings?.stream4_withdrawal ?? superAdminWallet?.breakdown?.withdrawal_1_6_total ?? metrics?.totalPersonalWithdrawalFees ?? 0;
 
   // Filtered withdrawals
   const filteredWithdrawals = withdrawals.filter((w) => {
@@ -544,7 +602,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <span className="text-2xl font-black text-slate-900 block mt-1">
-                  {formatNaira(superAdminWallet?.breakdown?.reg_600_total ?? metrics.totalPersonalPlatformFees ?? 0)}
+                  {formatNaira(stream1Total)}
                 </span>
                 <span className="text-xs text-slate-500 mt-1 block">
                   Personal Ajo ₦600 activation fee per registered saver
@@ -562,7 +620,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <span className="text-2xl font-black text-slate-900 block mt-1">
-                  {formatNaira(superAdminWallet?.breakdown?.contrib_60_total ?? metrics.totalContributionFees ?? 0)}
+                  {formatNaira(stream2Total)}
                 </span>
                 <span className="text-xs text-slate-500 mt-1 block">
                   ₦60 platform fee on every group contribution
@@ -580,7 +638,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <span className="text-2xl font-black text-slate-900 block mt-1">
-                  {formatNaira(superAdminWallet?.breakdown?.packing_33_total ?? metrics.superAdminCommission ?? 0)}
+                  {formatNaira(stream3Total)}
                 </span>
                 <span className="text-xs text-slate-500 mt-1 block">
                   1/3 share of group packing fees
@@ -598,7 +656,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <span className="text-2xl font-black text-slate-900 block mt-1">
-                  {formatNaira(superAdminWallet?.breakdown?.withdrawal_1_6_total ?? metrics.totalPersonalWithdrawalFees ?? 0)}
+                  {formatNaira(stream4Total)}
                 </span>
                 <span className="text-xs text-slate-500 mt-1 block">
                   1.6% fee retained on personal savings withdrawals
@@ -1357,7 +1415,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <div className="text-xl font-black text-slate-900">
-                  {formatNaira(superAdminWallet?.breakdown?.reg_600_total ?? metrics.totalPersonalPlatformFees ?? 0)}
+                  {formatNaira(stream1Total)}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
                   Personal Ajo one-time activation fee per registered saver.
@@ -1375,7 +1433,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <div className="text-xl font-black text-slate-900">
-                  {formatNaira(superAdminWallet?.breakdown?.contrib_60_total ?? metrics.totalContributionFees ?? 0)}
+                  {formatNaira(stream2Total)}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
                   Platform fee on every contribution made across all groups.
@@ -1393,7 +1451,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <div className="text-xl font-black text-slate-900">
-                  {formatNaira(superAdminWallet?.breakdown?.packing_33_total ?? metrics.superAdminCommission ?? 0)}
+                  {formatNaira(stream3Total)}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
                   1/3 share of packing fees retained on group payouts.
@@ -1411,7 +1469,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </span>
                 </div>
                 <div className="text-xl font-black text-slate-900">
-                  {formatNaira(superAdminWallet?.breakdown?.withdrawal_1_6_total ?? metrics.totalPersonalWithdrawalFees ?? 0)}
+                  {formatNaira(stream4Total)}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
                   1.6% fee retained on Personal Ajo member savings withdrawals.

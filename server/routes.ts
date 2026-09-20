@@ -57,6 +57,7 @@ import {
   fsRecordPackingRevenue,
   fsRecordWithdrawalFeeRevenue,
   fsRecordSuperAdminWithdrawalDeduction,
+  fsGetPlatformRevenueMain,
   getFirestoreDb,
   fsLogAuditEvent,
   fsSaveOtp,
@@ -2567,6 +2568,54 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
     }
 
     const data = db.getSuperAdminFullData(profile?.id, profile?.phone || superAdminPhone);
+    try {
+      const fsRev = await fsGetPlatformRevenueMain();
+      if (fsRev) {
+        data.superAdminEarnings = {
+          ...data.superAdminEarnings,
+          stream1_registration: fsRev.stream1,
+          stream2_contribution: fsRev.stream2,
+          stream3_packing: fsRev.stream3,
+          stream4_withdrawal: fsRev.stream4,
+          total_gross: fsRev.totalGross,
+          total_withdrawn: fsRev.totalWithdrawn,
+          available_balance: fsRev.unifiedAvailable,
+          totalEarnings: fsRev.unifiedAvailable,
+          total_earned: fsRev.totalGross,
+          lifetimeEarned: fsRev.totalGross,
+          unifiedAvailable: fsRev.unifiedAvailable
+        };
+        data.superAdminWallet = {
+          ...data.superAdminWallet,
+          total_gross_earnings: fsRev.totalGross,
+          total_withdrawn: fsRev.totalWithdrawn,
+          available_balance: fsRev.unifiedAvailable,
+          stream1_registration: fsRev.stream1,
+          stream2_contribution: fsRev.stream2,
+          stream3_packing: fsRev.stream3,
+          stream4_withdrawal: fsRev.stream4,
+          total_gross: fsRev.totalGross,
+          unifiedAvailable: fsRev.unifiedAvailable,
+          breakdown: {
+            reg_600_total: fsRev.stream1,
+            contrib_60_total: fsRev.stream2,
+            packing_33_total: fsRev.stream3,
+            withdrawal_1_6_total: fsRev.stream4
+          }
+        };
+        if (data.metrics) {
+          data.metrics.superAdminAvailableBalance = fsRev.unifiedAvailable;
+          data.metrics.totalSuperAdminEarnings = fsRev.totalGross;
+          data.metrics.superAdminWithdrawnAmount = fsRev.totalWithdrawn;
+          data.metrics.totalPersonalPlatformFees = fsRev.stream1;
+          data.metrics.totalContributionFees = fsRev.stream2;
+          data.metrics.superAdminCommission = fsRev.stream3;
+          data.metrics.totalPersonalWithdrawalFees = fsRev.stream4;
+        }
+      }
+    } catch (e) {
+      console.warn('[superadmin/full-data] Error attaching Firestore revenue:', e);
+    }
     return res.json(data);
   } catch (err: any) {
     return res.status(400).json({ error: err.message });

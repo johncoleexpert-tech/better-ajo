@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Rule 6: platformRevenue/main can only be updated via increment, never setDoc overwrite
+    match /platformRevenue/{docId} {
+      allow read: if true;
+      // Disallow client setDoc creating or overwriting platformRevenue/main
+      allow create: if false;
+      allow delete: if false;
+
+      // Only allow updating existing main document via additive increments:
+      // Gross earnings and stream amounts can never decrease (preventing setDoc overwrite or balance wipe)
+      allow update: if docId == 'main'
+        && request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'stream1', 'stream2', 'stream3', 'stream4',
+          'totalGross', 'totalWithdrawn', 'unifiedAvailable', 'lastUpdated'
+        ])
+        && request.resource.data.totalGross >= resource.data.totalGross
+        && request.resource.data.totalWithdrawn >= resource.data.totalWithdrawn
+        && request.resource.data.stream1 >= resource.data.stream1
+        && request.resource.data.stream2 >= resource.data.stream2
+        && request.resource.data.stream3 >= resource.data.stream3
+        && request.resource.data.stream4 >= resource.data.stream4;
+    }
+
+    // Users and Profiles
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    match /profiles/{profileId} {
+      allow read, write: if true;
+    }
+
+    // Group & Personal Savings Collections
+    match /groups/{groupId} {
+      allow read, write: if true;
+    }
+    match /group_members/{memberId} {
+      allow read, write: if true;
+    }
+    match /contributions/{contribId} {
+      allow read, write: if true;
+    }
+    match /personal_ajo/{ajoId} {
+      allow read, write: if true;
+    }
+    match /transactions/{txId} {
+      allow read, write: if true;
+    }
+    match /payments/{paymentId} {
+      allow read, write: if true;
+    }
+    match /withdrawals/{withdrawalId} {
+      allow read, write: if true;
+    }
+
+    // Default fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
