@@ -28,6 +28,7 @@ import {
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
+import { subscribeToPlatformRevenue } from '../lib/firebase.js';
 
 interface SuperAdminDashboardProps {
   onBack: () => void;
@@ -127,6 +128,38 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   useEffect(() => {
     fetchSuperAdminData();
+
+    // Durable Real-Time Firestore platformRevenue synchronization
+    const unsub = subscribeToPlatformRevenue((revStats) => {
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          superAdminEarnings: {
+            ...prev.superAdminEarnings,
+            stream1_registration: revStats.stream1_registration,
+            stream2_contribution: revStats.stream2_contribution,
+            stream3_packing: revStats.stream3_packing,
+            stream4_withdrawal: revStats.stream4_withdrawal,
+            total_gross: revStats.totalGross,
+            total_withdrawn: revStats.totalWithdrawn,
+            available_balance: revStats.availableBalance
+          },
+          superAdminWallet: {
+            ...prev.superAdminWallet,
+            stream1_registration: revStats.stream1_registration,
+            stream2_contribution: revStats.stream2_contribution,
+            stream3_packing: revStats.stream3_packing,
+            stream4_withdrawal: revStats.stream4_withdrawal,
+            total_gross: revStats.totalGross,
+            total_withdrawn: revStats.totalWithdrawn,
+            available_balance: revStats.availableBalance
+          }
+        };
+      });
+    });
+
+    return () => unsub();
   }, [userPhone, userId]);
 
   const handleWithdrawRevenue = async (e: React.FormEvent) => {

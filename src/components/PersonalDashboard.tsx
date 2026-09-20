@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Wallet,
   ArrowUpRight,
@@ -18,6 +18,7 @@ import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { PaystackModal, PaymentBreakdown } from './PaystackModal.js';
 import { OtpModal } from './OtpModal.js';
 import { apiRequest } from '../lib/api.js';
+import { subscribeToUserPersonalBalance } from '../lib/firebase.js';
 
 interface PersonalDashboardProps {
   user: UserProfile;
@@ -34,7 +35,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 }) => {
   // Modal states
   const [showDepositModal, setShowDepositModal] = useState(false);
-  const [depositAmount, setDepositAmount] = useState('10000');
+  const [depositAmount, setDepositAmount] = useState('5000');
   const [depositPaystack, setDepositPaystack] = useState<{
     reference: string;
     authorization_url?: string;
@@ -52,6 +53,33 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Durable real-time Firestore listener for user personalBalance
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Direct endpoint fetch on mount
+    apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
+      .then((data) => {
+        if (data && typeof data.personalBalance === 'number') {
+          onUpdatePersonalAjo({
+            ...personalAjo,
+            balance: data.personalBalance
+          });
+        }
+      })
+      .catch(() => {});
+
+    // Real-time Firestore onSnapshot listener
+    const unsub = subscribeToUserPersonalBalance(user.id, (freshBalance) => {
+      onUpdatePersonalAjo({
+        ...personalAjo,
+        balance: freshBalance
+      });
+    });
+
+    return () => unsub();
+  }, [user?.id]);
 
   // Deposit flow
   const handleInitDeposit = async (e: React.FormEvent) => {
@@ -83,6 +111,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     if (!depositPaystack) return;
     try {
       setLoading(true);
+      setError(null);
       const data = await apiRequest('/api/personal/deposit/verify', {
         method: 'POST',
         body: JSON.stringify({
@@ -92,12 +121,19 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         })
       });
 
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Transaction failed - not saved');
+      }
+
       onUpdatePersonalAjo(data.personalAjo);
       setDepositPaystack(null);
       setSuccessMessage(`Successfully saved ${formatNaira(Number(depositAmount))} to your Personal Better Ajo!`);
       setTimeout(() => setSuccessMessage(null), 5000);
     } catch (err: any) {
-      setError(err.message || 'Verification error');
+      const errMsg = err.message?.includes('Transaction failed')
+        ? err.message
+        : `Transaction failed - not saved: ${err.message || 'Verification error'}`;
+      setError(errMsg);
       throw err;
     } finally {
       setLoading(false);
@@ -351,8 +387,27 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 </div>
               </div>
 
-              <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-600 border border-slate-100">
-                Payment is processed securely using Paystack. A standard ₦60 transaction fee applies at checkout. {formatNaira(Number(depositAmount) || 0)} goes directly into your savings balance.
+              {/* Additive Fee Breakdown */}
+              <div className="rounded-2xl bg-slate-50 p-4 border border-slate-200/80 space-y-2.5 text-xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="font-medium">Savings:</span>
+                  <span className="font-bold text-slate-900 text-sm">{formatNaira(Number(depositAmount) || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-slate-600">
+                  <span className="font-medium">Platform Fee:</span>
+                  <span className="font-bold text-amber-700 text-sm">+₦60</span>
+                </div>
+                <div className="border-t border-slate-200 pt-2 flex justify-between items-center text-sm font-black text-slate-900">
+                  <span>Total to Pay:</span>
+                  <span className="text-[#008751] text-base font-black">{formatNaira((Number(depositAmount) || 0) + 60)}</span>
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-emerald-50/70 p-3 text-xs text-emerald-800 border border-emerald-100 flex items-start space-x-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  The ₦60 platform fee is added on top. Exactly <strong>{formatNaira(Number(depositAmount) || 0)}</strong> will be credited directly to your savings balance.
+                </span>
               </div>
 
               <button
@@ -360,7 +415,11 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 disabled={loading}
                 className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Proceed to Paystack (+ ₦60 fee)</span>}
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <span>Pay {formatNaira((Number(depositAmount) || 0) + 60)} via Paystack</span>
+                )}
               </button>
             </form>
           </div>

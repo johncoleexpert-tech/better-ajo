@@ -16,6 +16,7 @@ import { InfoModal } from './components/InfoModals.js';
 import { LiveSupportChat } from './components/LiveSupportChat.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { UserProfile, PersonalAjo, GroupAjo } from './types/index.js';
+import { subscribeToUserPersonalBalance } from './lib/firebase.js';
 
 export type AppView =
   | 'home'
@@ -81,6 +82,54 @@ export default function App() {
       console.error('Failed to restore session', e);
     }
   }, []);
+
+  // Durable real-time Firestore balance synchronization
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Fetch initial fresh balance from backend
+    fetch(`/api/user/${encodeURIComponent(user.id)}/balance`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && typeof data.personalBalance === 'number') {
+          setPersonalAjo(prev => {
+            if (!prev) {
+              return {
+                id: `pajo_${user.id}`,
+                user_id: user.id,
+                balance: data.personalBalance,
+                total_deposited: data.personalBalance,
+                total_withdrawn: 0,
+                status: 'active',
+                created_at: new Date().toISOString()
+              };
+            }
+            return { ...prev, balance: data.personalBalance };
+          });
+        }
+      })
+      .catch(() => {});
+
+    // Listen to real-time changes in Firestore users/{userId}
+    const unsub = subscribeToUserPersonalBalance(user.id, (freshBal) => {
+      setPersonalAjo(prev => {
+        if (!prev) {
+          return {
+            id: `pajo_${user.id}`,
+            user_id: user.id,
+            balance: freshBal,
+            total_deposited: freshBal,
+            total_withdrawn: 0,
+            status: 'active',
+            created_at: new Date().toISOString()
+          };
+        }
+        return { ...prev, balance: freshBal };
+      });
+    });
+
+    return () => unsub();
+  }, [user?.id]);
 
   const saveSession = (
     profile: UserProfile | null,

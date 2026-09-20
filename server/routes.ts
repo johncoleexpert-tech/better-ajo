@@ -52,6 +52,12 @@ import {
   fsExecuteContributionBatch,
   fsExecuteWithdrawalBatch,
   fsExecuteAdminWithdrawalBatch,
+  fsExecutePersonalDepositTransaction,
+  fsRecordRegistrationRevenue,
+  fsRecordPackingRevenue,
+  fsRecordWithdrawalFeeRevenue,
+  fsRecordSuperAdminWithdrawalDeduction,
+  getFirestoreDb,
   fsLogAuditEvent,
   fsSaveOtp,
   fsVerifyOtp,
@@ -301,7 +307,31 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
         db.upsertProfile(profile);
       }
 
-      const personal = db.getPersonalAjoByUserId(profile.id);
+      let personal = db.getPersonalAjoByUserId(profile.id);
+      try {
+        const fDb = getFirestoreDb();
+        if (fDb) {
+          const uDoc = await fDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id).get();
+          if (uDoc.exists) {
+            const uData = uDoc.data() || {};
+            const fsBal = Number(uData.personalBalance ?? uData.balance ?? 0);
+            if (personal) {
+              personal.balance = fsBal;
+            } else {
+              personal = {
+                id: `pajo_${profile.id}`,
+                user_id: profile.id,
+                balance: fsBal,
+                total_deposited: fsBal,
+                total_withdrawn: 0,
+                status: 'active',
+                created_at: new Date().toISOString()
+              };
+            }
+          }
+        }
+      } catch (e) {}
+
       const userGroups = db.getUserGroups(profile.id);
 
       db.recordAudit({
@@ -742,6 +772,14 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
       description: `Personal Ajo Platform Registration Fee (₦600) - ${registeredUser?.full_name || 'Saver'}`
     });
 
+    // Write to Firestore platformRevenue collection (STREAM_1_REGISTRATION)
+    fsRecordRegistrationRevenue(
+      userId,
+      600,
+      reference,
+      registeredUser?.full_name || 'Personal Saver'
+    ).catch(err => console.warn('[Firestore Revenue Warn]:', err?.message || err));
+
     return res.json({
       success: true,
       message: 'Personal Better Ajo activated successfully!',
@@ -907,12 +945,27 @@ apiRouter.post('/personal/deposit/verify', paymentRateLimiter, async (req: Reque
     personal = db.depositPersonalAjo(userId, numAmount);
     syncPersonalAjoToSupabase(personal).catch(() => {});
 
-    // CRITICAL WRITE CONFIRMATION with 3-tier resilience:
-    let confirmed = await fsExecuteDepositBatch(paymentRec, personal);
+    // CRITICAL ATOMIC FIRESTORE TRANSACTION:
+    // Atomic write to users/{userId} (personalBalance = currentBalance + numAmount),
+    // transactions collection, platformRevenue collection (STREAM_2_CONTRIBUTION, 60),
+    // and personal_ajo collection
+    const txResult = await fsExecutePersonalDepositTransaction(
+      userId,
+      numAmount,
+      60,
+      reference,
+      paymentRec
+    );
+
+    let confirmed = txResult.success;
     if (!confirmed) {
-      const remotePayment = await fsGetPaymentByReference(reference).catch(() => null);
-      if (remotePayment?.status === 'success') {
-        confirmed = true;
+      // Resilient fallback attempt with batch
+      confirmed = await fsExecuteDepositBatch(paymentRec, personal);
+      if (!confirmed) {
+        const remotePayment = await fsGetPaymentByReference(reference).catch(() => null);
+        if (remotePayment?.status === 'success') {
+          confirmed = true;
+        }
       }
     }
 
@@ -925,12 +978,28 @@ apiRouter.post('/personal/deposit/verify', paymentRateLimiter, async (req: Reque
       });
     }
 
+    if (txResult.newBalance) {
+      personal.balance = txResult.newBalance;
+    }
+
+    // Record the ₦60 additive transaction fee into Super Admin Revenue Ledger (Stream 2 - CONTRIBUTION)
+    const saverProfile = db.getProfileById(userId);
+    db.recordAdminRevenue({
+      type: 'contribution_60',
+      amount: 60,
+      group_or_user: `Personal Saver: ${saverProfile?.full_name || userId}`,
+      user_id: userId,
+      gross_amount: numAmount,
+      reference,
+      description: `₦60 Personal Ajo Savings Fee (Deposit: ₦${numAmount.toLocaleString()})`
+    });
+
     // Audit log
     db.recordAudit({
       event_type: 'PERSONAL_DEPOSIT_COMPLETED',
       user_id: userId,
       ip_address: req.ip,
-      details: { amount: numAmount, reference, newBalance: personal.balance }
+      details: { amount: numAmount, fee: 60, totalPaid: numAmount + 60, reference, newBalance: personal.balance }
     });
 
     return res.json({ success: true, personalAjo: personal });
@@ -1007,7 +1076,7 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       }
     });
 
-    // STEP 2 - Record Personal Ajo 1.6% Withdrawal Fee in Super Admin Revenue Ledger
+    // STEP 2 - Record Personal Ajo 1.6% Withdrawal Fee in Super Admin Revenue Ledger & Firestore
     if (fee > 0) {
       db.recordAdminRevenue({
         type: 'withdrawal_1_6',
@@ -1018,7 +1087,27 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
         gross_amount: numAmount,
         description: `1.6% Personal Withdrawal Processing Fee (Gross: ₦${numAmount.toLocaleString()}, Net: ₦${netAmount.toLocaleString()})`
       });
+
+      fsRecordWithdrawalFeeRevenue(
+        userId,
+        numAmount,
+        fee,
+        result.withdrawal.id,
+        profile.full_name || ''
+      ).catch(err => console.warn('[Firestore Revenue Warn]:', err?.message || err));
     }
+
+    // Update Firestore users collection with the new personalBalance
+    try {
+      const fDb = getFirestoreDb();
+      if (fDb) {
+        fDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).set({
+          personalBalance: result.personal.balance,
+          balance: result.personal.balance,
+          updatedAt: new Date()
+        }, { merge: true }).catch(() => {});
+      }
+    } catch (e) {}
 
     return res.json({
       success: true,
@@ -1950,6 +2039,15 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
       });
     }
 
+    if (result.commission && result.commission.super_admin_amount > 0) {
+      fsRecordPackingRevenue(
+        groupId,
+        result.transaction.id,
+        result.commission.super_admin_amount,
+        group.group_name
+      ).catch(err => console.warn('[Firestore Packing Revenue Warn]:', err?.message || err));
+    }
+
     const completionMessage = result.roundCompleted
       ? `All Members Have Successfully Packed! Round ${group.current_round} Completed`
       : undefined;
@@ -2679,6 +2777,10 @@ apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: 
       console.warn('[Supabase Super Admin Payment Sync Warn]:', err?.message || err);
     });
 
+    fsRecordSuperAdminWithdrawalDeduction(withdrawal).catch(err => {
+      console.warn('[Firestore Withdrawal Deduction Warn]:', err?.message || err);
+    });
+
     return res.json({
       success: true,
       message: transferResult.message || `Super Admin revenue of ₦${effectiveAmount.toLocaleString()} disbursed successfully!`,
@@ -2718,6 +2820,90 @@ apiRouter.get('/superadmin/audit-wallet', async (req: Request, res: Response) =>
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Failed to fetch super admin wallet' });
+  }
+});
+
+// Durable Real-Time Balance from Firestore
+apiRouter.get('/user/:userId/balance', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const dbInst = getFirestoreDb();
+    if (dbInst) {
+      const uDoc = await dbInst.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
+      if (uDoc.exists) {
+        const uData = uDoc.data() || {};
+        const personalBalance = Number(uData.personalBalance ?? uData.balance ?? 0);
+        return res.json({
+          success: true,
+          userId,
+          personalBalance,
+          balance: personalBalance
+        });
+      }
+    }
+    // Fallback to in-memory db
+    const personal = db.getPersonalAjoByUserId(userId);
+    return res.json({
+      success: true,
+      userId,
+      personalBalance: personal?.balance ?? 0,
+      balance: personal?.balance ?? 0
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Real-Time Platform Revenue directly from Firestore collection
+apiRouter.get('/superadmin/firestore-revenue', async (req: Request, res: Response) => {
+  try {
+    const dbInst = getFirestoreDb();
+    if (!dbInst) {
+      return res.status(503).json({ error: 'Firestore unavailable' });
+    }
+    const snap = await dbInst.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).get();
+    let stream1_registration = 0;
+    let stream2_contribution = 0;
+    let stream3_packing = 0;
+    let stream4_withdrawal = 0;
+    let total_withdrawn = 0;
+    const items: any[] = [];
+
+    snap.forEach(doc => {
+      const data = doc.data();
+      const amt = Number(data.amount || 0);
+      items.push({ id: doc.id, ...data });
+      if (data.stream === 'STREAM_1_REGISTRATION') {
+        stream1_registration += amt;
+      } else if (data.stream === 'STREAM_2_CONTRIBUTION') {
+        stream2_contribution += amt;
+      } else if (data.stream === 'STREAM_3_PACKING') {
+        stream3_packing += amt;
+      } else if (data.stream === 'STREAM_4_WITHDRAWAL') {
+        stream4_withdrawal += amt;
+      } else if (data.stream === 'WITHDRAWAL_DEDUCTION') {
+        total_withdrawn += Math.abs(amt);
+      }
+    });
+
+    const total_gross = stream1_registration + stream2_contribution + stream3_packing + stream4_withdrawal;
+    const available_balance = Math.max(0, total_gross - total_withdrawn);
+
+    return res.json({
+      success: true,
+      source: 'firestore',
+      stream1_registration,
+      stream2_contribution,
+      stream3_packing,
+      stream4_withdrawal,
+      total_gross,
+      total_withdrawn,
+      available_balance,
+      count: snap.size,
+      items
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
   }
 });
 

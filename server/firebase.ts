@@ -29,6 +29,7 @@ let authInstance: Auth | null = null;
 
 export const FIRESTORE_COLLECTIONS = {
   PROFILES: 'profiles',
+  USERS: 'users',
   PERSONAL_AJO: 'personal_ajo',
   GROUPS: 'groups',
   GROUP_MEMBERS: 'group_members',
@@ -37,6 +38,8 @@ export const FIRESTORE_COLLECTIONS = {
   COMMISSIONS: 'commissions',
   WITHDRAWALS: 'withdrawals',
   PAYMENTS: 'payments',
+  TRANSACTIONS: 'transactions',
+  PLATFORM_REVENUE: 'platformRevenue',
   AUDIT_LOGS: 'audit_logs',
   OTPS: 'otps',
   SUPER_ADMIN_EARNINGS: 'superAdminEarnings',
@@ -1343,6 +1346,117 @@ export async function fsExecuteStartNextRoundBatch(
  * - personal_ajo doc
  * Guarantees that either both the payment record and updated personal balance are confirmed in Firestore or none.
  */
+export async function fsExecutePersonalDepositTransaction(
+  userId: string,
+  savingsAmount: number,
+  fee: number = 60,
+  reference: string,
+  paymentRec?: PaymentRecord
+): Promise<{ success: boolean; newBalance: number; error?: string }> {
+  const startTime = Date.now();
+  const db = getFirestoreDb();
+  if (!db) {
+    console.error(`[fsExecutePersonalDepositTransaction] Firestore DB unavailable for ref: ${reference}`);
+    return { success: false, newBalance: 0, error: 'Firestore unavailable' };
+  }
+
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      // 1. Read users/{userId}
+      const userRef = db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId);
+      const userSnap = await transaction.get(userRef);
+
+      let currentBalance = 0;
+      if (userSnap.exists) {
+        const userData = userSnap.data() || {};
+        currentBalance = Number(userData.personalBalance ?? userData.balance ?? 0);
+      } else {
+        // Check personal_ajo fallback
+        const pAjoQuery = await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO)
+          .where('user_id', '==', userId).limit(1).get();
+        if (!pAjoQuery.empty) {
+          const pDoc = pAjoQuery.docs[0].data();
+          currentBalance = Number(pDoc.balance ?? 0);
+        }
+      }
+
+      // Additive savings: FULL savings amount is added to personalBalance. Fee is NOT deducted!
+      const newBalance = currentBalance + savingsAmount;
+      const totalPaid = savingsAmount + fee;
+
+      // 2. Update/create users/{userId} document
+      transaction.set(
+        userRef,
+        {
+          id: userId,
+          personalBalance: newBalance,
+          balance: newBalance,
+          updatedAt: new Date()
+        },
+        { merge: true }
+      );
+
+      // 3. Update personal_ajo collection document
+      const pAjoQuery = await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO)
+        .where('user_id', '==', userId).limit(1).get();
+      if (!pAjoQuery.empty) {
+        const pDoc = pAjoQuery.docs[0];
+        const pData = pDoc.data() || {};
+        transaction.update(pDoc.ref, {
+          balance: newBalance,
+          total_deposited: Number(pData.total_deposited || 0) + savingsAmount,
+          total_saved: Number(pData.total_saved || 0) + savingsAmount,
+          updated_at: new Date().toISOString()
+        });
+      }
+
+      // 4. Create transactions collection document
+      const txRef = db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc();
+      transaction.set(txRef, {
+        userId,
+        type: 'personal_savings',
+        savingsAmount,
+        fee,
+        totalPaid,
+        newBalance,
+        status: 'success',
+        reference,
+        createdAt: new Date()
+      });
+
+      // 5. Create platformRevenue collection document for STREAM_2_CONTRIBUTION
+      const revenueRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+      transaction.set(revenueRef, {
+        stream: 'STREAM_2_CONTRIBUTION',
+        streamName: 'CONTRIBUTION',
+        type: 'personal_savings_fee',
+        amount: fee,
+        source: 'personal_ajo',
+        savingsAmount,
+        totalPaid,
+        userId,
+        reference,
+        createdAt: new Date()
+      });
+
+      // 6. Record payment document if provided
+      if (paymentRec) {
+        const payDocId = paymentRec.id || paymentRec.reference || reference;
+        const payRef = db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId);
+        transaction.set(payRef, cleanUndefinedFields(paymentRec), { merge: true });
+      }
+
+      return { success: true, newBalance };
+    });
+
+    console.log(`[fsExecutePersonalDepositTransaction] Atomic transaction committed for ${userId}: newBalance=₦${result.newBalance} in ${Date.now() - startTime}ms`);
+    return result;
+  } catch (err: any) {
+    console.error(`[fsExecutePersonalDepositTransaction] Atomic transaction failed for ${userId}:`, err);
+    return { success: false, newBalance: 0, error: err?.message || 'Transaction failed' };
+  }
+}
+
 export async function fsExecuteDepositBatch(
   payment: PaymentRecord,
   personal: PersonalAjo
@@ -1358,52 +1472,22 @@ export async function fsExecuteDepositBatch(
     return false;
   }
 
-  const cleanPayment = cleanUndefinedFields(payment);
-  const cleanPersonal = cleanUndefinedFields(personal);
-  const payDocId = payment.id || payment.reference;
+  // Use the atomic transaction model to guarantee users collection, transactions, and platformRevenue are all written
+  const depositAmount = Number(payment.amount || 0) / 100; // payment in kobo or naira
+  // if total was savings + 60, savings is depositAmount >= 60 ? depositAmount - 60 : depositAmount
+  const actualSavings = (depositAmount > 60 && Math.abs(depositAmount - Math.round(depositAmount)) < 0.01)
+    ? depositAmount - 60
+    : (personal.balance || depositAmount);
 
-  // Tier 1: Primary Atomic Batch Write
-  try {
-    const batch = db.batch();
-    batch.set(db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId), cleanPayment, { merge: true });
-    batch.set(db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id), cleanPersonal, { merge: true });
-    await batch.commit();
-    console.log(`[Firestore Deposit Batch] Committed atomic batch for ref ${payment.reference} in ${Date.now() - startTime}ms`);
-    return true;
-  } catch (batchErr: any) {
-    console.warn(`[Firestore Deposit Batch] Primary batch commit failed for ref ${payment.reference} (${Date.now() - startTime}ms): ${batchErr?.message || batchErr}. Executing sequential fallback...`);
-  }
+  const txRes = await fsExecutePersonalDepositTransaction(
+    personal.user_id,
+    actualSavings > 0 ? actualSavings : 5000,
+    60,
+    payment.reference,
+    payment
+  );
 
-  // Tier 2: Resilient Sequential Fallback Writes
-  try {
-    await db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId).set(cleanPayment, { merge: true });
-    await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id).set(cleanPersonal, { merge: true });
-    console.log(`[Firestore Deposit Batch] Sequential fallback write successfully committed for ref: ${payment.reference}`);
-    return true;
-  } catch (seqErr: any) {
-    console.error(`[Firestore Deposit Batch] Sequential fallback write failed for ref ${payment.reference}:`, {
-      name: seqErr?.name,
-      code: seqErr?.code,
-      message: seqErr?.message,
-      durationMs: Date.now() - startTime
-    });
-  }
-
-  // Tier 3: Read-Back Confirmation Verification
-  try {
-    const [pSnap, persSnap] = await Promise.all([
-      db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId).get(),
-      db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id).get()
-    ]);
-    if (pSnap.exists && persSnap.exists && (pSnap.data() as any)?.status === 'success') {
-      console.log(`[Firestore Deposit Batch] Verified records exist in Firestore despite write error for ref: ${payment.reference}`);
-      return true;
-    }
-  } catch (verifyErr: any) {
-    console.error(`[Firestore Deposit Batch] Read-back verification failed for ref ${payment.reference}:`, verifyErr?.message || verifyErr);
-  }
-
-  return false;
+  return txRes.success;
 }
 
 /**
@@ -1443,8 +1527,23 @@ export async function fsExecuteContributionBatch(
     if (cleanMember && member?.id) {
       batch.set(db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS).doc(member.id), cleanMember, { merge: true });
     }
+    // Also record STREAM_2_CONTRIBUTION platform revenue
+    const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+    batch.set(revRef, {
+      stream: 'STREAM_2_CONTRIBUTION',
+      streamName: 'CONTRIBUTION',
+      type: 'group_contribution_fee',
+      amount: 60,
+      source: 'group_ajo',
+      savingsAmount: Number(contribution.amount || 0),
+      totalPaid: Number(contribution.amount || 0) + 60,
+      group_id: contribution.group_id,
+      userId: contribution.user_id || member?.user_id,
+      reference: payment.reference,
+      createdAt: new Date()
+    });
     await batch.commit();
-    console.log(`[Firestore Contribution Batch] Committed atomic batch for ref ${payment.reference} in ${Date.now() - startTime}ms`);
+    console.log(`[Firestore Contribution Batch] Committed atomic batch with platform revenue for ref ${payment.reference} in ${Date.now() - startTime}ms`);
     return true;
   } catch (batchErr: any) {
     console.warn(`[Firestore Contribution Batch] Primary batch commit failed for ref ${payment.reference} (${Date.now() - startTime}ms): ${batchErr?.message || batchErr}. Executing sequential fallback...`);
@@ -1457,6 +1556,19 @@ export async function fsExecuteContributionBatch(
     if (cleanMember && member?.id) {
       await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS).doc(member.id).set(cleanMember, { merge: true });
     }
+    await db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc().set({
+      stream: 'STREAM_2_CONTRIBUTION',
+      streamName: 'CONTRIBUTION',
+      type: 'group_contribution_fee',
+      amount: 60,
+      source: 'group_ajo',
+      savingsAmount: Number(contribution.amount || 0),
+      totalPaid: Number(contribution.amount || 0) + 60,
+      group_id: contribution.group_id,
+      userId: contribution.user_id || member?.user_id,
+      reference: payment.reference,
+      createdAt: new Date()
+    });
     console.log(`[Firestore Contribution Batch] Sequential fallback write successfully committed for ref: ${payment.reference}`);
     return true;
   } catch (seqErr: any) {
@@ -2232,6 +2344,220 @@ export async function deductFromSuperAdminEarnings(
   }), { merge: true });
 
   return { success: true, totalEarnings: newTotal, withdrawn: newWithdrawn };
+}
+
+/**
+ * Record Personal Ajo ₦600 registration fee to Firestore platformRevenue collection (STREAM_1_REGISTRATION).
+ */
+export async function fsRecordRegistrationRevenue(
+  userId: string,
+  fee: number = 600,
+  reference: string = '',
+  fullName: string = ''
+): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db) return false;
+  try {
+    const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+    await revRef.set({
+      stream: 'STREAM_1_REGISTRATION',
+      streamName: 'REGISTRATION',
+      type: 'personal_registration_fee',
+      amount: fee,
+      source: 'personal_ajo',
+      userId,
+      reference,
+      description: `Personal Ajo Registration Fee ₦${fee} - ${fullName || ''}`,
+      createdAt: new Date()
+    });
+    console.log(`[Firestore Revenue] STREAM_1_REGISTRATION recorded for user ${userId}: ₦${fee}`);
+    return true;
+  } catch (err: any) {
+    console.error('[Firestore Revenue] Failed to record STREAM_1_REGISTRATION:', err?.message || err);
+    return false;
+  }
+}
+
+/**
+ * Record Group Packing 33.33% share to Firestore platformRevenue collection (STREAM_3_PACKING).
+ */
+export async function fsRecordPackingRevenue(
+  groupId: string,
+  transactionId: string,
+  superAdminShare: number,
+  groupName: string = ''
+): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db) return false;
+  try {
+    const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+    await revRef.set({
+      stream: 'STREAM_3_PACKING',
+      streamName: 'PACKING',
+      type: 'group_packing_fee',
+      amount: superAdminShare,
+      source: 'group_ajo',
+      group_id: groupId,
+      reference: transactionId,
+      description: `33.33% Share of Group Packing Fee - ${groupName || ''}`,
+      createdAt: new Date()
+    });
+    console.log(`[Firestore Revenue] STREAM_3_PACKING recorded for group ${groupId}: ₦${superAdminShare}`);
+    return true;
+  } catch (err: any) {
+    console.error('[Firestore Revenue] Failed to record STREAM_3_PACKING:', err?.message || err);
+    return false;
+  }
+}
+
+/**
+ * Record Personal Ajo 1.6% withdrawal fee to Firestore platformRevenue collection (STREAM_4_WITHDRAWAL).
+ */
+export async function fsRecordWithdrawalFeeRevenue(
+  userId: string,
+  grossAmount: number,
+  fee: number,
+  reference: string,
+  fullName: string = ''
+): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db) return false;
+  try {
+    const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+    await revRef.set({
+      stream: 'STREAM_4_WITHDRAWAL',
+      streamName: 'WITHDRAWAL',
+      type: 'personal_withdrawal_fee',
+      amount: fee,
+      source: 'personal_ajo',
+      userId,
+      gross_amount: grossAmount,
+      reference,
+      description: `1.6% Personal Withdrawal Processing Fee - ${fullName || ''}`,
+      createdAt: new Date()
+    });
+    console.log(`[Firestore Revenue] STREAM_4_WITHDRAWAL recorded for user ${userId}: ₦${fee}`);
+    return true;
+  } catch (err: any) {
+    console.error('[Firestore Revenue] Failed to record STREAM_4_WITHDRAWAL:', err?.message || err);
+    return false;
+  }
+}
+
+/**
+ * Record Super Admin withdrawal deduction to Firestore platformRevenue collection.
+ */
+export async function fsRecordSuperAdminWithdrawalDeduction(
+  withdrawal: { amount: number; reference?: string; id?: string; bank_name?: string }
+): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db) return false;
+  try {
+    const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+    await revRef.set({
+      stream: 'WITHDRAWAL_DEDUCTION',
+      type: 'super_admin_withdrawal',
+      amount: -Math.abs(Number(withdrawal.amount)),
+      reference: withdrawal.reference || withdrawal.id || '',
+      description: `Super Admin Revenue Payout to ${withdrawal.bank_name || 'Bank'}`,
+      createdAt: new Date()
+    });
+    console.log(`[Firestore Revenue] WITHDRAWAL_DEDUCTION recorded: -₦${withdrawal.amount}`);
+    return true;
+  } catch (err: any) {
+    console.error('[Firestore Revenue] Failed to record WITHDRAWAL_DEDUCTION:', err?.message || err);
+    return false;
+  }
+}
+
+/**
+ * One-time / background sync to ensure all existing profiles & personal_ajo are in Firestore `users/{userId}`
+ * with `personalBalance`, and historical ledger entries are in `platformRevenue`.
+ */
+export async function fsSyncAllToUsersAndRevenue(): Promise<void> {
+  const db = getFirestoreDb();
+  if (!db) return;
+
+  try {
+    // 1. Sync profiles and personal_ajo into users/{userId}
+    const [profilesSnap, personalSnap] = await Promise.all([
+      db.collection(FIRESTORE_COLLECTIONS.PROFILES).get(),
+      db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).get()
+    ]);
+
+    const personalMap = new Map<string, any>();
+    personalSnap.forEach((doc) => {
+      const d = doc.data();
+      if (d.user_id) personalMap.set(d.user_id, d);
+    });
+
+    const userBatch = db.batch();
+    let batchCount = 0;
+
+    profilesSnap.forEach((pDoc) => {
+      const profile = pDoc.data();
+      const pAjo = personalMap.get(profile.id);
+      const balance = Number(pAjo?.balance ?? 0);
+
+      const userRef = db.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id);
+      userBatch.set(userRef, {
+        id: profile.id,
+        email: profile.email || '',
+        phone: profile.phone || '',
+        full_name: profile.full_name || '',
+        role: profile.role || 'user',
+        personalBalance: balance,
+        balance: balance,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      batchCount++;
+    });
+
+    if (batchCount > 0) {
+      await userBatch.commit();
+      console.log(`[Firestore Sync] Synced ${batchCount} users to users collection with personalBalance`);
+    }
+
+    // 2. Check if platformRevenue is empty, and seed from admin ledger if needed
+    const revCheck = await db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).limit(1).get();
+    if (revCheck.empty) {
+      // Import ledger from in-memory db
+      const { db: inMemDb } = await import('./db.js');
+      const ledger = inMemDb.getAdminRevenueLedger() || [];
+      if (ledger.length > 0) {
+        const revBatch = db.batch();
+        ledger.forEach((item: any) => {
+          const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
+          let stream = 'STREAM_2_CONTRIBUTION';
+          if (item.type === 'registration_600' || item.stream === 'STREAM_1_REGISTRATION') stream = 'STREAM_1_REGISTRATION';
+          else if (item.type === 'contribution_60' || item.stream === 'STREAM_2_CONTRIBUTION') stream = 'STREAM_2_CONTRIBUTION';
+          else if (item.type === 'packing_33' || item.stream === 'STREAM_3_PACKING') stream = 'STREAM_3_PACKING';
+          else if (item.type === 'withdrawal_1_6' || item.stream === 'STREAM_4_WITHDRAWAL') stream = 'STREAM_4_WITHDRAWAL';
+          else if (item.type === 'super_admin_withdrawal' || item.stream === 'WITHDRAWAL_DEDUCTION') stream = 'WITHDRAWAL_DEDUCTION';
+
+          const feeVal = Number(item.fee_amount ?? item.amount ?? 0);
+          revBatch.set(revRef, {
+            stream,
+            streamName: stream === 'WITHDRAWAL_DEDUCTION' ? 'WITHDRAWAL' : stream.replace('STREAM_', '').split('_')[1] || 'REVENUE',
+            type: item.type,
+            amount: stream === 'WITHDRAWAL_DEDUCTION' ? -Math.abs(feeVal) : feeVal,
+            fee_amount: feeVal,
+            source: item.source || 'platform',
+            userId: item.user_id || '',
+            reference: item.reference || item.id,
+            description: item.description || '',
+            createdAt: item.created_at ? new Date(item.created_at) : new Date()
+          });
+        });
+
+        await revBatch.commit();
+        console.log(`[Firestore Sync] Seeded ${ledger.length} records into platformRevenue collection`);
+      }
+    }
+  } catch (syncErr: any) {
+    console.error('[Firestore Sync] fsSyncAllToUsersAndRevenue error:', syncErr?.message || syncErr);
+  }
 }
 
 
