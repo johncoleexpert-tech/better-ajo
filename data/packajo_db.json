@@ -2822,510 +2822,1334 @@
   "superAdminRevenue": 667,
   "groupAdminRevenue": 1333,
   "superAdminEarnings": {
-    "totalEarnings": 0,
-    "totalWithdrawn": 14943,
-    "lifetimeEarned": 14943,
-    "updated_at": "2026-09-19T08:56:12.905Z",
+    "totalEarnings": 5028,
+    "available_balance": 5028,
+    "total_earned": 12563,
+    "total_withdrawn": 7535,
+    "totalWithdrawn": 7535,
+    "lifetimeEarned": 12563,
+    "personalPlatformFeesMerged": true,
+    "pending_withdrawals": 0,
+    "breakdown": [
+      {
+        "date": "2026-09-19T08:58:43.637Z",
+        "source": "Personal Saver: KOLA OYEWO",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
+        "amount": 800,
+        "reference": "wth_1789808323637_61e0"
+      },
+      {
+        "date": "2026-09-18T08:31:37.084Z",
+        "source": "Group: KAJOLOWO AJO",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦2,000)",
+        "amount": 667,
+        "reference": "pck_1789720297084_mem_1789719966456_1"
+      },
+      {
+        "date": "2026-09-18T08:30:33.611Z",
+        "source": "Group: KAJOLOWO AJO (OLAMIDE KUNLE)",
+        "description": "₦60 Contribution Processing Fee (Member: OLAMIDE KUNLE, Round 1)",
+        "amount": 60,
+        "reference": "pak_1789720227998_ji6mr7"
+      },
+      {
+        "date": "2026-09-18T08:29:44.512Z",
+        "source": "Group: KAJOLOWO AJO (FUNMILAYO OJO)",
+        "description": "₦60 Contribution Processing Fee (Member: FUNMILAYO OJO, Round 1)",
+        "amount": 60,
+        "reference": "pak_1789720179491_ukj1w0"
+      },
+      {
+        "date": "2026-09-18T08:19:32.877Z",
+        "source": "Personal Saver: KOLA OYEWO",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
+        "amount": 800,
+        "reference": "wth_1789719572877_bjg6"
+      },
+      {
+        "date": "2026-09-18T08:17:15.744Z",
+        "source": "KOLA OYEWO",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - KOLA OYEWO",
+        "amount": 600,
+        "reference": "pak_1789719435747_fubbvy"
+      },
+      {
+        "date": "2026-09-14T12:56:50.145Z",
+        "source": "Personal Saver: Akinyele Paul",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦100,000)",
+        "amount": 1600,
+        "reference": "wth_1789390610145_6tx7"
+      },
+      {
+        "date": "2026-09-14T12:56:19.735Z",
+        "source": "Personal Saver: Akinyele Paul",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦5,000)",
+        "amount": 80,
+        "reference": "wth_1789390579735_19rg"
+      },
+      {
+        "date": "2026-09-14T12:42:46.896Z",
+        "source": "Group: Figure two",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
+        "amount": 1000,
+        "reference": "pck_1789389766896_mem_1788623015525_2"
+      },
+      {
+        "date": "2026-09-14T10:09:17.943Z",
+        "source": "Personal Saver: Babajide Ogundimu",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "amount": 32,
+        "reference": "wth_1789380557943_706r"
+      },
+      {
+        "date": "2026-09-14T10:09:01.368Z",
+        "source": "Personal Saver: Babajide Ogundimu",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "amount": 32,
+        "reference": "wth_1789380541368_p2jr"
+      },
+      {
+        "date": "2026-09-14T10:08:43.938Z",
+        "source": "Group: Figure two (Nonolboy)",
+        "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+        "amount": 60,
+        "reference": "pak_1789380522979_x6aa65"
+      },
+      {
+        "date": "2026-09-14T10:08:43.245Z",
+        "source": "Group: Figure two (Nonolboy)",
+        "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+        "amount": 60,
+        "reference": "pak_1789380522979_x6aa65"
+      },
+      {
+        "date": "2026-09-14T10:08:42.293Z",
+        "source": "Personal Saver: Babajide Ogundimu",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "amount": 32,
+        "reference": "wth_1789380522293_7qfa"
+      },
+      {
+        "date": "2026-09-14T10:07:53.312Z",
+        "source": "Personal Saver: Babajide Ogundimu",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+        "amount": 32,
+        "reference": "wth_1789380473312_78kv"
+      },
+      {
+        "date": "2026-09-12T22:37:28.233Z",
+        "source": "Group: Group Ajo (Member)",
+        "description": "₦60 Contribution Processing Fee (Member: Member, Round 1)",
+        "amount": 60,
+        "reference": "test_batch_ref_1789252648233"
+      },
+      {
+        "date": "2026-09-12T22:07:45.412Z",
+        "source": "Group: Figure two (Mobolape ojo)",
+        "description": "₦60 Contribution Processing Fee (Member: Mobolape ojo, Round 1)",
+        "amount": 60,
+        "reference": "ref_test_idempotent_1789250865393"
+      },
+      {
+        "date": "2026-09-09T12:00:00.000Z",
+        "source": "Group: Security Test Thrift",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+        "amount": 167,
+        "reference": "pck_1788866674649_mem_1788866674625_1"
+      },
+      {
+        "date": "2026-09-09T12:00:00.000Z",
+        "source": "Group: Security Test Thrift (Test Member 2)",
+        "description": "₦60 Contribution Processing Fee (Member: Test Member 2, Round 1)",
+        "amount": 60,
+        "reference": "REF_TEST_E2"
+      },
+      {
+        "date": "2026-09-09T12:00:00.000Z",
+        "source": "Group: Security Test Thrift (Test Member 1)",
+        "description": "₦60 Contribution Processing Fee (Member: Test Member 1, Round 1)",
+        "amount": 60,
+        "reference": "REF_TEST_E1"
+      },
+      {
+        "date": "2026-09-08T11:26:31.270Z",
+        "source": "Test Contributor 1",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Contributor 1",
+        "amount": 600,
+        "reference": "pak_reg_pajo_1788866791270_009o"
+      },
+      {
+        "date": "2026-09-08T11:26:31.266Z",
+        "source": "Group: Security Suite Group 1788866791240",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+        "amount": 167,
+        "reference": "pck_1788866791266_mem_1788866791242_1"
+      },
+      {
+        "date": "2026-09-08T11:26:31.264Z",
+        "source": "Group: Security Suite Group 1788866791240 (Test Contributor 2)",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 2, Round 1)",
+        "amount": 60,
+        "reference": "REF_PAID_M2_1788866791240"
+      },
+      {
+        "date": "2026-09-08T11:26:31.263Z",
+        "source": "Group: Security Suite Group 1788866791240 (Test Contributor 1)",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 1, Round 1)",
+        "amount": 60,
+        "reference": "REF_PAID_M1_1788866791240"
+      },
+      {
+        "date": "2026-09-08T11:26:19.982Z",
+        "source": "Group: E1 Test",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+        "amount": 167,
+        "reference": "pck_1788866779982_mem_1788866779958_1"
+      },
+      {
+        "date": "2026-09-08T11:26:19.979Z",
+        "source": "Group: E1 Test (User 2)",
+        "description": "₦60 Contribution Processing Fee (Member: User 2, Round 1)",
+        "amount": 60,
+        "reference": "REF2_1788866779956"
+      },
+      {
+        "date": "2026-09-08T11:26:19.978Z",
+        "source": "Group: E1 Test (User 1)",
+        "description": "₦60 Contribution Processing Fee (Member: User 1, Round 1)",
+        "amount": 60,
+        "reference": "REF1_1788866779956"
+      },
+      {
+        "date": "2026-09-08T11:26:14.950Z",
+        "source": "Test Contributor 1",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Contributor 1",
+        "amount": 600,
+        "reference": "pak_reg_pajo_1788866774950_j6cx"
+      },
+      {
+        "date": "2026-09-08T11:26:14.947Z",
+        "source": "Group: Security Suite Group 1788866774920",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+        "amount": 167,
+        "reference": "pck_1788866774947_mem_1788866774922_1"
+      },
+      {
+        "date": "2026-09-08T11:26:14.945Z",
+        "source": "Group: Security Suite Group 1788866774920 (Test Contributor 2)",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 2, Round 1)",
+        "amount": 60,
+        "reference": "REF_PAID_M2_1788866774920"
+      },
+      {
+        "date": "2026-09-08T11:26:14.944Z",
+        "source": "Group: Security Suite Group 1788866774920 (Test Contributor 1)",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 1, Round 1)",
+        "amount": 60,
+        "reference": "REF_PAID_M1_1788866774920"
+      },
+      {
+        "date": "2026-09-08T11:24:34.653Z",
+        "source": "Test Member 1",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Member 1",
+        "amount": 600,
+        "reference": "pak_reg_pajo_1788866674653_5ag7"
+      },
+      {
+        "date": "2026-09-08T11:11:58.132Z",
+        "source": "Group: Figure two",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
+        "amount": 1000,
+        "reference": "pck_1788865918132_mem_1788622719655_1"
+      },
+      {
+        "date": "2026-09-08T11:10:07.390Z",
+        "source": "Group: Figure two (Nonolboy)",
+        "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+        "amount": 60,
+        "reference": "pak_1788865803210_3n993x"
+      },
+      {
+        "date": "2026-09-08T11:08:13.680Z",
+        "source": "Group: Figure two (Mobolape ojo)",
+        "description": "₦60 Contribution Processing Fee (Member: Mobolape ojo, Round 1)",
+        "amount": 60,
+        "reference": "pak_1788865688306_62brjc"
+      },
+      {
+        "date": "2026-09-02T21:08:14.740Z",
+        "source": "Babajide Ogundimu",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Babajide Ogundimu",
+        "amount": 600,
+        "reference": "pak_1788383294748_erbd0t"
+      },
+      {
+        "date": "2026-09-02T21:07:47.693Z",
+        "source": "Chioma Adeyemi",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Chioma Adeyemi",
+        "amount": 600,
+        "reference": "pak_1788383267700_4lytwy"
+      },
+      {
+        "date": "2026-09-02T21:07:34.809Z",
+        "source": "Adewale Test User",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Adewale Test User",
+        "amount": 600,
+        "reference": "pak_1788383254810_8gua08"
+      },
+      {
+        "date": "2026-09-02T20:46:52.410Z",
+        "source": "Akinyele Paul",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Akinyele Paul",
+        "amount": 600,
+        "reference": "pak_reg_usr_1788382012410_urddl"
+      },
+      {
+        "date": "2026-09-01T18:02:59.901Z",
+        "source": "Group: Family Monthly Pack (Babajide Ogundimu)",
+        "description": "₦60 Contribution Processing Fee (Member: Babajide Ogundimu, Round 1)",
+        "amount": 60,
+        "reference": "cnt_2"
+      }
+    ],
     "history": [
       {
-        "id": "sa_wth_1789808172905_fqigo",
-        "amount": -7108,
-        "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Withdrawal to Guaranty Trust Bank (GTB)",
-        "reference": "wth_sa_1789808169706_w7hoa",
-        "created_at": "2026-09-19T08:56:12.905Z",
-        "balance_after": 0
+        "id": "rev_wthfee_wth_1789808323637_61e0",
+        "amount": 800,
+        "type": "withdrawal_1_6",
+        "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
+        "reference": "wth_1789808323637_61e0",
+        "user_id": "usr_1789719435722_ym18a",
+        "created_at": "2026-09-19T08:58:43.637Z",
+        "balance_after": 5028
       },
       {
-        "id": "sa_wth_1789807565110_qot36",
-        "amount": -100,
-        "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Withdrawal to Access Bank",
-        "reference": "sa_test_payout_1789807562463",
-        "created_at": "2026-09-19T08:46:05.110Z",
-        "balance_after": 7108
-      },
-      {
-        "id": "sa_wth_1789807537142_kjpcu",
-        "amount": -50,
-        "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Withdrawal to Access Bank",
-        "reference": "test_err_1789807534912",
-        "created_at": "2026-09-19T08:45:37.142Z",
-        "balance_after": 7208
-      },
-      {
-        "id": "sa_wth_1789807531811_mtfz1",
-        "amount": -50,
-        "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Withdrawal to Access Bank",
-        "reference": "test_sa_wth_1789807529231",
-        "created_at": "2026-09-19T08:45:31.811Z",
-        "balance_after": 7258
-      },
-      {
-        "id": "sa_wth_1789807511543_z7bmn",
-        "amount": -100,
-        "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Withdrawal to Access Bank",
-        "reference": "test_sa_wth_1789807508912",
-        "created_at": "2026-09-19T08:45:11.543Z",
-        "balance_after": 7308
-      },
-      {
-        "id": "sa_init_sawth_wth_sa_1789720437390",
+        "id": "rev_sawth_wth_sa_1789720437390",
         "amount": -2125,
         "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Payout",
+        "description": "Super Admin Revenue Payout to Guaranty Trust Bank (GTB)",
         "reference": "wth_sa_1789720431966_6didy",
         "user_id": "usr_superadmin_08154267469",
         "created_at": "2026-09-18T08:33:57.390Z",
-        "balance_after": 2608
+        "balance_after": 4228
       },
       {
-        "id": "sa_init_com_com_1789720297084_pck_1789720297084_mem_1789719966456_1",
+        "id": "rev_pack_com_1789720297084_pck_1789720297084_mem_1789719966456_1",
         "amount": 667,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦2,000)",
         "reference": "pck_1789720297084_mem_1789719966456_1",
         "created_at": "2026-09-18T08:31:37.084Z",
-        "balance_after": 10143
+        "balance_after": 6353
       },
       {
-        "id": "sa_init_cnt_cnt_1789719966456_mem_1789719966456_1",
+        "id": "rev_cnt_cnt_1789719966456_mem_1789719966456_1",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: OLAMIDE KUNLE, Round 1)",
         "reference": "pak_1789720227998_ji6mr7",
         "user_id": "usr_1789719966454_iwksc",
         "created_at": "2026-09-18T08:30:33.611Z",
-        "balance_after": 7408
+        "balance_after": 5686
       },
       {
-        "id": "sa_init_cnt_cnt_1789720111956_mem_1789720111956_2",
+        "id": "rev_cnt_cnt_1789720111956_mem_1789720111956_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: FUNMILAYO OJO, Round 1)",
         "reference": "pak_1789720179491_ukj1w0",
         "user_id": "usr_1789720111954_buxv5",
         "created_at": "2026-09-18T08:29:44.512Z",
-        "balance_after": 7408
+        "balance_after": 5626
       },
       {
-        "id": "sa_init_wth_wth_1789719572877_bjg6",
+        "id": "rev_wthfee_wth_1789719572877_bjg6",
         "amount": 800,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
         "reference": "wth_1789719572877_bjg6",
         "user_id": "usr_1789719435722_ym18a",
         "created_at": "2026-09-18T08:19:32.877Z",
-        "balance_after": 6808
+        "balance_after": 5566
       },
       {
-        "id": "sa_init_pay_1789719436230_irpvx",
+        "id": "rev_reg_usr_1789719435722_ym18a",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - KOLA OYEWO",
         "reference": "pak_1789719435747_fubbvy",
         "user_id": "usr_1789719435722_ym18a",
-        "created_at": "2026-09-18T08:17:16.230Z",
-        "balance_after": 4200
-      },
-      {
-        "id": "sa_init_reg_pajo_1789719435744_or8x",
-        "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600) - KOLA OYEWO",
-        "reference": "pak_reg_pajo_1789719435744_or8x",
-        "user_id": "usr_1789719435722_ym18a",
         "created_at": "2026-09-18T08:17:15.744Z",
-        "balance_after": 7408
+        "balance_after": 4766
       },
       {
-        "id": "sa_init_sawth_wth_sa_1789714414973",
+        "id": "rev_sawth_wth_sa_1789714414973",
         "amount": -144,
         "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Payout",
+        "description": "Super Admin Revenue Payout to Guaranty Trust Bank (GTB)",
         "reference": "wth_sa_1789714412439_j4ops",
         "user_id": "usr_superadmin_08154267469",
         "created_at": "2026-09-18T06:53:34.973Z",
-        "balance_after": 4733
+        "balance_after": 4166
       },
       {
-        "id": "sa_init_wth_wth_1789390610145_6tx7",
+        "id": "rev_wthfee_wth_1789390610145_6tx7",
         "amount": 1600,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦100,000)",
         "reference": "wth_1789390610145_6tx7",
         "user_id": "usr_1788382012410_urddl",
         "created_at": "2026-09-14T12:56:50.145Z",
-        "balance_after": 6008
+        "balance_after": 4310
       },
       {
-        "id": "sa_init_wth_wth_1789390579735_19rg",
+        "id": "rev_wthfee_wth_1789390579735_19rg",
         "amount": 80,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦5,000)",
         "reference": "wth_1789390579735_19rg",
         "user_id": "usr_1788382012410_urddl",
         "created_at": "2026-09-14T12:56:19.735Z",
-        "balance_after": 4408
+        "balance_after": 2710
       },
       {
-        "id": "sa_init_com_com_1789389766896_pck_1789389766896_mem_1788623015525_2",
+        "id": "rev_pack_com_1789389766896_pck_1789389766896_mem_1788623015525_2",
         "amount": 1000,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
         "reference": "pck_1789389766896_mem_1788623015525_2",
         "created_at": "2026-09-14T12:42:46.896Z",
-        "balance_after": 9476
+        "balance_after": 2630
       },
       {
-        "id": "sa_init_sawth_wth_sa_1789389705945",
+        "id": "rev_sawth_wth_sa_1789389705945",
         "amount": -4266,
         "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Payout",
+        "description": "Super Admin Revenue Payout to Guaranty Trust Bank (GTB)",
         "reference": "wth_sa_1789389703577_ksjly",
         "user_id": "usr_superadmin_08154267469",
         "created_at": "2026-09-14T12:41:45.945Z",
-        "balance_after": 4877
+        "balance_after": 1630
       },
       {
-        "id": "sa_init_sawth_wth_sa_1789380561726",
+        "id": "rev_sawth_wth_sa_1789380561726",
         "amount": -1000,
         "type": "super_admin_withdrawal",
-        "description": "Super Admin Revenue Payout",
+        "description": "Super Admin Revenue Payout to Access Bank",
         "reference": "wth_sa_usr_superadmin_08154267469_100000",
         "user_id": "usr_superadmin_08154267469",
         "created_at": "2026-09-14T10:09:21.726Z",
-        "balance_after": 9143
+        "balance_after": 5896
       },
       {
-        "id": "sa_init_wth_wth_1789380557943_706r",
+        "id": "rev_wthfee_wth_1789380557943_706r",
         "amount": 32,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
         "reference": "wth_1789380557943_706r",
         "user_id": "user_2",
         "created_at": "2026-09-14T10:09:17.943Z",
-        "balance_after": 4328
+        "balance_after": 6896
       },
       {
-        "id": "sa_init_wth_wth_1789380541368_p2jr",
+        "id": "rev_wthfee_wth_1789380541368_p2jr",
         "amount": 32,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
         "reference": "wth_1789380541368_p2jr",
         "user_id": "user_2",
         "created_at": "2026-09-14T10:09:01.368Z",
-        "balance_after": 4296
+        "balance_after": 6864
       },
       {
-        "id": "sa_init_cnt_cnt_1789380523938_mem_1788623015525_2",
+        "id": "rev_cnt_cnt_1789380523938_mem_1788623015525_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
         "reference": "pak_1789380522979_x6aa65",
         "user_id": "usr_1788623015525_o63fx",
         "created_at": "2026-09-14T10:08:43.938Z",
-        "balance_after": 7408
+        "balance_after": 6832
       },
       {
-        "id": "sa_init_wth_wth_1789380522293_7qfa",
+        "id": "rev_cnt_cnt_1789380523397_mem_1788623015525_2",
+        "amount": 60,
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+        "reference": "pak_1789380522979_x6aa65",
+        "user_id": "usr_1788623015525_o63fx",
+        "created_at": "2026-09-14T10:08:43.245Z",
+        "balance_after": 6772
+      },
+      {
+        "id": "rev_wthfee_wth_1789380522293_7qfa",
         "amount": 32,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
         "reference": "wth_1789380522293_7qfa",
         "user_id": "user_2",
         "created_at": "2026-09-14T10:08:42.293Z",
-        "balance_after": 4264
+        "balance_after": 6712
       },
       {
-        "id": "sa_init_wth_wth_1789380473312_78kv",
+        "id": "rev_wthfee_wth_1789380473312_78kv",
         "amount": 32,
-        "type": "personal_ajo_withdrawal_commission",
+        "type": "withdrawal_1_6",
         "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
         "reference": "wth_1789380473312_78kv",
         "user_id": "user_2",
         "created_at": "2026-09-14T10:07:53.312Z",
-        "balance_after": 4232
+        "balance_after": 6680
       },
       {
-        "id": "sa_init_cnt_cnt_test_1789252648233",
+        "id": "rev_cnt_cnt_test_1789252648233",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Member, Round 1)",
         "reference": "test_batch_ref_1789252648233",
         "user_id": "usr_test",
         "created_at": "2026-09-12T22:37:28.233Z",
-        "balance_after": 7408
+        "balance_after": 6648
       },
       {
-        "id": "sa_init_cnt_cnt_1789250865412_mem_1788622719655_1",
+        "id": "rev_cnt_cnt_1789250865412_mem_1788622719655_1",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Mobolape ojo, Round 1)",
         "reference": "ref_test_idempotent_1789250865393",
         "user_id": "usr_1788622719654_fpet7",
         "created_at": "2026-09-12T22:07:45.412Z",
-        "balance_after": 7408
+        "balance_after": 6588
       },
       {
-        "id": "sa_init_com_com_1788866674649_pck_1788866674649_mem_1788866674625_1",
+        "id": "rev_pack_com_1788866674649_pck_1788866674649_mem_1788866674625_1",
         "amount": 167,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
         "reference": "pck_1788866674649_mem_1788866674625_1",
         "created_at": "2026-09-09T12:00:00.000Z",
-        "balance_after": 7975
+        "balance_after": 6528
       },
       {
-        "id": "sa_init_cnt_cnt_1788866674625_mem_1788866674625_1",
+        "id": "rev_cnt_cnt_1788866674625_mem_1788866674625_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
-        "reference": "REF_TEST_E1",
-        "user_id": "usr_1788866653157_993d4",
-        "created_at": "2026-09-09T12:00:00.000Z",
-        "balance_after": 7408
-      },
-      {
-        "id": "sa_init_cnt_cnt_1788866674625_mem_1788866674625_2",
-        "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Test Member 2, Round 1)",
         "reference": "REF_TEST_E2",
         "user_id": "usr_1788866653157_mn993",
         "created_at": "2026-09-09T12:00:00.000Z",
-        "balance_after": 7408
+        "balance_after": 6361
       },
       {
-        "id": "sa_init_pay_reg_pajo_1788866791270_009o",
+        "id": "rev_cnt_cnt_1788866674625_mem_1788866674625_1",
+        "amount": 60,
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Test Member 1, Round 1)",
+        "reference": "REF_TEST_E1",
+        "user_id": "usr_1788866653157_993d4",
+        "created_at": "2026-09-09T12:00:00.000Z",
+        "balance_after": 6301
+      },
+      {
+        "id": "rev_reg_usr_1788866791240_u0kkq",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Contributor 1",
         "reference": "pak_reg_pajo_1788866791270_009o",
         "user_id": "usr_1788866791240_u0kkq",
         "created_at": "2026-09-08T11:26:31.270Z",
-        "balance_after": 3600
+        "balance_after": 6241
       },
       {
-        "id": "sa_init_com_com_1788866791266_pck_1788866791266_mem_1788866791242_1",
+        "id": "rev_pack_com_1788866791266_pck_1788866791266_mem_1788866791242_1",
         "amount": 167,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
         "reference": "pck_1788866791266_mem_1788866791242_1",
         "created_at": "2026-09-08T11:26:31.266Z",
-        "balance_after": 8476
+        "balance_after": 5641
       },
       {
-        "id": "sa_init_cnt_cnt_1788866791242_mem_1788866791242_2",
+        "id": "rev_cnt_cnt_1788866791242_mem_1788866791242_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 2, Round 1)",
         "reference": "REF_PAID_M2_1788866791240",
         "user_id": "usr_1788866791241_feyyw",
         "created_at": "2026-09-08T11:26:31.264Z",
-        "balance_after": 7408
+        "balance_after": 5474
       },
       {
-        "id": "sa_init_cnt_cnt_1788866791242_mem_1788866791242_1",
+        "id": "rev_cnt_cnt_1788866791242_mem_1788866791242_1",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 1, Round 1)",
         "reference": "REF_PAID_M1_1788866791240",
         "user_id": "usr_1788866791240_u0kkq",
         "created_at": "2026-09-08T11:26:31.263Z",
-        "balance_after": 7408
+        "balance_after": 5414
       },
       {
-        "id": "sa_init_com_com_1788866779982_pck_1788866779982_mem_1788866779958_1",
+        "id": "rev_pack_com_1788866779982_pck_1788866779982_mem_1788866779958_1",
         "amount": 167,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
         "reference": "pck_1788866779982_mem_1788866779958_1",
         "created_at": "2026-09-08T11:26:19.982Z",
-        "balance_after": 8309
+        "balance_after": 5354
       },
       {
-        "id": "sa_init_cnt_cnt_1788866779958_mem_1788866779958_2",
+        "id": "rev_cnt_cnt_1788866779958_mem_1788866779958_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: User 2, Round 1)",
         "reference": "REF2_1788866779956",
         "user_id": "usr_1788866779957_58k4n",
         "created_at": "2026-09-08T11:26:19.979Z",
-        "balance_after": 7408
+        "balance_after": 5187
       },
       {
-        "id": "sa_init_cnt_cnt_1788866779958_mem_1788866779958_1",
+        "id": "rev_cnt_cnt_1788866779958_mem_1788866779958_1",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: User 1, Round 1)",
         "reference": "REF1_1788866779956",
         "user_id": "usr_1788866779957_ye6n4",
         "created_at": "2026-09-08T11:26:19.978Z",
-        "balance_after": 7408
+        "balance_after": 5127
       },
       {
-        "id": "sa_init_pay_reg_pajo_1788866774950_j6cx",
+        "id": "rev_reg_usr_1788866774921_9jvfv",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Contributor 1",
         "reference": "pak_reg_pajo_1788866774950_j6cx",
         "user_id": "usr_1788866774921_9jvfv",
         "created_at": "2026-09-08T11:26:14.950Z",
-        "balance_after": 3000
+        "balance_after": 5067
       },
       {
-        "id": "sa_init_com_com_1788866774947_pck_1788866774947_mem_1788866774922_1",
+        "id": "rev_pack_com_1788866774947_pck_1788866774947_mem_1788866774922_1",
         "amount": 167,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
         "reference": "pck_1788866774947_mem_1788866774922_1",
         "created_at": "2026-09-08T11:26:14.947Z",
-        "balance_after": 8142
+        "balance_after": 4467
       },
       {
-        "id": "sa_init_cnt_cnt_1788866774922_mem_1788866774922_2",
+        "id": "rev_cnt_cnt_1788866774922_mem_1788866774922_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 2, Round 1)",
         "reference": "REF_PAID_M2_1788866774920",
         "user_id": "usr_1788866774921_4spg8",
         "created_at": "2026-09-08T11:26:14.945Z",
-        "balance_after": 7408
+        "balance_after": 4300
       },
       {
-        "id": "sa_init_cnt_cnt_1788866774922_mem_1788866774922_1",
+        "id": "rev_cnt_cnt_1788866774922_mem_1788866774922_1",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Test Contributor 1, Round 1)",
         "reference": "REF_PAID_M1_1788866774920",
         "user_id": "usr_1788866774921_9jvfv",
         "created_at": "2026-09-08T11:26:14.944Z",
-        "balance_after": 7408
+        "balance_after": 4240
       },
       {
-        "id": "sa_init_pay_reg_pajo_1788866674653_5ag7",
+        "id": "rev_reg_usr_1788866653157_993d4",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Member 1",
         "reference": "pak_reg_pajo_1788866674653_5ag7",
         "user_id": "usr_1788866653157_993d4",
         "created_at": "2026-09-08T11:24:34.653Z",
-        "balance_after": 2400
+        "balance_after": 4180
       },
       {
-        "id": "sa_init_com_com_1788865918132_pck_1788865918132_mem_1788622719655_1",
+        "id": "rev_pack_com_1788865918132_pck_1788865918132_mem_1788622719655_1",
         "amount": 1000,
-        "type": "group_packing_commission",
-        "description": "33.33% Share of Group Packing Fee",
+        "type": "packing_33",
+        "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
         "reference": "pck_1788865918132_mem_1788622719655_1",
         "created_at": "2026-09-08T11:11:58.132Z",
-        "balance_after": 7808
+        "balance_after": 3580
       },
       {
-        "id": "sa_init_cnt_cnt_1788623015525_mem_1788623015525_2",
+        "id": "rev_cnt_cnt_1788623015525_mem_1788623015525_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
         "reference": "pak_1788865803210_3n993x",
         "user_id": "usr_1788623015525_o63fx",
         "created_at": "2026-09-08T11:10:07.390Z",
-        "balance_after": 7408
+        "balance_after": 2580
       },
       {
-        "id": "sa_init_cnt_cnt_1788622719655_mem_1788622719655_1",
+        "id": "rev_cnt_cnt_1788622719655_mem_1788622719655_1",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Mobolape ojo, Round 1)",
         "reference": "pak_1788865688306_62brjc",
         "user_id": "usr_1788622719654_fpet7",
         "created_at": "2026-09-08T11:08:13.680Z",
-        "balance_after": 7408
+        "balance_after": 2520
       },
       {
-        "id": "sa_init_pay_1788383295194_ojci8",
+        "id": "rev_reg_user_2",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Babajide Ogundimu",
         "reference": "pak_1788383294748_erbd0t",
         "user_id": "user_2",
-        "created_at": "2026-09-02T21:08:15.194Z",
-        "balance_after": 1800
-      },
-      {
-        "id": "sa_init_reg_pajo_1788383294740_wl2l",
-        "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600) - Babajide Ogundimu",
-        "reference": "pak_reg_pajo_1788383294740_wl2l",
-        "user_id": "user_2",
         "created_at": "2026-09-02T21:08:14.740Z",
-        "balance_after": 7408
+        "balance_after": 2460
       },
       {
-        "id": "sa_init_pay_1788383268104_p3xy2",
+        "id": "rev_reg_usr_1788383267693_m5jh2",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Chioma Adeyemi",
         "reference": "pak_1788383267700_4lytwy",
         "user_id": "usr_1788383267693_m5jh2",
-        "created_at": "2026-09-02T21:07:48.104Z",
-        "balance_after": 1200
-      },
-      {
-        "id": "sa_init_reg_pajo_1788383267693_5vxd",
-        "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600) - Chioma Adeyemi",
-        "reference": "pak_reg_pajo_1788383267693_5vxd",
-        "user_id": "usr_1788383267693_m5jh2",
         "created_at": "2026-09-02T21:07:47.693Z",
-        "balance_after": 7408
+        "balance_after": 1860
       },
       {
-        "id": "sa_init_pay_1788383255249_y657h",
+        "id": "rev_reg_usr_1788383254809_7ztqt",
         "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600)",
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Adewale Test User",
         "reference": "pak_1788383254810_8gua08",
         "user_id": "usr_1788383254809_7ztqt",
-        "created_at": "2026-09-02T21:07:35.249Z",
-        "balance_after": 600
-      },
-      {
-        "id": "sa_init_reg_pajo_1788383254809_1mqw",
-        "amount": 600,
-        "type": "personal_ajo_activation",
-        "description": "Personal Ajo Platform Registration Fee (₦600) - Adewale Test User",
-        "reference": "pak_reg_pajo_1788383254809_1mqw",
-        "user_id": "usr_1788383254809_7ztqt",
         "created_at": "2026-09-02T21:07:34.809Z",
-        "balance_after": 7408
+        "balance_after": 1260
       },
       {
-        "id": "sa_init_reg_pajo_1788382012410_su2t",
+        "id": "rev_reg_usr_1788382012410_urddl",
         "amount": 600,
-        "type": "personal_ajo_activation",
+        "type": "registration_600",
         "description": "Personal Ajo Platform Registration Fee (₦600) - Akinyele Paul",
-        "reference": "pak_reg_pajo_1788382012410_su2t",
+        "reference": "pak_reg_usr_1788382012410_urddl",
         "user_id": "usr_1788382012410_urddl",
         "created_at": "2026-09-02T20:46:52.410Z",
-        "balance_after": 7408
+        "balance_after": 660
       },
       {
-        "id": "sa_init_cnt_cnt_2",
+        "id": "rev_cnt_cnt_2",
         "amount": 60,
-        "type": "group_contribution_fee",
-        "description": "₦60 Group Contribution Processing Fee (Round 1)",
+        "type": "contribution_60",
+        "description": "₦60 Contribution Processing Fee (Member: Babajide Ogundimu, Round 1)",
         "reference": "cnt_2",
         "user_id": "user_2",
         "created_at": "2026-09-01T18:02:59.901Z",
-        "balance_after": 7408
+        "balance_after": 60
       }
     ],
-    "personalPlatformFeesMerged": true
-  }
+    "updated_at": "2026-09-20T12:06:00.121Z"
+  },
+  "super_admin_wallet": {
+    "total_gross_earnings": 12563,
+    "total_withdrawn": 7535,
+    "available_balance": 5028,
+    "breakdown": {
+      "reg_600_total": 4800,
+      "contrib_60_total": 1020,
+      "packing_33_total": 3335,
+      "withdrawal_1_6_total": 3408
+    },
+    "updated_at": "2026-09-20T12:06:00.120Z"
+  },
+  "admin_revenue_ledger": [
+    {
+      "id": "rev_wthfee_wth_1789808323637_61e0",
+      "date": "2026-09-19T08:58:43.637Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: KOLA OYEWO",
+      "user_id": "usr_1789719435722_ym18a",
+      "gross_amount": 50000,
+      "fee_amount": 800,
+      "reference": "wth_1789808323637_61e0",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
+      "balance_after": 5028,
+      "created_at": "2026-09-19T08:58:43.637Z"
+    },
+    {
+      "id": "rev_sawth_wth_sa_1789720437390",
+      "date": "2026-09-18T08:33:57.390Z",
+      "type": "super_admin_withdrawal",
+      "group_or_user": "Super Admin Payout (Guaranty Trust Bank (GTB) 0123456789)",
+      "user_id": "usr_superadmin_08154267469",
+      "gross_amount": 2125,
+      "fee_amount": -2125,
+      "reference": "wth_sa_1789720431966_6didy",
+      "description": "Super Admin Revenue Payout to Guaranty Trust Bank (GTB)",
+      "balance_after": 4228,
+      "created_at": "2026-09-18T08:33:57.390Z"
+    },
+    {
+      "id": "rev_pack_com_1789720297084_pck_1789720297084_mem_1789719966456_1",
+      "date": "2026-09-18T08:31:37.084Z",
+      "type": "packing_33",
+      "group_or_user": "Group: KAJOLOWO AJO",
+      "group_id": "grp_1789719735648_gopg",
+      "gross_amount": 2000,
+      "fee_amount": 667,
+      "reference": "pck_1789720297084_mem_1789719966456_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦2,000)",
+      "balance_after": 6353,
+      "created_at": "2026-09-18T08:31:37.084Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1789719966456_mem_1789719966456_1",
+      "date": "2026-09-18T08:30:33.611Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: KAJOLOWO AJO (OLAMIDE KUNLE)",
+      "user_id": "usr_1789719966454_iwksc",
+      "group_id": "grp_1789719735648_gopg",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "pak_1789720227998_ji6mr7",
+      "description": "₦60 Contribution Processing Fee (Member: OLAMIDE KUNLE, Round 1)",
+      "balance_after": 5686,
+      "created_at": "2026-09-18T08:30:33.611Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1789720111956_mem_1789720111956_2",
+      "date": "2026-09-18T08:29:44.512Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: KAJOLOWO AJO (FUNMILAYO OJO)",
+      "user_id": "usr_1789720111954_buxv5",
+      "group_id": "grp_1789719735648_gopg",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "pak_1789720179491_ukj1w0",
+      "description": "₦60 Contribution Processing Fee (Member: FUNMILAYO OJO, Round 1)",
+      "balance_after": 5626,
+      "created_at": "2026-09-18T08:29:44.512Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789719572877_bjg6",
+      "date": "2026-09-18T08:19:32.877Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: KOLA OYEWO",
+      "user_id": "usr_1789719435722_ym18a",
+      "gross_amount": 50000,
+      "fee_amount": 800,
+      "reference": "wth_1789719572877_bjg6",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦50,000)",
+      "balance_after": 5566,
+      "created_at": "2026-09-18T08:19:32.877Z"
+    },
+    {
+      "id": "rev_reg_usr_1789719435722_ym18a",
+      "date": "2026-09-18T08:17:15.744Z",
+      "type": "registration_600",
+      "group_or_user": "KOLA OYEWO",
+      "user_id": "usr_1789719435722_ym18a",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_1789719435747_fubbvy",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - KOLA OYEWO",
+      "balance_after": 4766,
+      "created_at": "2026-09-18T08:17:15.744Z"
+    },
+    {
+      "id": "rev_sawth_wth_sa_1789714414973",
+      "date": "2026-09-18T06:53:34.973Z",
+      "type": "super_admin_withdrawal",
+      "group_or_user": "Super Admin Payout (Guaranty Trust Bank (GTB) 0123456789)",
+      "user_id": "usr_superadmin_08154267469",
+      "gross_amount": 144,
+      "fee_amount": -144,
+      "reference": "wth_sa_1789714412439_j4ops",
+      "description": "Super Admin Revenue Payout to Guaranty Trust Bank (GTB)",
+      "balance_after": 4166,
+      "created_at": "2026-09-18T06:53:34.973Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789390610145_6tx7",
+      "date": "2026-09-14T12:56:50.145Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: Akinyele Paul",
+      "user_id": "usr_1788382012410_urddl",
+      "gross_amount": 100000,
+      "fee_amount": 1600,
+      "reference": "wth_1789390610145_6tx7",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦100,000)",
+      "balance_after": 4310,
+      "created_at": "2026-09-14T12:56:50.145Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789390579735_19rg",
+      "date": "2026-09-14T12:56:19.735Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: Akinyele Paul",
+      "user_id": "usr_1788382012410_urddl",
+      "gross_amount": 5000,
+      "fee_amount": 80,
+      "reference": "wth_1789390579735_19rg",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦5,000)",
+      "balance_after": 2710,
+      "created_at": "2026-09-14T12:56:19.735Z"
+    },
+    {
+      "id": "rev_pack_com_1789389766896_pck_1789389766896_mem_1788623015525_2",
+      "date": "2026-09-14T12:42:46.896Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Figure two",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 3000,
+      "fee_amount": 1000,
+      "reference": "pck_1789389766896_mem_1788623015525_2",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
+      "balance_after": 2630,
+      "created_at": "2026-09-14T12:42:46.896Z"
+    },
+    {
+      "id": "rev_sawth_wth_sa_1789389705945",
+      "date": "2026-09-14T12:41:45.945Z",
+      "type": "super_admin_withdrawal",
+      "group_or_user": "Super Admin Payout (Guaranty Trust Bank (GTB) 0123456789)",
+      "user_id": "usr_superadmin_08154267469",
+      "gross_amount": 4266,
+      "fee_amount": -4266,
+      "reference": "wth_sa_1789389703577_ksjly",
+      "description": "Super Admin Revenue Payout to Guaranty Trust Bank (GTB)",
+      "balance_after": 1630,
+      "created_at": "2026-09-14T12:41:45.945Z"
+    },
+    {
+      "id": "rev_sawth_wth_sa_1789380561726",
+      "date": "2026-09-14T10:09:21.726Z",
+      "type": "super_admin_withdrawal",
+      "group_or_user": "Super Admin Payout (Access Bank 0123456789)",
+      "user_id": "usr_superadmin_08154267469",
+      "gross_amount": 1000,
+      "fee_amount": -1000,
+      "reference": "wth_sa_usr_superadmin_08154267469_100000",
+      "description": "Super Admin Revenue Payout to Access Bank",
+      "balance_after": 5896,
+      "created_at": "2026-09-14T10:09:21.726Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789380557943_706r",
+      "date": "2026-09-14T10:09:17.943Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: Babajide Ogundimu",
+      "user_id": "user_2",
+      "gross_amount": 2000,
+      "fee_amount": 32,
+      "reference": "wth_1789380557943_706r",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+      "balance_after": 6896,
+      "created_at": "2026-09-14T10:09:17.943Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789380541368_p2jr",
+      "date": "2026-09-14T10:09:01.368Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: Babajide Ogundimu",
+      "user_id": "user_2",
+      "gross_amount": 2000,
+      "fee_amount": 32,
+      "reference": "wth_1789380541368_p2jr",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+      "balance_after": 6864,
+      "created_at": "2026-09-14T10:09:01.368Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1789380523938_mem_1788623015525_2",
+      "date": "2026-09-14T10:08:43.938Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Figure two (Nonolboy)",
+      "user_id": "usr_1788623015525_o63fx",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "pak_1789380522979_x6aa65",
+      "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+      "balance_after": 6832,
+      "created_at": "2026-09-14T10:08:43.938Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1789380523397_mem_1788623015525_2",
+      "date": "2026-09-14T10:08:43.245Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Figure two (Nonolboy)",
+      "user_id": "usr_1788623015525_o63fx",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "pak_1789380522979_x6aa65",
+      "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+      "balance_after": 6772,
+      "created_at": "2026-09-14T10:08:43.245Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789380522293_7qfa",
+      "date": "2026-09-14T10:08:42.293Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: Babajide Ogundimu",
+      "user_id": "user_2",
+      "gross_amount": 2000,
+      "fee_amount": 32,
+      "reference": "wth_1789380522293_7qfa",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+      "balance_after": 6712,
+      "created_at": "2026-09-14T10:08:42.293Z"
+    },
+    {
+      "id": "rev_wthfee_wth_1789380473312_78kv",
+      "date": "2026-09-14T10:07:53.312Z",
+      "type": "withdrawal_1_6",
+      "group_or_user": "Personal Saver: Babajide Ogundimu",
+      "user_id": "user_2",
+      "gross_amount": 2000,
+      "fee_amount": 32,
+      "reference": "wth_1789380473312_78kv",
+      "description": "1.6% Commission on Personal Ajo Withdrawal (₦2,000)",
+      "balance_after": 6680,
+      "created_at": "2026-09-14T10:07:53.312Z"
+    },
+    {
+      "id": "rev_cnt_cnt_test_1789252648233",
+      "date": "2026-09-12T22:37:28.233Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Group Ajo (Member)",
+      "user_id": "usr_test",
+      "group_id": "grp_test",
+      "gross_amount": 5000,
+      "fee_amount": 60,
+      "reference": "test_batch_ref_1789252648233",
+      "description": "₦60 Contribution Processing Fee (Member: Member, Round 1)",
+      "balance_after": 6648,
+      "created_at": "2026-09-12T22:37:28.233Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1789250865412_mem_1788622719655_1",
+      "date": "2026-09-12T22:07:45.412Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Figure two (Mobolape ojo)",
+      "user_id": "usr_1788622719654_fpet7",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "ref_test_idempotent_1789250865393",
+      "description": "₦60 Contribution Processing Fee (Member: Mobolape ojo, Round 1)",
+      "balance_after": 6588,
+      "created_at": "2026-09-12T22:07:45.412Z"
+    },
+    {
+      "id": "rev_pack_com_1788866674649_pck_1788866674649_mem_1788866674625_1",
+      "date": "2026-09-09T12:00:00.000Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Security Test Thrift",
+      "group_id": "grp_1788866674625_77cd",
+      "gross_amount": 500,
+      "fee_amount": 167,
+      "reference": "pck_1788866674649_mem_1788866674625_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+      "balance_after": 6528,
+      "created_at": "2026-09-09T12:00:00.000Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866674625_mem_1788866674625_2",
+      "date": "2026-09-09T12:00:00.000Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Security Test Thrift (Test Member 2)",
+      "user_id": "usr_1788866653157_mn993",
+      "group_id": "grp_1788866674625_77cd",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF_TEST_E2",
+      "description": "₦60 Contribution Processing Fee (Member: Test Member 2, Round 1)",
+      "balance_after": 6361,
+      "created_at": "2026-09-09T12:00:00.000Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866674625_mem_1788866674625_1",
+      "date": "2026-09-09T12:00:00.000Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Security Test Thrift (Test Member 1)",
+      "user_id": "usr_1788866653157_993d4",
+      "group_id": "grp_1788866674625_77cd",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF_TEST_E1",
+      "description": "₦60 Contribution Processing Fee (Member: Test Member 1, Round 1)",
+      "balance_after": 6301,
+      "created_at": "2026-09-09T12:00:00.000Z"
+    },
+    {
+      "id": "rev_reg_usr_1788866791240_u0kkq",
+      "date": "2026-09-08T11:26:31.270Z",
+      "type": "registration_600",
+      "group_or_user": "Test Contributor 1",
+      "user_id": "usr_1788866791240_u0kkq",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_reg_pajo_1788866791270_009o",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Test Contributor 1",
+      "balance_after": 6241,
+      "created_at": "2026-09-08T11:26:31.270Z"
+    },
+    {
+      "id": "rev_pack_com_1788866791266_pck_1788866791266_mem_1788866791242_1",
+      "date": "2026-09-08T11:26:31.266Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Security Suite Group 1788866791240",
+      "group_id": "grp_1788866791242_ttyu",
+      "gross_amount": 500,
+      "fee_amount": 167,
+      "reference": "pck_1788866791266_mem_1788866791242_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+      "balance_after": 5641,
+      "created_at": "2026-09-08T11:26:31.266Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866791242_mem_1788866791242_2",
+      "date": "2026-09-08T11:26:31.264Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Security Suite Group 1788866791240 (Test Contributor 2)",
+      "user_id": "usr_1788866791241_feyyw",
+      "group_id": "grp_1788866791242_ttyu",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF_PAID_M2_1788866791240",
+      "description": "₦60 Contribution Processing Fee (Member: Test Contributor 2, Round 1)",
+      "balance_after": 5474,
+      "created_at": "2026-09-08T11:26:31.264Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866791242_mem_1788866791242_1",
+      "date": "2026-09-08T11:26:31.263Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Security Suite Group 1788866791240 (Test Contributor 1)",
+      "user_id": "usr_1788866791240_u0kkq",
+      "group_id": "grp_1788866791242_ttyu",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF_PAID_M1_1788866791240",
+      "description": "₦60 Contribution Processing Fee (Member: Test Contributor 1, Round 1)",
+      "balance_after": 5414,
+      "created_at": "2026-09-08T11:26:31.263Z"
+    },
+    {
+      "id": "rev_pack_com_1788866779982_pck_1788866779982_mem_1788866779958_1",
+      "date": "2026-09-08T11:26:19.982Z",
+      "type": "packing_33",
+      "group_or_user": "Group: E1 Test",
+      "group_id": "grp_1788866779958_5fmd",
+      "gross_amount": 500,
+      "fee_amount": 167,
+      "reference": "pck_1788866779982_mem_1788866779958_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+      "balance_after": 5354,
+      "created_at": "2026-09-08T11:26:19.982Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866779958_mem_1788866779958_2",
+      "date": "2026-09-08T11:26:19.979Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: E1 Test (User 2)",
+      "user_id": "usr_1788866779957_58k4n",
+      "group_id": "grp_1788866779958_5fmd",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF2_1788866779956",
+      "description": "₦60 Contribution Processing Fee (Member: User 2, Round 1)",
+      "balance_after": 5187,
+      "created_at": "2026-09-08T11:26:19.979Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866779958_mem_1788866779958_1",
+      "date": "2026-09-08T11:26:19.978Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: E1 Test (User 1)",
+      "user_id": "usr_1788866779957_ye6n4",
+      "group_id": "grp_1788866779958_5fmd",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF1_1788866779956",
+      "description": "₦60 Contribution Processing Fee (Member: User 1, Round 1)",
+      "balance_after": 5127,
+      "created_at": "2026-09-08T11:26:19.978Z"
+    },
+    {
+      "id": "rev_reg_usr_1788866774921_9jvfv",
+      "date": "2026-09-08T11:26:14.950Z",
+      "type": "registration_600",
+      "group_or_user": "Test Contributor 1",
+      "user_id": "usr_1788866774921_9jvfv",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_reg_pajo_1788866774950_j6cx",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Test Contributor 1",
+      "balance_after": 5067,
+      "created_at": "2026-09-08T11:26:14.950Z"
+    },
+    {
+      "id": "rev_pack_com_1788866774947_pck_1788866774947_mem_1788866774922_1",
+      "date": "2026-09-08T11:26:14.947Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Security Suite Group 1788866774920",
+      "group_id": "grp_1788866774922_tudi",
+      "gross_amount": 500,
+      "fee_amount": 167,
+      "reference": "pck_1788866774947_mem_1788866774922_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦500)",
+      "balance_after": 4467,
+      "created_at": "2026-09-08T11:26:14.947Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866774922_mem_1788866774922_2",
+      "date": "2026-09-08T11:26:14.945Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Security Suite Group 1788866774920 (Test Contributor 2)",
+      "user_id": "usr_1788866774921_4spg8",
+      "group_id": "grp_1788866774922_tudi",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF_PAID_M2_1788866774920",
+      "description": "₦60 Contribution Processing Fee (Member: Test Contributor 2, Round 1)",
+      "balance_after": 4300,
+      "created_at": "2026-09-08T11:26:14.945Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788866774922_mem_1788866774922_1",
+      "date": "2026-09-08T11:26:14.944Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Security Suite Group 1788866774920 (Test Contributor 1)",
+      "user_id": "usr_1788866774921_9jvfv",
+      "group_id": "grp_1788866774922_tudi",
+      "gross_amount": 10000,
+      "fee_amount": 60,
+      "reference": "REF_PAID_M1_1788866774920",
+      "description": "₦60 Contribution Processing Fee (Member: Test Contributor 1, Round 1)",
+      "balance_after": 4240,
+      "created_at": "2026-09-08T11:26:14.944Z"
+    },
+    {
+      "id": "rev_reg_usr_1788866653157_993d4",
+      "date": "2026-09-08T11:24:34.653Z",
+      "type": "registration_600",
+      "group_or_user": "Test Member 1",
+      "user_id": "usr_1788866653157_993d4",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_reg_pajo_1788866674653_5ag7",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Test Member 1",
+      "balance_after": 4180,
+      "created_at": "2026-09-08T11:24:34.653Z"
+    },
+    {
+      "id": "rev_pack_com_1788865918132_pck_1788865918132_mem_1788622719655_1",
+      "date": "2026-09-08T11:11:58.132Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Figure two",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 3000,
+      "fee_amount": 1000,
+      "reference": "pck_1788865918132_mem_1788622719655_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
+      "balance_after": 3580,
+      "created_at": "2026-09-08T11:11:58.132Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788623015525_mem_1788623015525_2",
+      "date": "2026-09-08T11:10:07.390Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Figure two (Nonolboy)",
+      "user_id": "usr_1788623015525_o63fx",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "pak_1788865803210_3n993x",
+      "description": "₦60 Contribution Processing Fee (Member: Nonolboy, Round 1)",
+      "balance_after": 2580,
+      "created_at": "2026-09-08T11:10:07.390Z"
+    },
+    {
+      "id": "rev_cnt_cnt_1788622719655_mem_1788622719655_1",
+      "date": "2026-09-08T11:08:13.680Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Figure two (Mobolape ojo)",
+      "user_id": "usr_1788622719654_fpet7",
+      "group_id": "grp_1788622347979_71p3",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "pak_1788865688306_62brjc",
+      "description": "₦60 Contribution Processing Fee (Member: Mobolape ojo, Round 1)",
+      "balance_after": 2520,
+      "created_at": "2026-09-08T11:08:13.680Z"
+    },
+    {
+      "id": "rev_reg_user_2",
+      "date": "2026-09-02T21:08:14.740Z",
+      "type": "registration_600",
+      "group_or_user": "Babajide Ogundimu",
+      "user_id": "user_2",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_1788383294748_erbd0t",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Babajide Ogundimu",
+      "balance_after": 2460,
+      "created_at": "2026-09-02T21:08:14.740Z"
+    },
+    {
+      "id": "rev_reg_usr_1788383267693_m5jh2",
+      "date": "2026-09-02T21:07:47.693Z",
+      "type": "registration_600",
+      "group_or_user": "Chioma Adeyemi",
+      "user_id": "usr_1788383267693_m5jh2",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_1788383267700_4lytwy",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Chioma Adeyemi",
+      "balance_after": 1860,
+      "created_at": "2026-09-02T21:07:47.693Z"
+    },
+    {
+      "id": "rev_reg_usr_1788383254809_7ztqt",
+      "date": "2026-09-02T21:07:34.809Z",
+      "type": "registration_600",
+      "group_or_user": "Adewale Test User",
+      "user_id": "usr_1788383254809_7ztqt",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_1788383254810_8gua08",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Adewale Test User",
+      "balance_after": 1260,
+      "created_at": "2026-09-02T21:07:34.809Z"
+    },
+    {
+      "id": "rev_reg_usr_1788382012410_urddl",
+      "date": "2026-09-02T20:46:52.410Z",
+      "type": "registration_600",
+      "group_or_user": "Akinyele Paul",
+      "user_id": "usr_1788382012410_urddl",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_reg_usr_1788382012410_urddl",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Akinyele Paul",
+      "balance_after": 660,
+      "created_at": "2026-09-02T20:46:52.410Z"
+    },
+    {
+      "id": "rev_cnt_cnt_2",
+      "date": "2026-09-01T18:02:59.901Z",
+      "type": "contribution_60",
+      "group_or_user": "Group: Family Monthly Pack (Babajide Ogundimu)",
+      "user_id": "user_2",
+      "group_id": "grp_family_demo",
+      "gross_amount": 50000,
+      "fee_amount": 60,
+      "reference": "cnt_2",
+      "description": "₦60 Contribution Processing Fee (Member: Babajide Ogundimu, Round 1)",
+      "balance_after": 60,
+      "created_at": "2026-09-01T18:02:59.901Z"
+    }
+  ]
 }

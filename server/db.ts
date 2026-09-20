@@ -18,7 +18,9 @@ import {
   SuperAdminFullData,
   GroupAdminMemberItem,
   GroupAdminEarningItem,
-  AuditLogEntry
+  AuditLogEntry,
+  SuperAdminWallet,
+  AdminRevenueLedgerEntry
 } from '../src/types/index.js';
 import { PaystackTransferResult } from './paystack.js';
 import {
@@ -110,6 +112,17 @@ interface DatabaseSchema {
     lifetimeEarned: number;
     personalPlatformFeesMerged?: boolean;
     updated_at: string;
+    available_balance?: number;
+    total_earned?: number;
+    total_withdrawn?: number;
+    pending_withdrawals?: number;
+    breakdown?: Array<{
+      date: string;
+      source: string;
+      description: string;
+      amount: number;
+      reference: string;
+    }>;
     history: Array<{
       id: string;
       amount: number;
@@ -469,7 +482,7 @@ class Database {
 
     // 2. Group Contribution Fee = ₦60 per every contribution by any member
     const paidContribs = (this.data.contributions || []).filter(
-      c => c.status === 'Paid' || c.status === 'success' || (c.status as string) === 'successful'
+      c => c.status === 'Paid' || (c.status as string) === 'success' || (c.status as string) === 'successful'
     );
     const contrib_60_count = paidContribs.length;
     const contrib_60_total = contrib_60_count * 60;
@@ -2964,7 +2977,7 @@ class Database {
       .reduce((sum, t) => sum + t.packing_amount, 0);
 
     this.initSuperAdminEarnings();
-    const wallet = this.data.super_admin_wallet || this.auditSuperAdminRealBalance();
+    const wallet = this.getSuperAdminWallet();
     const superAdminAvailableBalance = wallet.available_balance;
     const superAdminWithdrawnAmount = wallet.total_withdrawn;
     const totalSuperAdminEarnings = wallet.total_gross_earnings;
@@ -3738,6 +3751,7 @@ class Database {
     const totalPersonalWithdrawalFees = wallet.breakdown.withdrawal_1_6_total;
     const totalContributionFees = wallet.breakdown.contrib_60_total;
     const totalSuperAdminCommission = wallet.breakdown.packing_33_total;
+    const totalGroupPackingFees = Number((this.data.commissions.reduce((sum, c) => sum + Math.round((c.admin_amount + c.super_admin_amount) * 100), 0) / 100).toFixed(2));
     const totalSuperAdminEarnings = wallet.total_gross_earnings;
     const superAdminCommission = totalSuperAdminEarnings;
     const superAdminAvailableBalance = wallet.available_balance;

@@ -1007,6 +1007,19 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       }
     });
 
+    // STEP 2 - Record Personal Ajo 1.6% Withdrawal Fee in Super Admin Revenue Ledger
+    if (fee > 0) {
+      db.recordAdminRevenue({
+        type: 'withdrawal_1_6',
+        amount: fee,
+        reference: result.withdrawal.id,
+        group_or_user: profile.full_name || 'Personal Saver',
+        user_id: userId,
+        gross_amount: numAmount,
+        description: `1.6% Personal Withdrawal Processing Fee (Gross: ₦${numAmount.toLocaleString()}, Net: ₦${netAmount.toLocaleString()})`
+      });
+    }
+
     return res.json({
       success: true,
       message: `₦${netAmount.toLocaleString()} has been sent to ${profile.bank_name} (${profile.account_number})`,
@@ -2645,6 +2658,7 @@ apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: 
     // 4. Commit confirmed withdrawal to local database state and deduct from wallet immediately
     db.recordConfirmedWithdrawal(withdrawal, payment);
     try {
+      db.deductAdminRevenueWithdrawal(withdrawal, payment);
       db.withdrawFromSuperAdminEarnings(effectiveAmount, {
         description: `Super Admin Revenue Withdrawal to ${withdrawal.bank_name || 'Bank'}`,
         reference,
