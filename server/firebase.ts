@@ -584,19 +584,236 @@ export async function fsGetAllProfiles(): Promise<UserProfile[]> {
 }
 
 // --- 2. PERSONAL AJO ---
+export async function getOrCreatePersonalAjo(userId: string): Promise<PersonalAjo> {
+  const db = getFirestoreDb();
+  if (!db || !userId) {
+    throw new Error('Firestore database is unavailable or invalid userId provided.');
+  }
+
+  const snap = await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO)
+    .where('user_id', '==', userId)
+    .get();
+
+  if (!snap.empty) {
+    const docs = snap.docs.map(d => ({ ref: d.ref, data: d.data() as PersonalAjo }));
+    // Sort descending by created_at to keep the newest document
+    docs.sort((a, b) => (b.data.created_at || '').localeCompare(a.data.created_at || ''));
+    const newest = docs[0];
+
+    // If duplicate documents exist for this user_id, clean up the extras
+    if (docs.length > 1) {
+      console.warn(`[getOrCreatePersonalAjo] Found ${docs.length} duplicates for user ${userId}. Deduplicating...`);
+      for (let i = 1; i < docs.length; i++) {
+        await docs[i].ref.delete().catch(err => console.warn(`Failed to delete duplicate pajo doc ${docs[i].ref.id}:`, err));
+      }
+    }
+
+    return newest.data;
+  }
+
+  // Not found: create a single new Personal Ajo document (never create duplicate)
+  const newId = `pajo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const now = new Date().toISOString();
+  const newPersonal: PersonalAjo = {
+    id: newId,
+    user_id: userId,
+    balance: 0,
+    total_deposited: 0,
+    total_withdrawn: 0,
+    status: 'active',
+    created_at: now,
+    updated_at: now
+  } as any;
+
+  await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(newId).set(cleanUndefinedFields(newPersonal));
+  console.log(`[getOrCreatePersonalAjo] Created new Personal Ajo doc ${newId} for user ${userId}`);
+  return newPersonal;
+}
+
 export async function fsGetPersonalAjoByUserId(userId: string): Promise<PersonalAjo | null> {
   const db = getFirestoreDb();
   if (!db || !userId) return null;
   try {
     const snap = await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO)
       .where('user_id', '==', userId)
-      .limit(1)
       .get();
-    if (snap.empty || !snap.docs[0]) return null;
-    return snap.docs[0].data() as PersonalAjo;
+    if (snap.empty) return null;
+    const docs = snap.docs.map(d => d.data() as PersonalAjo);
+    docs.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return docs[0];
   } catch (err) {
     console.warn(`Firestore getPersonalAjoByUserId error (${userId}):`, err);
     return null;
+  }
+}
+
+/**
+ * Atomic Paystack webhook payment handler.
+ * 1. Checks if payment is already processed by reference (prevents double credit).
+ * 2. Uses Firestore transaction to atomically update:
+ *    - personal_ajo balance, total_deposited, total_saved, updated_at
+ *    - payment doc processed = true, status = 'success'
+ *    - user's balance in users/{userId}
+ *    - platformRevenue/main increment
+ */
+export async function onPaymentSuccess(paymentData: {
+  reference: string;
+  amount: number; // In Naira or Kobo
+  user_id?: string;
+  status?: string;
+  channel?: string;
+  gateway_response?: string;
+  paid_at?: string;
+  purpose?: string;
+}): Promise<{
+  success: boolean;
+  skipped?: boolean;
+  alreadyProcessed?: boolean;
+  balance?: number;
+  error?: string;
+}> {
+  const db = getFirestoreDb();
+  if (!db) {
+    return { success: false, error: 'Firestore database is unavailable' };
+  }
+
+  const { reference } = paymentData;
+  if (!reference) {
+    return { success: false, error: 'Missing payment reference' };
+  }
+
+  try {
+    // 1. Locate payment document or query by reference
+    const payQuery = await db.collection(FIRESTORE_COLLECTIONS.PAYMENTS)
+      .where('reference', '==', reference)
+      .limit(1)
+      .get();
+
+    let payDocRef: FirebaseFirestore.DocumentReference;
+    let existingPayment: any = null;
+
+    if (!payQuery.empty) {
+      payDocRef = payQuery.docs[0].ref;
+      existingPayment = payQuery.docs[0].data();
+    } else {
+      // Check direct ID match
+      const directDoc = await db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(reference).get();
+      if (directDoc.exists) {
+        payDocRef = directDoc.ref;
+        existingPayment = directDoc.data();
+      } else {
+        // Create new payment document reference
+        payDocRef = db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(`pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+      }
+    }
+
+    // Check if already processed prior to running transaction
+    if (existingPayment?.processed === true) {
+      console.log(`[onPaymentSuccess] Payment ${reference} already marked processed. Skipping.`);
+      return { success: true, skipped: true, alreadyProcessed: true };
+    }
+
+    const userId = existingPayment?.user_id || paymentData.user_id;
+    if (!userId) {
+      return { success: false, error: 'Cannot determine user_id for payment' };
+    }
+
+    // 2. Ensure Personal Ajo doc exists (getOrCreatePersonalAjo)
+    const personalAjo = await getOrCreatePersonalAjo(userId);
+    const pajoDocRef = db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personalAjo.id);
+
+    // Compute amount in Naira
+    let amountNaira = Number(paymentData.amount || existingPayment?.amount || 0);
+    if (amountNaira > 10000000) {
+      // Amount was passed in kobo (e.g. 30006000 kobo -> 300060 Naira)
+      amountNaira = amountNaira / 100;
+    }
+
+    // 3. Execute atomic Firestore transaction
+    const result = await db.runTransaction(async (transaction) => {
+      const paySnap = await transaction.get(payDocRef);
+      if (paySnap.exists) {
+        const payVal = paySnap.data();
+        if (payVal?.processed === true) {
+          return { success: true, skipped: true, alreadyProcessed: true, balance: personalAjo.balance };
+        }
+      }
+
+      const pajoSnap = await transaction.get(pajoDocRef);
+      if (!pajoSnap.exists) {
+        throw new Error(`Personal Ajo document ${personalAjo.id} not found in transaction`);
+      }
+
+      const pData = pajoSnap.data() || {};
+      const oldBalance = Number(pData.balance || 0);
+      const oldDeposited = Number(pData.total_deposited || 0);
+      const oldSaved = Number(pData.total_saved || 0);
+
+      const newBalance = oldBalance + amountNaira;
+      const newDeposited = oldDeposited + amountNaira;
+      const newSaved = oldSaved + amountNaira;
+      const now = new Date().toISOString();
+
+      // Update personal_ajo document
+      transaction.update(pajoDocRef, {
+        balance: newBalance,
+        total_deposited: newDeposited,
+        total_saved: newSaved,
+        updated_at: now
+      });
+
+      // Update payment document (processed = true)
+      if (paySnap.exists) {
+        transaction.update(payDocRef, {
+          status: 'success',
+          processed: true,
+          amount: amountNaira,
+          paid_at: paymentData.paid_at || now,
+          updated_at: now
+        });
+      } else {
+        transaction.set(payDocRef, {
+          id: payDocRef.id,
+          user_id: userId,
+          reference,
+          amount: amountNaira,
+          purpose: paymentData.purpose || 'personal_deposit',
+          channel: paymentData.channel || 'card',
+          gateway_response: paymentData.gateway_response || 'Successful',
+          status: 'success',
+          processed: true,
+          created_at: now,
+          paid_at: paymentData.paid_at || now,
+          updated_at: now
+        });
+      }
+
+      // Update users/{userId} document
+      const userRef = db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId);
+      transaction.set(userRef, {
+        personalBalance: newBalance,
+        balance: newBalance,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      // Update platformRevenue/main directly in transaction via additive increment
+      const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+      const fee = 60; // ₦60 fee
+      transaction.update(mainRef, {
+        stream2: FieldValue.increment(fee),
+        totalGross: FieldValue.increment(fee),
+        unifiedAvailable: FieldValue.increment(fee),
+        lastUpdated: FieldValue.serverTimestamp()
+      });
+
+      return { success: true, balance: newBalance };
+    });
+
+    console.log(`[onPaymentSuccess] Atomic transaction committed for ${userId}, ref: ${reference}. New balance: ${result.balance}`);
+    return result;
+  } catch (err: any) {
+    console.error(`[onPaymentSuccess] Error processing payment for ref ${reference}:`, err);
+    return { success: false, error: err?.message || 'Transaction failed' };
   }
 }
 

@@ -16,7 +16,7 @@ export interface UserProfile {
   phone: string;
   email?: string;
   password?: string;
-  role?: 'SUPER_ADMIN' | 'GROUP_ADMIN' | 'MEMBER';
+  role?: 'SUPER_ADMIN' | 'GROUP_ADMIN' | 'MEMBER' | 'superadmin' | 'groupadmin' | 'user' | string;
   bank_name: string;
   account_number: string;
   verification_type: VerificationType;

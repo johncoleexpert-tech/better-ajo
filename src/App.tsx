@@ -87,6 +87,15 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
+    const isSuperAdminUser = user.phone === '08154267469' || user.role === 'SUPER_ADMIN' || user.role === 'superadmin' || user.email === 'superadmin@packajo.ng' || user.email === 'paulakinyele54@gmail.com';
+    const isGroupAdminUser = user.role === 'GROUP_ADMIN' || user.role === 'groupadmin';
+
+    // Strict rule: personal_ajo must ONLY be visible to role=user
+    if (isSuperAdminUser || isGroupAdminUser) {
+      setPersonalAjo(null);
+      return;
+    }
+
     // Fetch initial fresh balance from backend
     fetch(`/api/user/${encodeURIComponent(user.id)}/balance`)
       .then(res => res.json())
@@ -129,7 +138,18 @@ export default function App() {
     });
 
     return () => unsub();
-  }, [user?.id]);
+  }, [user?.id, user?.role, user?.phone]);
+
+  // Route protection: prevent admin roles from viewing personal ajo routes
+  useEffect(() => {
+    if (!user) return;
+    const isSuperAdminUser = user.phone === '08154267469' || user.role === 'SUPER_ADMIN' || user.role === 'superadmin' || user.email === 'superadmin@packajo.ng' || user.email === 'paulakinyele54@gmail.com';
+    const isGroupAdminUser = user.role === 'GROUP_ADMIN' || user.role === 'groupadmin';
+    if ((isSuperAdminUser || isGroupAdminUser) && (currentView === 'personal_dashboard' || currentView === 'personal_register')) {
+      if (isSuperAdminUser) setCurrentView('super_admin');
+      else setCurrentView('group_admin_dashboard');
+    }
+  }, [user, currentView]);
 
   const saveSession = (
     profile: UserProfile | null,
@@ -172,13 +192,18 @@ export default function App() {
     // For an existing Group Admin -> Existing Group Admin Dashboard
     // For an existing Group Member -> Existing Group Member Dashboard
     // For an existing Personal Ajo user -> Existing Personal Ajo Dashboard
-    if (userProfile.phone === '08154267469' || userProfile.role === 'SUPER_ADMIN') {
-      saveSession(userProfile, loginData.personalAjo, allGroups, adminGroups[0]?.id || null);
+    const isSuper = userProfile.phone === '08154267469' || userProfile.role === 'SUPER_ADMIN' || userProfile.role === 'superadmin' || userProfile.email === 'superadmin@packajo.ng' || userProfile.email === 'paulakinyele54@gmail.com';
+    const isGroupAdm = adminGroups.length > 0 || userProfile.role === 'GROUP_ADMIN' || userProfile.role === 'groupadmin';
+
+    if (isSuper) {
+      setPersonalAjo(null);
+      saveSession(userProfile, null, allGroups, adminGroups[0]?.id || null);
       setCurrentView('super_admin');
-    } else if (adminGroups.length > 0) {
-      const targetId = adminGroups[0].id;
+    } else if (isGroupAdm) {
+      const targetId = adminGroups[0]?.id || null;
       setActiveGroupId(targetId);
-      saveSession(userProfile, loginData.personalAjo, allGroups, targetId);
+      setPersonalAjo(null);
+      saveSession(userProfile, null, allGroups, targetId);
       setCurrentView('group_admin_dashboard');
     } else if (memberGroups.length > 0) {
       const targetId = memberGroups[0].id;

@@ -67,8 +67,10 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const activeUser = user || currentUser || null;
-  const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
-  const isGroupAdmin = hasAdminGroups || activeUser?.role === 'GROUP_ADMIN';
+  const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.role === 'superadmin' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
+  const isGroupAdmin = hasAdminGroups || activeUser?.role === 'GROUP_ADMIN' || activeUser?.role === 'groupadmin';
+  // Personal Ajo is strictly visible to role == 'user' only (hidden for superadmin & groupadmin)
+  const isUserRole = Boolean(activeUser && !isSuperAdmin && !isGroupAdmin && (activeUser.role === 'user' || activeUser.role === 'MEMBER' || !activeUser.role));
 
   const handleSignUpClick = () => {
     setIsMenuOpen(false);
@@ -204,8 +206,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 )}
 
-                {/* Personal Dashboard Link */}
-                {personalAjo && (
+                {/* Personal Dashboard Link (Strictly role == 'user' only) */}
+                {isUserRole && personalAjo && (
                   <button
                     onClick={onSelectPersonalDashboard || onOpenPersonal}
                     className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${

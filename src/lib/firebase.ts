@@ -233,3 +233,29 @@ export async function deductPlatformRevenueWithdrawalClient(
     });
   });
 }
+
+/**
+ * Frontend helper: fetch personal_ajo by user_id and return latest doc only where user_id == input.
+ */
+export async function fetchPersonalAjoByUserId(userId: string): Promise<any | null> {
+  if (!userId) return null;
+  try {
+    const q = query(collection(db, 'personal_ajo'), where('user_id', '==', userId));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      docs.sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''));
+      return docs[0];
+    }
+    // Check direct doc(db, 'personal_ajo', userId)
+    const directSnap = await getDoc(doc(db, 'personal_ajo', userId));
+    if (directSnap.exists()) {
+      return { id: directSnap.id, ...directSnap.data() };
+    }
+    return null;
+  } catch (err) {
+    console.warn('[fetchPersonalAjoByUserId] error:', err);
+    return null;
+  }
+}
+

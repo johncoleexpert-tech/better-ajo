@@ -2,6 +2,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSuperAdmin() {
+      return request.auth != null && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superadmin' || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SUPER_ADMIN')) ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'superadmin' || 
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'SUPER_ADMIN'))
+      );
+    }
+
+    function isGroupAdmin() {
+      return request.auth != null && (
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'groupadmin' || 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'GROUP_ADMIN')) ||
+        (exists(/databases/$(database)/documents/profiles/$(request.auth.uid)) && 
+         (get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'groupadmin' || 
+          get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'GROUP_ADMIN'))
+      );
+    }
+
     // Rule 6: platformRevenue/main can only be updated via increment, never setDoc overwrite
     match /platformRevenue/{docId} {
       allow read: if true;
@@ -24,6 +46,14 @@ service cloud.firestore {
         && request.resource.data.stream4 >= resource.data.stream4;
     }
 
+    // Personal Ajo - STRICT SECURITY & ROLE VISIBILITY
+    // personal_ajo must ONLY be visible to role=user and only his own doc.
+    match /personal_ajo/{docId} {
+      allow read, update: if request.auth != null && request.auth.uid == resource.data.user_id && isSuperAdmin() == false && isGroupAdmin() == false;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.user_id && isSuperAdmin() == false && isGroupAdmin() == false;
+      allow delete: if false;
+    }
+
     // Users and Profiles
     match /users/{userId} {
       allow read, write: if true;
@@ -32,7 +62,7 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Group & Personal Savings Collections
+    // Group & Savings Collections
     match /groups/{groupId} {
       allow read, write: if true;
     }
@@ -40,9 +70,6 @@ service cloud.firestore {
       allow read, write: if true;
     }
     match /contributions/{contribId} {
-      allow read, write: if true;
-    }
-    match /personal_ajo/{ajoId} {
       allow read, write: if true;
     }
     match /transactions/{txId} {

@@ -33,6 +33,8 @@ import {
   fsGetProfileById,
   fsUpsertPersonalAjo,
   fsGetPersonalAjoByUserId,
+  getOrCreatePersonalAjo,
+  onPaymentSuccess,
   fsUpsertGroup,
   fsGetGroupById,
   fsGetGroupByCode,
@@ -308,30 +310,18 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
         db.upsertProfile(profile);
       }
 
-      let personal = db.getPersonalAjoByUserId(profile.id);
-      try {
-        const fDb = getFirestoreDb();
-        if (fDb) {
-          const uDoc = await fDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id).get();
-          if (uDoc.exists) {
-            const uData = uDoc.data() || {};
-            const fsBal = Number(uData.personalBalance ?? uData.balance ?? 0);
-            if (personal) {
-              personal.balance = fsBal;
-            } else {
-              personal = {
-                id: `pajo_${profile.id}`,
-                user_id: profile.id,
-                balance: fsBal,
-                total_deposited: fsBal,
-                total_withdrawn: 0,
-                status: 'active',
-                created_at: new Date().toISOString()
-              };
-            }
-          }
+      const isSuper = profile.role === 'SUPER_ADMIN' || profile.role === 'superadmin' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com' || profile.phone === '08154267469';
+      const isGroupAdmin = profile.role === 'GROUP_ADMIN' || profile.role === 'groupadmin';
+
+      // personal_ajo must ONLY be visible to role=user and only his own doc.
+      let personal = null;
+      if (!isSuper && !isGroupAdmin) {
+        try {
+          personal = await getOrCreatePersonalAjo(profile.id);
+        } catch (e) {
+          personal = db.getPersonalAjoByUserId(profile.id);
         }
-      } catch (e) {}
+      }
 
       const userGroups = db.getUserGroups(profile.id);
 
@@ -393,7 +383,17 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
       });
     }
 
-    const personal = db.getPersonalAjoByUserId(profile.id);
+    const isSuper = profile.role === 'SUPER_ADMIN' || profile.role === 'superadmin' || profile.phone === '08154267469';
+    const isGroupAdmin = profile.role === 'GROUP_ADMIN' || profile.role === 'groupadmin';
+
+    let personal = null;
+    if (!isSuper && !isGroupAdmin) {
+      try {
+        personal = await getOrCreatePersonalAjo(profile.id);
+      } catch (e) {
+        personal = db.getPersonalAjoByUserId(profile.id);
+      }
+    }
     const userGroups = db.getUserGroups(profile.id);
 
     db.recordAudit({
@@ -861,37 +861,7 @@ apiRouter.post('/personal/deposit/verify', paymentRateLimiter, async (req: Reque
       return res.status(403).json({ error: 'Security violation: Cannot verify deposit for another user account.' });
     }
 
-    // IDEMPOTENCY CHECK: If already successfully processed, confirm Firestore and return without double-crediting
-    let existingPayment = db.getPaymentByReference(reference);
-    if (!existingPayment) {
-      existingPayment = await fsGetPaymentByReference(reference).catch(() => null);
-    }
-
-    if (existingPayment && existingPayment.status === 'success') {
-      let personal = db.getPersonalAjoByUserId(userId);
-      if (!personal) {
-        personal = await fsGetPersonalAjoByUserId(userId).catch(() => null);
-        if (personal) {
-          (db as any).data.personal_ajo.push(personal);
-          db.save();
-        }
-      }
-      if (personal) {
-        const remotePayment = await fsGetPaymentByReference(reference).catch(() => null);
-        let confirmed = Boolean(remotePayment?.status === 'success');
-        if (!confirmed) {
-          confirmed = await fsExecuteDepositBatch(existingPayment, personal);
-        }
-        return res.json({
-          success: true,
-          message: 'Deposit already verified and credited to your savings.',
-          alreadyProcessed: true,
-          personalAjo: personal,
-          cloudConfirmed: confirmed
-        });
-      }
-    }
-
+    // Verify payment with Paystack
     const transactionFee = 60;
     const expectedKobo = Math.round((numAmount + transactionFee) * 100);
     const verification = await verifyPaystackPayment(reference, expectedKobo);
@@ -899,113 +869,77 @@ apiRouter.post('/personal/deposit/verify', paymentRateLimiter, async (req: Reque
       return res.status(400).json({ error: verification.message || 'Payment verification failed on server.' });
     }
 
-    // CROSS-VERCEL-INSTANCE PAYMENT RECONSTRUCTION:
-    // Do not depend on a payment record existing in local server memory.
-    let paymentRec = db.getPaymentByReference(reference);
-    if (!paymentRec) {
-      const fsPayment = await fsGetPaymentByReference(reference).catch(() => null);
-      if (fsPayment) {
-        paymentRec = fsPayment;
-      } else {
-        paymentRec = {
-          id: `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          user_id: userId,
-          purpose: 'personal_savings_deposit',
-          amount: numAmount,
-          amount_kobo: verification.amount_kobo || expectedKobo,
-          currency: 'NGN',
-          reference,
-          status: 'pending',
-          created_at: new Date().toISOString()
-        };
-        (db as any).data.payments.push(paymentRec);
-        db.save();
-      }
-    }
-
-    paymentRec.status = 'success';
-    paymentRec.gateway_response = verification.data?.gateway_response || 'Successful';
-    paymentRec.paid_at = verification.data?.paid_at || new Date().toISOString();
-    paymentRec.channel = verification.data?.channel || 'card';
-    paymentRec.updated_at = new Date().toISOString();
-    db.save();
-    syncPaymentRecordToSupabase(paymentRec).catch(() => {});
-
-    // Ensure Personal Ajo account is available locally
-    let personal = db.getPersonalAjoByUserId(userId);
-    if (!personal) {
-      const fsPersonal = await fsGetPersonalAjoByUserId(userId).catch(() => null);
-      if (fsPersonal) {
-        personal = fsPersonal;
-        (db as any).data.personal_ajo.push(personal);
-        db.save();
-      }
-    }
-
-    // Deposit the savings amount into user's personal ajo (fee is not deducted from savings)
-    personal = db.depositPersonalAjo(userId, numAmount);
-    syncPersonalAjoToSupabase(personal).catch(() => {});
-
-    // CRITICAL ATOMIC FIRESTORE TRANSACTION:
-    // Atomic write to users/{userId} (personalBalance = currentBalance + numAmount),
-    // transactions collection, platformRevenue collection (STREAM_2_CONTRIBUTION, 60),
-    // and personal_ajo collection
-    const txResult = await fsExecutePersonalDepositTransaction(
-      userId,
-      numAmount,
-      60,
+    // ATOMIC IDEMPOTENT TRANSACTION (onPaymentSuccess):
+    // 1. Checks if payment is already processed. If so, skips to prevent double credit.
+    // 2. Uses Firestore transaction to update balance, total_deposited, total_saved, payment processed=true.
+    const result = await onPaymentSuccess({
       reference,
-      paymentRec
-    );
-
-    let confirmed = txResult.success;
-    if (!confirmed) {
-      // Resilient fallback attempt with batch
-      confirmed = await fsExecuteDepositBatch(paymentRec, personal);
-      if (!confirmed) {
-        const remotePayment = await fsGetPaymentByReference(reference).catch(() => null);
-        if (remotePayment?.status === 'success') {
-          confirmed = true;
-        }
-      }
-    }
-
-    if (!confirmed) {
-      console.error(`[Personal Deposit] Firestore persistence failed for ref: ${reference}, userId: ${userId}`);
-      return res.status(503).json({
-        error: 'Deposit was verified with Paystack, but cloud synchronization could not be confirmed safely. Please click retry to confirm your balance.',
-        retryable: true,
-        reference
-      });
-    }
-
-    if (txResult.newBalance) {
-      personal.balance = txResult.newBalance;
-    }
-
-    // Record the ₦60 additive transaction fee into Super Admin Revenue Ledger (Stream 2 - CONTRIBUTION)
-    const saverProfile = db.getProfileById(userId);
-    db.recordAdminRevenue({
-      type: 'contribution_60',
-      amount: 60,
-      group_or_user: `Personal Saver: ${saverProfile?.full_name || userId}`,
+      amount: numAmount,
       user_id: userId,
-      gross_amount: numAmount,
-      reference,
-      description: `₦60 Personal Ajo Savings Fee (Deposit: ₦${numAmount.toLocaleString()})`
+      channel: verification.data?.channel || 'card',
+      gateway_response: verification.data?.gateway_response || 'Successful',
+      paid_at: verification.data?.paid_at || new Date().toISOString(),
+      purpose: 'personal_deposit'
     });
+
+    if (!result.success) {
+      return res.status(500).json({ error: result.error || 'Payment transaction failed' });
+    }
+
+    const personal = await getOrCreatePersonalAjo(userId).catch(() => db.getPersonalAjoByUserId(userId));
 
     // Audit log
     db.recordAudit({
       event_type: 'PERSONAL_DEPOSIT_COMPLETED',
       user_id: userId,
       ip_address: req.ip,
-      details: { amount: numAmount, fee: 60, totalPaid: numAmount + 60, reference, newBalance: personal.balance }
+      details: { amount: numAmount, fee: 60, totalPaid: numAmount + 60, reference, newBalance: personal?.balance }
     });
 
-    return res.json({ success: true, personalAjo: personal });
+    return res.json({
+      success: true,
+      alreadyProcessed: result.alreadyProcessed || false,
+      personalAjo: personal
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// Paystack Webhook Handler
+apiRouter.post(['/paystack/webhook', '/webhook'], async (req: Request, res: Response) => {
+  try {
+    const event = req.body;
+    if (!event || event.event !== 'charge.success') {
+      return res.status(200).json({ received: true });
+    }
+
+    const data = event.data || {};
+    const reference = data.reference;
+    if (!reference) {
+      return res.status(200).json({ received: true });
+    }
+
+    const amountKobo = Number(data.amount || 0);
+    const amountNaira = amountKobo > 0 ? (amountKobo > 10000000 ? amountKobo / 100 : amountKobo / 100) : 0;
+    const metadata = data.metadata || {};
+    const userId = metadata.userId || metadata.user_id;
+
+    console.log(`[Paystack Webhook] Received charge.success for ref: ${reference}, amount: ${amountNaira}`);
+    const result = await onPaymentSuccess({
+      reference,
+      amount: amountNaira,
+      user_id: userId,
+      channel: data.channel || 'card',
+      gateway_response: data.gateway_response || 'Successful',
+      paid_at: data.paid_at || new Date().toISOString(),
+      purpose: 'personal_deposit'
+    });
+
+    return res.status(200).json({ success: true, result });
+  } catch (err: any) {
+    console.error('[Paystack Webhook Error]:', err);
+    return res.status(200).json({ error: err.message });
   }
 });
 
@@ -2615,6 +2549,11 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
       }
     } catch (e) {
       console.warn('[superadmin/full-data] Error attaching Firestore revenue:', e);
+    }
+    // Strict Privacy: Super Admin does not query or see personal_ajo accounts
+    data.personalUsers = [];
+    if (data.metrics) {
+      data.metrics.personalAjoAccounts = 0;
     }
     return res.json(data);
   } catch (err: any) {

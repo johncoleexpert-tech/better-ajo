@@ -785,32 +785,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 Verified member records, bank disbursement details, and participation statuses across all products.
               </p>
             </div>
-            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
-              <button
-                onClick={() => setMemberViewType('group')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  memberViewType === 'group'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Group Members ({members.length})
-              </button>
-              <button
-                onClick={() => setMemberViewType('personal')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-                  memberViewType === 'personal'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Personal Savers ({personalUsers.length})
-              </button>
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700">
+              Group Members ({members.length})
             </div>
           </div>
 
-          {memberViewType === 'group' ? (
-            <div className="overflow-x-auto">
+          <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
                   <tr>
@@ -870,59 +850,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
-                <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                  <tr>
-                    <th className="py-3 px-4">Saver Name</th>
-                    <th className="py-3 px-4">Phone Number</th>
-                    <th className="py-3 px-4">Bank Name & Account</th>
-                    <th className="py-3 px-4">Account Status</th>
-                    <th className="py-3 px-4">Current Balance</th>
-                    <th className="py-3 px-4">Total Deposited</th>
-                    <th className="py-3 px-4">Total Withdrawn</th>
-                    <th className="py-3 px-4">Registration Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {personalUsers.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-3 px-4 font-bold text-slate-900">{p.full_name}</td>
-                      <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(p.phone)}</td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
-                        {p.bank_name && p.bank_name !== 'Not provided' ? (
-                          <span>{p.bank_name} - <strong className="text-slate-900">{p.account_number}</strong></span>
-                        ) : (
-                          <span className="text-slate-400 italic">Not set</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          p.account_status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {p.account_status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-black text-emerald-700">{formatNaira(p.balance)}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(p.total_deposited)}</td>
-                      <td className="py-3 px-4 font-bold text-slate-600">{formatNaira(p.total_withdrawn)}</td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {new Date(p.created_at).toLocaleDateString('en-NG')}
-                      </td>
-                    </tr>
-                  ))}
-                  {personalUsers.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
-                        No registered Personal Better Ajo users yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
 

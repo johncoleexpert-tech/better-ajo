@@ -362,58 +362,14 @@
   ],
   "personal_ajo": [
     {
-      "id": "pajo_1788382012410_su2t",
-      "user_id": "usr_1788382012410_urddl",
-      "balance": 95000,
-      "total_deposited": 200000,
-      "total_withdrawn": 105000,
-      "status": "pending_fee",
-      "created_at": "2026-09-02T20:46:52.410Z"
-    },
-    {
-      "id": "pajo_1788383254809_1mqw",
-      "user_id": "usr_1788383254809_7ztqt",
-      "balance": 0,
-      "total_deposited": 0,
-      "total_withdrawn": 0,
+      "id": "pajo_1789719435744_or8x",
+      "user_id": "usr_1789719435722_ym18a",
+      "balance": 305060,
+      "total_deposited": 305060,
+      "total_withdrawn": 100000,
       "status": "active",
-      "created_at": "2026-09-02T21:07:34.809Z"
-    },
-    {
-      "id": "pajo_1788383267693_5vxd",
-      "user_id": "usr_1788383267693_m5jh2",
-      "balance": 0,
-      "total_deposited": 0,
-      "total_withdrawn": 0,
-      "status": "pending_fee",
-      "created_at": "2026-09-02T21:07:47.693Z"
-    },
-    {
-      "id": "pajo_1788383294740_wl2l",
-      "user_id": "user_2",
-      "balance": 12000,
-      "total_deposited": 20000,
-      "total_withdrawn": 8000,
-      "status": "active",
-      "created_at": "2026-09-02T21:08:14.740Z"
-    },
-    {
-      "id": "pajo_1788866674653_5ag7",
-      "user_id": "usr_1788866653157_993d4",
-      "balance": 50000,
-      "total_deposited": 50000,
-      "total_withdrawn": 0,
-      "status": "active",
-      "created_at": "2026-09-08T11:24:34.653Z"
-    },
-    {
-      "id": "pajo_1788866774950_j6cx",
-      "user_id": "usr_1788866774921_9jvfv",
-      "balance": 50000,
-      "total_deposited": 50000,
-      "total_withdrawn": 0,
-      "status": "active",
-      "created_at": "2026-09-08T11:26:14.950Z"
+      "created_at": "2026-09-18T08:17:15.744Z",
+      "total_saved": 305060
     },
     {
       "id": "pajo_1788866791270_009o",
@@ -425,13 +381,58 @@
       "created_at": "2026-09-08T11:26:31.270Z"
     },
     {
-      "id": "pajo_1789719435744_or8x",
-      "user_id": "usr_1789719435722_ym18a",
-      "balance": 0,
-      "total_deposited": 100000,
-      "total_withdrawn": 100000,
+      "id": "pajo_1788866774950_j6cx",
+      "user_id": "usr_1788866774921_9jvfv",
+      "balance": 50000,
+      "total_deposited": 50000,
+      "total_withdrawn": 0,
       "status": "active",
-      "created_at": "2026-09-18T08:17:15.744Z"
+      "created_at": "2026-09-08T11:26:14.950Z"
+    },
+    {
+      "id": "pajo_1788866674653_5ag7",
+      "user_id": "usr_1788866653157_993d4",
+      "balance": 50000,
+      "total_deposited": 50000,
+      "total_withdrawn": 0,
+      "status": "active",
+      "created_at": "2026-09-08T11:24:34.653Z"
+    },
+    {
+      "id": "pajo_1788383294740_wl2l",
+      "user_id": "user_2",
+      "balance": 12000,
+      "total_deposited": 20000,
+      "total_withdrawn": 8000,
+      "status": "active",
+      "created_at": "2026-09-02T21:08:14.740Z"
+    },
+    {
+      "id": "pajo_1788383267693_5vxd",
+      "user_id": "usr_1788383267693_m5jh2",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "pending_fee",
+      "created_at": "2026-09-02T21:07:47.693Z"
+    },
+    {
+      "id": "pajo_1788383254809_1mqw",
+      "user_id": "usr_1788383254809_7ztqt",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "active",
+      "created_at": "2026-09-02T21:07:34.809Z"
+    },
+    {
+      "id": "pajo_1788382012410_su2t",
+      "user_id": "usr_1788382012410_urddl",
+      "balance": 95000,
+      "total_deposited": 200000,
+      "total_withdrawn": 105000,
+      "status": "pending_fee",
+      "created_at": "2026-09-02T20:46:52.410Z"
     }
   ],
   "groups": [
@@ -2741,6 +2742,17 @@
       },
       "ip_address": "127.0.0.1",
       "created_at": "2026-09-20T17:13:41.975Z"
+    },
+    {
+      "id": "aud_1789975128837_uqxd4",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_superadmin_08154267469",
+      "details": {
+        "email": "superadmin@packajo.ng",
+        "role": "SUPER_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-21T07:18:48.837Z"
     }
   ],
   "support_messages": [
