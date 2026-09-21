@@ -46,6 +46,12 @@ service cloud.firestore {
         && request.resource.data.stream4 >= resource.data.stream4;
     }
 
+    // Platform Stats: Aggregate metrics for superadmin (totalPersonalSavings)
+    match /platformStats/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Personal Ajo - STRICT SECURITY & ROLE VISIBILITY
     // personal_ajo must ONLY be visible to role=user and only his own doc.
     match /personal_ajo/{docId} {

@@ -28,7 +28,7 @@ import {
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
 
 interface SuperAdminDashboardProps {
@@ -55,6 +55,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     unifiedAvailable: number;
     lastUpdated?: any;
   } | null>(null);
+  const [totalPersonalSavings, setTotalPersonalSavings] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -104,6 +105,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       }
 
       setData(json);
+      if (json.platformStats?.totalPersonalSavings !== undefined) {
+        setTotalPersonalSavings(Number(json.platformStats.totalPersonalSavings || 0));
+      }
     } catch (err: any) {
       setError(err.message || 'Access restricted to authorized Super Administrator.');
     } finally {
@@ -210,9 +214,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       });
     });
 
+    // Real-time listener to platformStats/main (Personal Ajo aggregate savings)
+    let unsubStats: (() => void) | null = null;
+    try {
+      unsubStats = onSnapshot(doc(db, 'platformStats', 'main'), (snap) => {
+        if (snap.exists()) {
+          const stats = snap.data();
+          setTotalPersonalSavings(Number(stats.totalPersonalSavings || 0));
+        }
+      }, (err) => console.warn('[Super Admin] platformStats/main listener error:', err));
+    } catch (e) {}
+
     fetchSuperAdminData();
 
-    return () => unsub();
+    return () => {
+      unsub();
+      if (unsubStats) unsubStats();
+    };
   }, [userPhone, userId]);
 
   const handleWithdrawRevenue = async (e: React.FormEvent) => {
@@ -428,7 +446,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
             Total Users
@@ -446,6 +464,24 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <span className="text-xl font-black text-slate-900 block">{metrics.groupsCount}</span>
           <span className="text-[10px] text-slate-500 mt-1 block font-medium">
             {metrics.groupMembersCount} active members
+          </span>
+        </div>
+
+        {/* PERSONAL AJO SAVINGS Card (Aggregate Only from platformStats/main) */}
+        <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50/80 border border-emerald-200/80 p-4 shadow-xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+              PERSONAL AJO SAVINGS
+            </span>
+            <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-emerald-200/80 text-emerald-900">
+              Aggregate
+            </span>
+          </div>
+          <span className="text-xl font-black text-emerald-950 block">
+            {formatNaira(totalPersonalSavings)}
+          </span>
+          <span className="text-[10px] text-emerald-700/90 mt-1 block font-medium">
+            Protected member vaults
           </span>
         </div>
 

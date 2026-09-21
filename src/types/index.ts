@@ -21,6 +21,8 @@ export interface UserProfile {
   account_number: string;
   verification_type: VerificationType;
   verification_number: string;
+  whatsapp_number?: string;
+  whatsappNumber?: string;
   created_at: string;
 }
 
@@ -46,6 +48,8 @@ export interface GroupAjo {
   packing_fee: number;
   withdrawalFee?: number;
   group_code: string;
+  whatsapp_number?: string;
+  whatsappNumber?: string;
   status: 'recruiting' | 'active' | 'round_completed';
   current_round: number;
   currentRound?: number;
@@ -62,6 +66,8 @@ export interface GroupMember {
   user_id: string;
   full_name: string;
   phone: string;
+  whatsapp_number?: string;
+  whatsappNumber?: string;
   bank_name: string;
   account_number: string;
   position: number;

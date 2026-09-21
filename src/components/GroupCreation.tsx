@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, ArrowLeft, Users, Coins, Clock, Loader2, CheckCircle2, Copy, Share2, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Shield, ArrowLeft, Users, Coins, Clock, Loader2, CheckCircle2, Copy, Share2, Mail, Lock, User, Eye, EyeOff, Phone } from 'lucide-react';
 import { UserProfile, PackingCycle } from '../types/index.js';
 import { NIGERIAN_BANKS, formatNaira, formatPhone } from '../lib/formatters.js';
 import { OtpModal } from './OtpModal.js';
@@ -32,6 +32,7 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
   const [contributionAmount, setContributionAmount] = useState(50000);
   const [cycleType, setCycleType] = useState<PackingCycle>('Every Month');
   const [packingFee, setPackingFee] = useState<number>(3000);
+  const [whatsappNumber, setWhatsappNumber] = useState(currentUser?.whatsapp_number || currentUser?.whatsappNumber || currentUser?.phone || '');
 
   // Admin Profile (if not logged in)
   const [fullName, setFullName] = useState(currentUser?.full_name || '');
@@ -147,7 +148,9 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
           member_limit: Number(memberLimit),
           contribution_amount: Number(contributionAmount),
           cycle_type: cycleType,
-          packing_fee: Number(packingFee)
+          packing_fee: Number(packingFee),
+          whatsapp_number: whatsappNumber,
+          whatsappNumber: whatsappNumber
         })
       });
 
@@ -206,6 +209,26 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
               placeholder="e.g. Family Monthly Pack"
               className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none text-sm font-semibold text-slate-900 transition"
             />
+          </div>
+
+          {/* Group Admin WhatsApp Number */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Admin WhatsApp Number <span className="text-slate-400 font-normal lowercase">(for member coordination & reminders)</span>
+            </label>
+            <div className="relative">
+              <input
+                type="tel"
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value)}
+                placeholder="e.g. 08012345678 or +2348012345678"
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none text-sm font-mono text-slate-900 transition"
+              />
+              <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600" />
+            </div>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              Enables members to reach you and receive instant notifications via WhatsApp.
+            </span>
           </div>
 
           {/* Number of Contributors (2 to 50 strictly) */}

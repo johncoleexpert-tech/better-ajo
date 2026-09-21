@@ -93,6 +93,80 @@ export function subscribeToUserPersonalBalance(
   );
 }
 
+/**
+ * Real-time listener for personal_ajo doc using onSnapshot.
+ * Fixes: "Personal Ajo dashboard: change get() to onSnapshot() for personal_ajo doc. Balance updates instantly."
+ */
+export function subscribeToPersonalAjoDoc(
+  userId: string,
+  onUpdate: (data: any) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId) return () => {};
+
+  // Listen directly to personal_ajo doc (by userId)
+  const docRef = doc(db, 'personal_ajo', userId);
+  const unsubDoc = onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      onUpdate(snap.data());
+    }
+  }, (err) => {
+    if (onError) onError(err);
+  });
+
+  // Also query where user_id == userId for docs named by pajo_id
+  const q = query(collection(db, 'personal_ajo'), where('user_id', '==', userId));
+  const unsubQuery = onSnapshot(q, (snapshot) => {
+    if (!snapshot.empty) {
+      const firstDoc = snapshot.docs[0].data();
+      onUpdate(firstDoc);
+    }
+  }, (err) => {
+    if (onError) onError(err);
+  });
+
+  return () => {
+    unsubDoc();
+    unsubQuery();
+  };
+}
+
+/**
+ * Real-time listener for personal payments (deposits & withdrawals) for user_id == me
+ */
+export function subscribeToUserPersonalPayments(
+  userId: string,
+  onPaymentsUpdate: (payments: any[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  if (!userId) return () => {};
+
+  const q = query(
+    collection(db, 'payments'),
+    where('user_id', '==', userId)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach((doc) => {
+        const d = doc.data();
+        const purpose = d.purpose || d.type || '';
+        if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
+          list.push({ id: doc.id, ...d });
+        }
+      });
+      list.sort((a, b) => new Date(b.created_at || b.paid_at || 0).getTime() - new Date(a.created_at || a.paid_at || 0).getTime());
+      onPaymentsUpdate(list);
+    },
+    (err) => {
+      console.warn('[Firestore] personal payments listener error:', err);
+      if (onError) onError(err);
+    }
+  );
+}
+
 export interface PlatformRevenueMainData {
   stream1: number;
   stream2: number;

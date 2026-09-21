@@ -1793,6 +1793,8 @@ class Database {
     contribution_amount: number;
     cycle_type: GroupAjo['cycle_type'];
     packing_fee?: number;
+    whatsapp_number?: string;
+    whatsappNumber?: string;
   }): { group: GroupAjo; adminMember?: GroupMember; adminProfile?: UserProfile } {
     // Generate unique code e.g. PAK-82K4M
     let code = '';
@@ -1806,6 +1808,7 @@ class Database {
     } while (this.data.groups.some(g => g.group_code === code));
 
     const packingFee = data.packing_fee !== undefined ? data.packing_fee : 3000;
+    const waNumber = data.whatsapp_number || data.whatsappNumber;
 
     const group: GroupAjo = {
       id: `grp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1818,6 +1821,8 @@ class Database {
       packing_amount: data.contribution_amount * data.member_limit,
       packing_fee: packingFee,
       withdrawalFee: packingFee,
+      whatsapp_number: waNumber,
+      whatsappNumber: waNumber,
       group_code: code,
       status: 'recruiting',
       current_round: 1,
@@ -1958,12 +1963,16 @@ class Database {
       }
     }
 
+    const waNumber = userProfile.whatsapp_number || userProfile.whatsappNumber || userProfile.phone;
+
     const member: GroupMember = {
       id: `mem_${Date.now()}_${nextPosition}`,
       group_id: group.id,
       user_id: userProfile.id,
       full_name: userProfile.full_name,
       phone: userProfile.phone,
+      whatsapp_number: waNumber,
+      whatsappNumber: waNumber,
       bank_name: userProfile.bank_name,
       account_number: userProfile.account_number,
       position: nextPosition,

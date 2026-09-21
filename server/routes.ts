@@ -60,6 +60,8 @@ import {
   fsRecordWithdrawalFeeRevenue,
   fsRecordSuperAdminWithdrawalDeduction,
   fsGetPlatformRevenueMain,
+  aggregatePersonalAjoSavings,
+  fsGetPlatformStats,
   getFirestoreDb,
   fsLogAuditEvent,
   fsSaveOtp,
@@ -1055,6 +1057,72 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
   }
 });
 
+apiRouter.get('/platform/stats', async (_req: Request, res: Response) => {
+  try {
+    const stats = (await fsGetPlatformStats()) || (await aggregatePersonalAjoSavings());
+    return res.json({ success: true, stats });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const fDb = getFirestoreDb();
+    const payments: any[] = [];
+    if (fDb) {
+      try {
+        const snap = await fDb.collection(FIRESTORE_COLLECTIONS.PAYMENTS)
+          .where('user_id', '==', userId)
+          .get();
+        snap.forEach(doc => {
+          const d = doc.data();
+          const purpose = d.purpose || d.type || '';
+          if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
+            payments.push({ id: doc.id, ...d });
+          }
+        });
+      } catch (err) {
+        console.warn('Firestore personal payments query warn:', err);
+      }
+    }
+    // Also include withdrawals and payments from local db fallback
+    const localWithdrawals = db.data?.withdrawals?.filter((w: any) => w.user_id === userId) || [];
+    for (const w of localWithdrawals) {
+      const payId = `pay_wth_${w.id}`;
+      if (!payments.some(p => p.id === payId || p.reference === w.id)) {
+        payments.push({
+          id: payId,
+          user_id: w.user_id,
+          amount: w.amount,
+          reference: w.reference || w.id,
+          purpose: 'personal_withdrawal',
+          type: 'withdrawal',
+          status: 'success',
+          gateway_response: 'Successful',
+          created_at: w.created_at || new Date().toISOString()
+        });
+      }
+    }
+
+    const localPayments = db.data?.payments?.filter((p: any) => p.user_id === userId) || [];
+    for (const p of localPayments) {
+      const purpose = p.purpose || p.type || '';
+      if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
+        if (!payments.some(x => x.id === p.id || (p.reference && x.reference === p.reference))) {
+          payments.push(p);
+        }
+      }
+    }
+
+    payments.sort((a, b) => new Date(b.created_at || b.paid_at || 0).getTime() - new Date(a.created_at || a.paid_at || 0).getTime());
+    return res.json({ success: true, payments });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ----------------------------------------------------
 // GROUP PACK AJO ROUTES
 // ----------------------------------------------------
@@ -1079,8 +1147,12 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       member_limit,
       contribution_amount,
       cycle_type,
-      packing_fee
+      packing_fee,
+      whatsapp_number,
+      whatsappNumber
     } = req.body;
+
+    const waNumber = whatsapp_number || whatsappNumber;
 
     if (!admin_id || !admin_name || !group_name || !member_limit || !contribution_amount || !cycle_type) {
       return res.status(400).json({ error: 'All group creation fields are required.' });
@@ -1118,8 +1190,16 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       member_limit: limit,
       contribution_amount: contrib,
       cycle_type,
-      packing_fee: fee
+      packing_fee: fee,
+      whatsapp_number: waNumber,
+      whatsappNumber: waNumber
     });
+
+    if (waNumber && result.adminProfile) {
+      result.adminProfile.whatsapp_number = waNumber;
+      result.adminProfile.whatsappNumber = waNumber;
+      db.save();
+    }
 
     await syncGroupToSupabase(result.group).catch(() => {});
     await fsUpsertGroup(result.group).catch(() => {});
@@ -1229,8 +1309,12 @@ apiRouter.post('/groups/join', async (req: Request, res: Response) => {
       verification_number,
       email,
       password,
-      otp_code
+      otp_code,
+      whatsapp_number,
+      whatsappNumber
     } = req.body;
+
+    const waNumber = (whatsapp_number || whatsappNumber || phone || '').trim();
 
     if (!group_code || !full_name || (!phone && !email) || !bank_name || !account_number || !verification_type || !verification_number) {
       return res.status(400).json({ error: 'All required fields must be provided.' });
@@ -1262,6 +1346,8 @@ apiRouter.post('/groups/join', async (req: Request, res: Response) => {
     const profile = db.upsertProfile({
       full_name: full_name.trim(),
       phone: cleanPhone,
+      whatsapp_number: waNumber || cleanPhone,
+      whatsappNumber: waNumber || cleanPhone,
       bank_name: bank_name.trim(),
       account_number: account_number.trim(),
       verification_type,
@@ -2550,11 +2636,17 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
     } catch (e) {
       console.warn('[superadmin/full-data] Error attaching Firestore revenue:', e);
     }
-    // Strict Privacy: Super Admin does not query or see personal_ajo accounts
+    // Strict Privacy: Super Admin does not query or see individual personal_ajo accounts
     data.personalUsers = [];
     if (data.metrics) {
       data.metrics.personalAjoAccounts = 0;
     }
+
+    try {
+      const stats = (await fsGetPlatformStats()) || (await aggregatePersonalAjoSavings());
+      data.platformStats = stats;
+    } catch (err) {}
+
     return res.json(data);
   } catch (err: any) {
     return res.status(400).json({ error: err.message });
@@ -3202,3 +3294,12 @@ apiRouter.post('/support/mark-read', (req: Request, res: Response) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+// Periodic Cloud Function Sync: Sum all personal_ajo balances into platformStats/main
+setTimeout(() => {
+  aggregatePersonalAjoSavings().catch(err => console.warn('[PlatformStats aggregation on startup error]:', err?.message || err));
+}, 3000);
+setInterval(() => {
+  aggregatePersonalAjoSavings().catch(err => console.warn('[PlatformStats aggregation interval error]:', err?.message || err));
+}, 60000);
+

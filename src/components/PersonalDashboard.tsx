@@ -11,14 +11,19 @@ import {
   AlertCircle,
   Loader2,
   X,
-  LogOut
+  LogOut,
+  Clock
 } from 'lucide-react';
 import { UserProfile, PersonalAjo } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { PaystackModal, PaymentBreakdown } from './PaystackModal.js';
 import { OtpModal } from './OtpModal.js';
 import { apiRequest } from '../lib/api.js';
-import { subscribeToUserPersonalBalance } from '../lib/firebase.js';
+import {
+  subscribeToUserPersonalBalance,
+  subscribeToPersonalAjoDoc,
+  subscribeToUserPersonalPayments
+} from '../lib/firebase.js';
 
 interface PersonalDashboardProps {
   user: UserProfile;
@@ -49,16 +54,18 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [testWithdrawOtp, setTestWithdrawOtp] = useState<string | undefined>();
 
   const [showTransactionsModal, setShowTransactionsModal] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState<boolean>(true);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Durable real-time Firestore listener for user personalBalance
+  // Durable real-time Firestore listeners for user personal balance and transaction history
   useEffect(() => {
     if (!user?.id) return;
 
-    // Direct endpoint fetch on mount
+    // 1. Direct endpoint fetch on mount
     apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
       .then((data) => {
         if (data && typeof data.personalBalance === 'number') {
@@ -70,15 +77,49 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       })
       .catch(() => {});
 
-    // Real-time Firestore onSnapshot listener
-    const unsub = subscribeToUserPersonalBalance(user.id, (freshBalance) => {
+    // 2. Real-time Firestore onSnapshot listener for users collection
+    const unsubUser = subscribeToUserPersonalBalance(user.id, (freshBalance) => {
       onUpdatePersonalAjo({
         ...personalAjo,
         balance: freshBalance
       });
     });
 
-    return () => unsub();
+    // 3. Real-time Firestore onSnapshot listener for personal_ajo doc
+    // (Requirement: Personal Ajo dashboard: change get() to onSnapshot() for personal_ajo doc. Balance updates instantly)
+    const unsubPersonalAjo = subscribeToPersonalAjoDoc(user.id, (pData) => {
+      if (pData) {
+        onUpdatePersonalAjo({
+          ...personalAjo,
+          balance: typeof pData.balance === 'number' ? pData.balance : personalAjo.balance,
+          total_deposited: typeof pData.total_deposited === 'number' ? pData.total_deposited : personalAjo.total_deposited,
+          total_withdrawn: typeof pData.total_withdrawn === 'number' ? pData.total_withdrawn : personalAjo.total_withdrawn,
+          total_saved: typeof pData.total_saved === 'number' ? pData.total_saved : personalAjo.total_saved
+        });
+      }
+    });
+
+    // 4. Fetch and listen to personal transactions history (deposits & withdrawals)
+    setLoadingTransactions(true);
+    apiRequest(`/api/personal/payments/${encodeURIComponent(user.id)}`)
+      .then((res) => {
+        if (res?.payments && Array.isArray(res.payments)) {
+          setTransactions(res.payments);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingTransactions(false));
+
+    const unsubPayments = subscribeToUserPersonalPayments(user.id, (freshPayments) => {
+      setTransactions(freshPayments);
+      setLoadingTransactions(false);
+    });
+
+    return () => {
+      unsubUser();
+      unsubPersonalAjo();
+      unsubPayments();
+    };
   }, [user?.id]);
 
   // Deposit flow
@@ -337,6 +378,116 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         </div>
       </div>
 
+      {/* Personal Transaction History Table Section */}
+      <div className="mt-8 rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-8 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-2xl bg-[#E6F3ED] flex items-center justify-center text-[#008751]">
+              <HistoryIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-slate-900 tracking-tight">
+                Personal Transaction History
+              </h3>
+              <p className="text-xs text-slate-500">
+                Verified savings deposits and NUBAN bank withdrawals
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+              {transactions.length} record{transactions.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        </div>
+
+        {loadingTransactions ? (
+          <div className="py-12 flex flex-col items-center justify-center text-slate-400 space-y-2">
+            <Loader2 className="h-6 w-6 animate-spin text-[#008751]" />
+            <span className="text-xs font-medium">Loading transactions...</span>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="py-12 text-center text-slate-400 space-y-2">
+            <Clock className="h-8 w-8 mx-auto text-slate-300 stroke-[1.5]" />
+            <p className="text-sm font-semibold text-slate-600">No transactions recorded yet</p>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Your deposits and withdrawals will appear here automatically with real-time Paystack and NUBAN confirmation.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-600">
+              <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                <tr>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Reference</th>
+                  <th className="py-3 px-4">Amount</th>
+                  <th className="py-3 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {transactions.map((tx) => {
+                  const isDeposit = (tx.purpose || tx.type) === 'personal_deposit';
+                  const dateVal = tx.created_at || tx.paid_at || tx.timestamp;
+                  const formattedDate = dateVal
+                    ? new Date(dateVal).toLocaleString('en-NG', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short'
+                      })
+                    : '—';
+
+                  return (
+                    <tr key={tx.id || tx.reference} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">
+                        {formattedDate}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                            isDeposit
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {isDeposit ? (
+                            <ArrowDownLeft className="h-3 w-3" />
+                          ) : (
+                            <ArrowUpRight className="h-3 w-3" />
+                          )}
+                          {isDeposit ? 'Deposit' : 'Withdrawal'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                        {tx.reference || tx.id}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-sm whitespace-nowrap">
+                        <span className={isDeposit ? 'text-emerald-700' : 'text-slate-900'}>
+                          {isDeposit ? '+' : '-'}{formatNaira(Number(tx.amount || 0))}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            tx.status === 'success' || tx.status === 'completed'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : tx.status === 'pending'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}
+                        >
+                          {tx.status || 'success'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Save Money (Deposit) Modal */}
       {showDepositModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
@@ -546,33 +697,56 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               </button>
             </div>
 
-            <div className="py-4 space-y-3 overflow-y-auto">
-              <div className="p-3.5 rounded-xl bg-gray-50 flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-bold text-gray-900 block">Personal Better Ajo Registration</span>
-                  <span className="text-gray-400 text-[10px]">One-time Platform Fee</span>
+            <div className="py-4 space-y-3 overflow-y-auto max-h-[60vh]">
+              {transactions.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 space-y-2">
+                  <Clock className="h-7 w-7 mx-auto text-slate-300" />
+                  <p className="text-xs font-semibold text-slate-600">No personal transactions recorded yet</p>
                 </div>
-                <span className="font-bold text-gray-700">₦600</span>
-              </div>
+              ) : (
+                transactions.map((tx) => {
+                  const isDeposit = (tx.purpose || tx.type) === 'personal_deposit';
+                  const dateVal = tx.created_at || tx.paid_at || tx.timestamp;
+                  const formattedDate = dateVal
+                    ? new Date(dateVal).toLocaleString('en-NG', {
+                        dateStyle: 'short',
+                        timeStyle: 'short'
+                      })
+                    : '—';
 
-              {personalAjo.total_deposited > 0 && (
-                <div className="p-3.5 rounded-xl bg-emerald-50 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-emerald-950 block">Cumulative Deposits</span>
-                    <span className="text-emerald-700 text-[10px]">Paystack Gateway</span>
-                  </div>
-                  <span className="font-bold text-emerald-800">+{formatNaira(personalAjo.total_deposited)}</span>
-                </div>
-              )}
-
-              {personalAjo.total_withdrawn > 0 && (
-                <div className="p-3.5 rounded-xl bg-gray-50 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-gray-900 block">Cumulative Withdrawals</span>
-                    <span className="text-gray-500 text-[10px]">NUBAN Bank Transfer</span>
-                  </div>
-                  <span className="font-bold text-red-600">-{formatNaira(personalAjo.total_withdrawn)}</span>
-                </div>
+                  return (
+                    <div
+                      key={tx.id || tx.reference}
+                      className="p-3 rounded-xl bg-slate-50 flex items-center justify-between text-xs border border-slate-100"
+                    >
+                      <div className="flex items-center space-x-2.5">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+                            isDeposit ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {isDeposit ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                        </div>
+                        <div>
+                          <span className="font-bold text-slate-900 block">
+                            {isDeposit ? 'Personal Deposit' : 'Bank Withdrawal'}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {tx.reference || tx.id} • {formattedDate}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`font-bold block ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
+                          {isDeposit ? '+' : '-'}{formatNaira(Number(tx.amount || 0))}
+                        </span>
+                        <span className="text-[9px] uppercase font-bold text-slate-400">
+                          {tx.status || 'success'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 

@@ -10,6 +10,7 @@ interface AuthModalProps {
   onSelectPersonal: () => void;
   onSelectGroup: () => void;
   onLoginSuccess: (userData: any) => void;
+  onNavigateHome?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -18,15 +19,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   mode,
   onSelectPersonal,
   onSelectGroup,
-  onLoginSuccess
+  onLoginSuccess,
+  onNavigateHome
 }) => {
-  // Tabs for account authentication
-  const [authTab, setAuthTab] = useState<'login' | 'signup'>('login');
+  const [currentMode, setCurrentMode] = useState<'choice' | 'login'>(mode);
 
   // Form Fields - Email & Password ONLY
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Hidden Phone & OTP variables preserved so no dependencies break
@@ -41,13 +41,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   // Reset input state when modal is opened or mode changes
   React.useEffect(() => {
     if (isOpen) {
+      setCurrentMode(mode);
       setEmail('');
       setPassword('');
-      setFullName('');
       setShowPassword(false);
       setError(null);
       setLoading(false);
-      setAuthTab('login');
       // Hidden state cleanup
       setPhone('');
       setOtpStep(false);
@@ -59,7 +58,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleClose = () => {
     setEmail('');
     setPassword('');
-    setFullName('');
+    setShowPassword(false);
     setError(null);
     setLoading(false);
     onClose();
@@ -90,42 +89,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClose();
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email || !email.includes('@')) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-    if (!password || password.length < 4) {
-      setError('Password must be at least 4 characters.');
-      return;
-    }
-    if (!fullName.trim()) {
-      setError('Please enter your full name.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await apiRequest('/api/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          full_name: fullName.trim(),
-          email: email.trim().toLowerCase(),
-          password
-        })
-      });
-
-      onLoginSuccess(data);
-      onClose();
-    } catch (err: any) {
-      setError(err.message || 'Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -162,7 +125,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <PackAjoLogo size="sm" showText={true} />
           </div>
 
-          {mode === 'choice' ? (
+          {currentMode === 'choice' ? (
             <div>
               <div className="text-center mb-6">
                 <h3 className="text-xl font-black text-slate-900 tracking-tight">
@@ -228,10 +191,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="mt-6 pt-4 border-t border-slate-100 text-center">
                 <button
                   onClick={() => {
-                    setAuthTab('login');
-                    // switch to login form view inside modal
-                    const modalEl = document.querySelector('[data-auth-container]');
-                    if (modalEl) modalEl.scrollIntoView();
+                    setCurrentMode('login');
                   }}
                   className="text-xs font-bold text-[#008751] hover:underline cursor-pointer"
                 >
@@ -241,46 +201,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           ) : (
             <div data-auth-container>
-              {/* Login / Sign Up Tab Switcher */}
-              <div className="flex rounded-xl bg-slate-100 p-1 mb-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthTab('login');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    authTab === 'login'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Log In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthTab('signup');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    authTab === 'signup'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  Create Account
-                </button>
-              </div>
-
               <div className="text-center mb-5">
                 <h3 className="text-lg font-black text-slate-900">
-                  {authTab === 'login' ? 'Welcome Back' : 'Sign Up for Better Ajo'}
+                  Welcome Back
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  {authTab === 'login'
-                    ? 'Log in with your email and password to access Personal or Group Ajo.'
-                    : 'Create your account with email and password to start saving.'}
+                  Log in with your email and password to access Personal or Group Ajo.
                 </p>
               </div>
 
@@ -291,187 +217,94 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               )}
 
               {/* Login Form */}
-              {authTab === 'login' ? (
-                <form onSubmit={handleEmailLogin} className="space-y-4">
-                  {/* Email Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="name@example.com"
-                        className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
-                        autoFocus
-                      />
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                    </div>
+              <form onSubmit={handleEmailLogin} className="space-y-4">
+                {/* Email Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
+                      autoFocus
+                    />
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   </div>
+                </div>
 
-                  {/* Password Input */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full pl-11 pr-11 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
-                      />
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Logging in...</span>
-                      </>
-                    ) : (
-                      <span>LOG IN</span>
-                    )}
-                  </button>
-
-                  {/* Super Admin Quick Helper */}
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Super Admin: <strong className="text-slate-700">superadmin@packajo.ng</strong></span>
+                {/* Password Input */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-11 pr-11 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
+                    />
+                    <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                     <button
                       type="button"
-                      onClick={autofillSuperAdmin}
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Logging in...</span>
+                    </>
+                  ) : (
+                    <span>LOG IN</span>
+                  )}
+                </button>
+
+                {/* Super Admin Quick Helper */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Super Admin: <strong className="text-slate-700">superadmin@packajo.ng</strong></span>
+                  <button
+                    type="button"
+                    onClick={autofillSuperAdmin}
+                    className="font-bold text-[#008751] hover:underline cursor-pointer"
+                  >
+                    Fill Admin
+                  </button>
+                </div>
+
+                <div className="text-center pt-2">
+                  <p className="text-xs text-slate-600">
+                    Don't have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleClose();
+                        onNavigateHome?.();
+                      }}
                       className="font-bold text-[#008751] hover:underline cursor-pointer"
                     >
-                      Fill Admin
+                      Go to Home Page to sign up
                     </button>
-                  </div>
-
-                  <div className="text-center pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthTab('signup');
-                        setError(null);
-                      }}
-                      className="text-xs text-slate-600 hover:text-[#008751] font-medium cursor-pointer"
-                    >
-                      Don't have an account? <span className="font-bold text-[#008751]">Sign Up</span>
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                /* Sign Up Form */
-                <form onSubmit={handleEmailSignup} className="space-y-4">
-                  {/* Full Name */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Full Name
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        required
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Babatunde Adeleke"
-                        className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
-                        autoFocus
-                      />
-                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                    </div>
-                  </div>
-
-                  {/* Email */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Email Address
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="name@example.com"
-                        className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
-                      />
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                    </div>
-                  </div>
-
-                  {/* Password */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                      Create Password
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        minLength={4}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="At least 4 characters"
-                        className="w-full pl-11 pr-11 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
-                      />
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Creating Account...</span>
-                      </>
-                    ) : (
-                      <span>CREATE ACCOUNT & LOG IN</span>
-                    )}
-                  </button>
-
-                  <div className="text-center pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthTab('login');
-                        setError(null);
-                      }}
-                      className="text-xs text-slate-600 hover:text-[#008751] font-medium cursor-pointer"
-                    >
-                      Already have an account? <span className="font-bold text-[#008751]">Log In</span>
-                    </button>
-                  </div>
-                </form>
-              )}
+                  </p>
+                </div>
+              </form>
             </div>
           )}
         </div>

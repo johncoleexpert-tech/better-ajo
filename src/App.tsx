@@ -652,6 +652,10 @@ export default function App() {
           setIsAuthModalOpen(false);
           setCurrentView('group_create');
         }}
+        onNavigateHome={() => {
+          setIsAuthModalOpen(false);
+          setCurrentView('home');
+        }}
         onLoginSuccess={handleLoginSuccess}
       />
     </div>

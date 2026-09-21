@@ -810,6 +810,8 @@ export async function onPaymentSuccess(paymentData: {
     });
 
     console.log(`[onPaymentSuccess] Atomic transaction committed for ${userId}, ref: ${reference}. New balance: ${result.balance}`);
+    // Sync platformStats/main aggregate personal savings
+    aggregatePersonalAjoSavings().catch(() => {});
     return result;
   } catch (err: any) {
     console.error(`[onPaymentSuccess] Error processing payment for ref ${reference}:`, err);
@@ -1868,13 +1870,31 @@ export async function fsExecuteWithdrawalBatch(
   const cleanWithdrawal = cleanUndefinedFields(withdrawal);
   const cleanPersonal = cleanUndefinedFields(personal);
 
+  const payDocId = `pay_wth_${withdrawal.id}`;
+  const withdrawalPayment = cleanUndefinedFields({
+    id: payDocId,
+    user_id: withdrawal.user_id,
+    amount: withdrawal.amount,
+    reference: withdrawal.reference || withdrawal.id,
+    purpose: 'personal_withdrawal',
+    type: 'withdrawal',
+    channel: 'bank_transfer',
+    status: 'success',
+    gateway_response: 'Successful',
+    paid_at: withdrawal.created_at || new Date().toISOString(),
+    created_at: withdrawal.created_at || new Date().toISOString(),
+    processed: true
+  });
+
   // Tier 1: Primary Atomic Batch Write
   try {
     const batch = db.batch();
     batch.set(db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(withdrawal.id), cleanWithdrawal, { merge: true });
     batch.set(db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id), cleanPersonal, { merge: true });
+    batch.set(db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId), withdrawalPayment, { merge: true });
     await batch.commit();
     console.log(`[Firestore Personal Withdrawal] Batch commit succeeded for withdrawal ${withdrawal.id} in ${Date.now() - startTime}ms`);
+    aggregatePersonalAjoSavings().catch(() => {});
     return true;
   } catch (batchErr: any) {
     console.warn(`[Firestore Personal Withdrawal] Batch commit failed for withdrawal ${withdrawal.id} (${Date.now() - startTime}ms): ${batchErr?.message || batchErr}. Trying sequential fallback...`);
@@ -1884,7 +1904,9 @@ export async function fsExecuteWithdrawalBatch(
   try {
     await db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(withdrawal.id).set(cleanWithdrawal, { merge: true });
     await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id).set(cleanPersonal, { merge: true });
+    await db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId).set(withdrawalPayment, { merge: true });
     console.log(`[Firestore Personal Withdrawal] Sequential fallback committed for withdrawal ${withdrawal.id}`);
+    aggregatePersonalAjoSavings().catch(() => {});
     return true;
   } catch (seqErr: any) {
     console.error(`[Firestore Personal Withdrawal] Sequential fallback failed for withdrawal ${withdrawal.id}:`, {
@@ -1903,6 +1925,7 @@ export async function fsExecuteWithdrawalBatch(
     ]);
     if (wSnap.exists && pSnap.exists) {
       console.log(`[Firestore Personal Withdrawal] Verified records exist in Firestore for withdrawal ${withdrawal.id}`);
+      aggregatePersonalAjoSavings().catch(() => {});
       return true;
     }
   } catch (verifyErr: any) {
@@ -2625,6 +2648,72 @@ export async function fsGetPlatformRevenueMain(): Promise<{
     }
   } catch (err: any) {
     console.error('[Firestore] Error getting platformRevenue/main:', err);
+  }
+  return null;
+}
+
+/**
+ * Cloud Function / Backend Task:
+ * Sums all personal_ajo.balance into platformStats/main document.
+ * This ensures SuperAdmin only reads aggregate total without reading individual documents.
+ */
+export async function aggregatePersonalAjoSavings(): Promise<{ totalPersonalSavings: number; totalPersonalSavers: number }> {
+  let totalSavings = 0;
+  let totalSavers = 0;
+
+  const db = getFirestoreDb();
+  if (db) {
+    try {
+      const snap = await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).get();
+      snap.forEach((doc) => {
+        const d = doc.data();
+        const bal = Number(d.balance || 0);
+        if (bal > 0) {
+          totalSavings += bal;
+        }
+        totalSavers++;
+      });
+
+      // Atomically set platformStats/main
+      await db.collection('platformStats').doc('main').set({
+        totalPersonalSavings: totalSavings,
+        totalPersonalSavers: totalSavers,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+
+      return { totalPersonalSavings: totalSavings, totalPersonalSavers: totalSavers };
+    } catch (err: any) {
+      console.error('[Firestore] Error aggregating personal_ajo balance into platformStats/main:', err?.message || err);
+    }
+  }
+
+  // In-memory fallback
+  try {
+    const { db: inMemDb } = await import('./db.js');
+    const personalAjos = inMemDb.getAllPersonalAjos ? inMemDb.getAllPersonalAjos() : (inMemDb.data?.personal_ajos || []);
+    totalSavings = personalAjos.reduce((sum: number, p: any) => sum + Number(p.balance || 0), 0);
+    totalSavers = personalAjos.length;
+  } catch {}
+
+  return { totalPersonalSavings: totalSavings, totalPersonalSavers: totalSavers };
+}
+
+/**
+ * Get aggregated platformStats/main data
+ */
+export async function fsGetPlatformStats(): Promise<{ totalPersonalSavings: number; totalPersonalSavers: number } | null> {
+  const db = getFirestoreDb();
+  if (db) {
+    try {
+      const snap = await db.collection('platformStats').doc('main').get();
+      if (snap.exists) {
+        const d = snap.data();
+        return {
+          totalPersonalSavings: Number(d?.totalPersonalSavings || 0),
+          totalPersonalSavers: Number(d?.totalPersonalSavers || 0)
+        };
+      }
+    } catch (err) {}
   }
   return null;
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, ArrowLeft, Users, Coins, Clock, Loader2, CheckCircle2, AlertTriangle, KeyRound, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Shield, ArrowLeft, Users, Coins, Clock, Loader2, CheckCircle2, AlertTriangle, KeyRound, Mail, Lock, User, Eye, EyeOff, Phone } from 'lucide-react';
 import { UserProfile, GroupAjo } from '../types/index.js';
 import { NIGERIAN_BANKS, formatNaira, formatPhone } from '../lib/formatters.js';
 import { apiRequest } from '../lib/api.js';
@@ -31,6 +31,7 @@ export const GroupJoin: React.FC<GroupJoinProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [phone, setPhone] = useState(currentUser?.phone || `080${Math.floor(10000000 + Math.random() * 90000000)}`);
+  const [whatsappNumber, setWhatsappNumber] = useState(currentUser?.whatsapp_number || currentUser?.whatsappNumber || currentUser?.phone || '');
   const [bankName, setBankName] = useState(currentUser?.bank_name || NIGERIAN_BANKS[0]);
   const [accountNumber, setAccountNumber] = useState(currentUser?.account_number || '');
   const [verificationType, setVerificationType] = useState<'NIN' | 'BVN'>(currentUser?.verification_type || 'BVN');
@@ -112,6 +113,8 @@ export const GroupJoin: React.FC<GroupJoinProps> = ({
           email: (currentUser?.email || email).trim().toLowerCase(),
           password: password || undefined,
           phone,
+          whatsapp_number: whatsappNumber,
+          whatsappNumber: whatsappNumber,
           bank_name: bankName,
           account_number: accountNumber,
           verification_type: verificationType,
@@ -124,6 +127,8 @@ export const GroupJoin: React.FC<GroupJoinProps> = ({
         full_name: fullName.trim(),
         email: (currentUser?.email || email).trim().toLowerCase(),
         phone: currentUser?.phone || phone,
+        whatsapp_number: whatsappNumber || currentUser?.whatsapp_number || phone,
+        whatsappNumber: whatsappNumber || currentUser?.whatsapp_number || phone,
         bank_name: bankName,
         account_number: accountNumber,
         verification_type: verificationType,
@@ -282,6 +287,26 @@ export const GroupJoin: React.FC<GroupJoinProps> = ({
                     />
                     <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                   </div>
+                </div>
+
+                {/* Member WhatsApp Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    WhatsApp Phone Number <span className="text-slate-400 font-normal lowercase">(for admin reminders & notifications)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="tel"
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value)}
+                      placeholder="e.g. 08012345678 or +2348012345678"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none text-sm font-mono text-slate-900 transition"
+                    />
+                    <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-600" />
+                  </div>
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    Your Group Admin can send direct turn notifications and payout alerts via WhatsApp.
+                  </span>
                 </div>
 
                 {!currentUser && (

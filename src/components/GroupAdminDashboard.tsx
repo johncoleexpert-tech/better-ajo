@@ -200,17 +200,25 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     }
   };
 
-  const getWhatsAppLink = (phone: string, memberName: string, customMsg?: string) => {
+  const getWhatsAppLink = (phoneOrMember: any, memberName?: string, customMsg?: string) => {
     if (!data?.group) return '#';
+    let phone = '';
+    let name = memberName || '';
+    if (typeof phoneOrMember === 'object' && phoneOrMember !== null) {
+      phone = phoneOrMember.whatsapp_number || phoneOrMember.whatsappNumber || phoneOrMember.phone || '';
+      name = name || phoneOrMember.full_name || '';
+    } else {
+      phone = String(phoneOrMember || '');
+    }
     const digitsOnly = phone.replace(/\D/g, '');
     let intlPhone = digitsOnly;
     if (intlPhone.startsWith('0')) {
       intlPhone = '234' + intlPhone.slice(1);
-    } else if (!intlPhone.startsWith('234')) {
+    } else if (!intlPhone.startsWith('234') && intlPhone.length > 0) {
       intlPhone = '234' + intlPhone;
     }
 
-    const baseMessage = customMsg?.trim() || `Hello ${memberName}, this is a message from the admin of ${data.group.group_name} on Better Ajo.`;
+    const baseMessage = customMsg?.trim() || `Hello ${name}, this is a message from the admin of ${data.group.group_name} on Better Ajo.`;
     return `https://wa.me/${intlPhone}?text=${encodeURIComponent(baseMessage)}`;
   };
 
@@ -791,7 +799,12 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         {m.full_name}
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-600">
-                        {formatPhone(m.phone)}
+                        <div>{formatPhone(m.phone)}</div>
+                        {(m.whatsapp_number || m.whatsappNumber) && (m.whatsapp_number || m.whatsappNumber) !== m.phone && (
+                          <div className="text-[10px] text-emerald-700 flex items-center gap-0.5 font-sans font-semibold">
+                            <Phone className="h-2.5 w-2.5" /> WA: {m.whatsapp_number || m.whatsappNumber}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
                         {m.bank_name ? `${m.bank_name} • ${m.account_number}` : 'Not provided'}
@@ -825,7 +838,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                       </td>
                       <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
                         <a
-                          href={getWhatsAppLink(m.phone, m.full_name)}
+                          href={getWhatsAppLink(m, m.full_name)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#008751] font-bold text-[11px] transition"
@@ -1444,6 +1457,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 <div>
                   <span className="text-[11px] text-slate-500 font-medium block">Phone Number</span>
                   <span className="font-mono font-bold text-slate-800">{formatPhone(selectedMemberDetails.phone)}</span>
+                  {(selectedMemberDetails.whatsapp_number || selectedMemberDetails.whatsappNumber) && (
+                    <span className="text-[10px] text-emerald-700 font-sans block mt-0.5">
+                      WhatsApp: {selectedMemberDetails.whatsapp_number || selectedMemberDetails.whatsappNumber}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <span className="text-[11px] text-slate-500 font-medium block">Membership Status</span>
@@ -1510,7 +1528,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-2">
                 <a
-                  href={getWhatsAppLink(selectedMemberDetails.phone, selectedMemberDetails.full_name)}
+                  href={getWhatsAppLink(selectedMemberDetails, selectedMemberDetails.full_name)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 py-3 rounded-xl bg-[#008751] hover:bg-[#007345] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md transition"
