@@ -31,6 +31,7 @@ export const FIRESTORE_COLLECTIONS = {
   PROFILES: 'profiles',
   USERS: 'users',
   PERSONAL_AJO: 'personal_ajo',
+  PERSONAL_AJOS: 'personalAjos',
   GROUPS: 'groups',
   GROUP_MEMBERS: 'group_members',
   CONTRIBUTIONS: 'contributions',
@@ -720,7 +721,9 @@ export async function onPaymentSuccess(paymentData: {
 
     // 2. Ensure Personal Ajo doc exists (getOrCreatePersonalAjo)
     const personalAjo = await getOrCreatePersonalAjo(userId);
-    const pajoDocRef = db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personalAjo.id);
+    const ajoId = personalAjo.id;
+    const personalAjosRef = db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJOS).doc(ajoId);
+    const pajoDocRef = db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(ajoId);
 
     // Compute amount in Naira
     let amountNaira = Number(paymentData.amount || existingPayment?.amount || 0);
@@ -729,40 +732,78 @@ export async function onPaymentSuccess(paymentData: {
       amountNaira = amountNaira / 100;
     }
 
+    const newTxId = `tx_dep_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const txRef = db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(newTxId);
+
+    // Fetch user profile name for transactions audit record
+    let userName = 'Personal Saver';
+    try {
+      const uDoc = await db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
+      if (uDoc.exists) {
+        const uData = uDoc.data();
+        userName = uData?.full_name || uData?.name || userName;
+      }
+    } catch {}
+
     // 3. Execute atomic Firestore transaction
     const result = await db.runTransaction(async (transaction) => {
       const paySnap = await transaction.get(payDocRef);
       if (paySnap.exists) {
         const payVal = paySnap.data();
         if (payVal?.processed === true) {
-          return { success: true, skipped: true, alreadyProcessed: true, balance: personalAjo.balance };
+          return { success: true, skipped: true, alreadyProcessed: true, balance: personalAjo.balance, total_saved: personalAjo.total_saved };
         }
       }
 
-      const pajoSnap = await transaction.get(pajoDocRef);
-      if (!pajoSnap.exists) {
-        throw new Error(`Personal Ajo document ${personalAjo.id} not found in transaction`);
+      // Inside runTransaction: get personalAjos/{ajoId} (with fallback to legacy doc)
+      let ajoSnap = await transaction.get(personalAjosRef);
+      if (!ajoSnap.exists) {
+        ajoSnap = await transaction.get(pajoDocRef);
+      }
+      if (!ajoSnap.exists) {
+        throw new Error(`Personal Ajo document ${ajoId} not found in transaction`);
       }
 
-      const pData = pajoSnap.data() || {};
-      const oldBalance = Number(pData.balance || 0);
+      const pData = ajoSnap.data() || {};
       const oldDeposited = Number(pData.total_deposited || 0);
-      const oldSaved = Number(pData.total_saved || 0);
+      const oldSaved = Number(pData.total_saved ?? pData.balance ?? 0);
 
-      const newBalance = oldBalance + amountNaira;
       const newDeposited = oldDeposited + amountNaira;
       const newSaved = oldSaved + amountNaira;
       const now = new Date().toISOString();
 
-      // Update personal_ajo document
-      transaction.update(pajoDocRef, {
-        balance: newBalance,
-        total_deposited: newDeposited,
-        total_saved: newSaved,
+      // Create transactions/{newId} with status pending
+      transaction.set(txRef, {
+        id: newTxId,
+        user_id: userId,
+        user_name: userName,
+        ajo_name: 'Personal Better Ajo',
+        amount: amountNaira,
+        savings_amount: amountNaira,
+        fee: 60,
+        total_amount: amountNaira + 60,
+        netPayout: 0,
+        net_amount: 0,
+        type: 'personal_deposit',
+        purpose: 'personal_deposit',
+        status: 'pending',
+        reference,
+        created_at: now,
+        createdAt: now,
         updated_at: now
       });
 
-      // Update payment document (processed = true)
+      // Update personalAjos: total_saved and total_deposited increment by amount
+      const ajoUpdate = {
+        total_saved: newSaved,
+        total_deposited: newDeposited,
+        balance: newSaved,
+        updated_at: now
+      };
+      transaction.set(personalAjosRef, ajoUpdate, { merge: true });
+      transaction.set(pajoDocRef, ajoUpdate, { merge: true });
+
+      // Update payment document
       if (paySnap.exists) {
         transaction.update(payDocRef, {
           status: 'success',
@@ -791,8 +832,9 @@ export async function onPaymentSuccess(paymentData: {
       // Update users/{userId} document
       const userRef = db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId);
       transaction.set(userRef, {
-        personalBalance: newBalance,
-        balance: newBalance,
+        personalBalance: newSaved,
+        balance: newSaved,
+        total_saved: newSaved,
         updatedAt: new Date()
       }, { merge: true });
 
@@ -806,12 +848,18 @@ export async function onPaymentSuccess(paymentData: {
         lastUpdated: FieldValue.serverTimestamp()
       });
 
-      return { success: true, balance: newBalance };
+      return { success: true, balance: newSaved, total_saved: newSaved };
     });
 
-    console.log(`[onPaymentSuccess] Atomic transaction committed for ${userId}, ref: ${reference}. New balance: ${result.balance}`);
-    // Sync platformStats/main aggregate personal savings
-    aggregatePersonalAjoSavings().catch(() => {});
+    // Then after commit set transactions status to success
+    await txRef.update({
+      status: 'success',
+      updated_at: new Date().toISOString()
+    }).catch(err => console.warn('[onPaymentSuccess] Error marking tx success:', err));
+
+    console.log(`[onPaymentSuccess] Atomic transaction committed for ${userId}, ref: ${reference}. New total_saved: ${result.total_saved}`);
+    // Sync platformStats/main aggregate personal savings from transactions collection
+    fsGetTotalsFromTransactions().catch(() => {});
     return result;
   } catch (err: any) {
     console.error(`[onPaymentSuccess] Error processing payment for ref ${reference}:`, err);
@@ -1428,10 +1476,37 @@ export async function fsExecutePackBatch(
   const cleanMember = member && member.id ? cleanUndefinedFields(member) : undefined;
   const cleanGroup = group && group.id ? cleanUndefinedFields(group) : undefined;
 
+  const grossAmt = Number((transaction as any).total_amount || transaction.packing_amount || 0);
+  const feeAmt = Number(transaction.packing_fee || 0);
+  const netAmt = Number(transaction.member_amount || (grossAmt - feeAmt));
+  const uName = transaction.member_name || member?.full_name || 'Member';
+  const grpName = group?.group_name || 'Ajo Group';
+
+  const txDocData = cleanUndefinedFields({
+    id: `tx_pack_${transaction.id}`,
+    userId: member?.user_id || transaction.member_id || '',
+    userName: uName,
+    userRole: 'member',
+    role: 'member',
+    ajoId: transaction.group_id || group?.id || '',
+    ajoName: grpName,
+    type: 'withdraw_pack',
+    gross_amount: grossAmt,
+    amount: grossAmt,
+    fee: feeAmt,
+    net_payout: netAmt,
+    source: grpName,
+    destination: uName,
+    timestamp: FieldValue.serverTimestamp(),
+    status: 'completed',
+    created_at: new Date().toISOString()
+  });
+
   // Tier 1: Primary Atomic Batch Write
   try {
     const batch = db.batch();
     batch.set(db.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS).doc(transaction.id), cleanTransaction, { merge: true });
+    batch.set(db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_pack_${transaction.id}`), txDocData, { merge: true });
     if (cleanCommission && commission?.id) {
       batch.set(db.collection(FIRESTORE_COLLECTIONS.COMMISSIONS).doc(commission.id), cleanCommission, { merge: true });
     }
@@ -1451,6 +1526,7 @@ export async function fsExecutePackBatch(
   // Tier 2: Resilient Sequential Fallback Writes
   try {
     await db.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS).doc(transaction.id).set(cleanTransaction, { merge: true });
+    await db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_pack_${transaction.id}`).set(txDocData, { merge: true });
     if (cleanCommission && commission?.id) {
       await db.collection(FIRESTORE_COLLECTIONS.COMMISSIONS).doc(commission.id).set(cleanCommission, { merge: true });
     }
@@ -1850,6 +1926,245 @@ export async function fsExecuteContributionBatch(
 }
 
 /**
+ * FIX A - REAL TRANSACTION ATOMIC WITHDRAWAL:
+ * - Inside runTransaction, check personalAjos total_saved >= amount+fee from Firestore snapshot, if insufficient throw error, else deduct total_saved.
+ * - Create transactions/{newId} with status pending.
+ * - After commit set transactions status to success.
+ */
+export async function fsExecuteWithdrawalTransaction(
+  userId: string,
+  amount: number,
+  fee: number,
+  netAmount: number,
+  bankName: string,
+  accountNumber: string
+): Promise<{ success: boolean; error?: string; personalAjo?: PersonalAjo; withdrawalId?: string }> {
+  const db = getFirestoreDb();
+  if (!db || !userId) {
+    return { success: false, error: 'Database unavailable or invalid userId' };
+  }
+
+  const personalAjo = await getOrCreatePersonalAjo(userId);
+  const ajoId = personalAjo.id;
+  const personalAjosRef = db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJOS).doc(ajoId);
+  const pajoDocRef = db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(ajoId);
+  const newTxId = `tx_wth_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+  const txRef = db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(newTxId);
+  const withdrawalRef = db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(newTxId);
+  const now = new Date().toISOString();
+
+  // Fetch user profile name for transactions audit record
+  let userName = 'Personal Saver';
+  try {
+    const uDoc = await db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
+    if (uDoc.exists) {
+      const uData = uDoc.data();
+      userName = uData?.full_name || uData?.name || userName;
+    }
+  } catch {}
+
+  try {
+    const txResult = await db.runTransaction(async (transaction) => {
+      // 1. Inside runTransaction: get personalAjos/{ajoId}
+      let ajoSnap = await transaction.get(personalAjosRef);
+      if (!ajoSnap.exists) {
+        ajoSnap = await transaction.get(pajoDocRef);
+      }
+      if (!ajoSnap.exists) {
+        throw new Error(`Personal Ajo document not found for user ${userId}`);
+      }
+
+      const ajoData = ajoSnap.data() || {};
+      const currentSaved = Number(ajoData.total_saved ?? ajoData.balance ?? 0);
+
+      // 2. Check personalAjos total_saved >= amount from Firestore snapshot.
+      // BUG 2 FIX: total_saved = total_saved - amount. Payout to user = amount - fee.
+      if (currentSaved < amount) {
+        throw new Error(`Insufficient balance: Available savings is ₦${currentSaved.toLocaleString()}, but requested withdrawal is ₦${amount.toLocaleString()}`);
+      }
+
+      // 3. Create transactions/{newId} with status pending
+      transaction.set(txRef, {
+        id: newTxId,
+        user_id: userId,
+        user_name: userName,
+        ajo_name: 'Personal Better Ajo',
+        amount: amount,
+        fee: fee,
+        net_amount: netAmount,
+        netPayout: netAmount,
+        type: 'personal_withdraw',
+        purpose: 'personal_withdraw',
+        status: 'pending',
+        bank_name: bankName,
+        account_number: accountNumber,
+        created_at: now,
+        createdAt: now,
+        updated_at: now
+      });
+
+      transaction.set(withdrawalRef, {
+        id: newTxId,
+        user_id: userId,
+        user_name: userName,
+        amount: amount,
+        fee: fee,
+        net_amount: netAmount,
+        netPayout: netAmount,
+        bank_name: bankName,
+        account_number: accountNumber,
+        status: 'pending',
+        created_at: now,
+        createdAt: now
+      });
+
+      // 4. Deduct total_saved: total_saved = total_saved - amount
+      const newSaved = currentSaved - amount;
+      const newWithdrawn = Number(ajoData.total_withdrawn || 0) + amount;
+
+      const updateData = {
+        total_saved: newSaved,
+        balance: newSaved,
+        total_withdrawn: newWithdrawn,
+        updated_at: now
+      };
+
+      transaction.set(personalAjosRef, updateData, { merge: true });
+      transaction.set(pajoDocRef, updateData, { merge: true });
+
+      // Update user doc
+      const userRef = db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId);
+      transaction.set(userRef, {
+        personalBalance: newSaved,
+        balance: newSaved,
+        total_saved: newSaved,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      // Record fee revenue in platformRevenue/main
+      if (fee > 0) {
+        const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+        transaction.update(revRef, {
+          stream4: FieldValue.increment(fee),
+          totalGross: FieldValue.increment(fee),
+          unifiedAvailable: FieldValue.increment(fee),
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+
+      return { newSaved, newWithdrawn };
+    });
+
+    // 5. After commit set transactions status to success
+    await Promise.all([
+      txRef.update({ status: 'success', updated_at: new Date().toISOString() }),
+      withdrawalRef.update({ status: 'success', processed: true, updated_at: new Date().toISOString() })
+    ]).catch(err => console.warn('[fsExecuteWithdrawalTransaction] Error marking status success:', err));
+
+    console.log(`[fsExecuteWithdrawalTransaction] Committed withdrawal for user ${userId}, amount: ${amount}, fee: ${fee}. New total_saved: ${txResult.newSaved}`);
+
+    // Update in-memory db
+    try {
+      const { db: inMemDb } = await import('./db.js');
+      const pa = inMemDb.getPersonalAjoByUserId(userId);
+      if (pa) {
+        pa.balance = txResult.newSaved;
+        pa.total_saved = txResult.newSaved;
+        pa.total_withdrawn = txResult.newWithdrawn;
+      }
+    } catch {}
+
+    // Update aggregate totals from transactions collection
+    fsGetTotalsFromTransactions().catch(() => {});
+
+    return {
+      success: true,
+      withdrawalId: newTxId,
+      personalAjo: {
+        ...personalAjo,
+        total_saved: txResult.newSaved,
+        balance: txResult.newSaved,
+        total_withdrawn: txResult.newWithdrawn
+      }
+    };
+  } catch (err: any) {
+    console.error(`[fsExecuteWithdrawalTransaction] Failed for user ${userId}:`, err?.message || err);
+    return { success: false, error: err?.message || 'Withdrawal transaction failed' };
+  }
+}
+
+/**
+ * FIX A - SuperAdminFullData must read totals from same transactions collection filtering status==success only, so both dashboards match.
+ */
+export async function fsGetTotalsFromTransactions(): Promise<{
+  totalPersonalSavings: number;
+  totalPersonalDeposits: number;
+  totalPersonalWithdrawn: number;
+  totalPersonalFees: number;
+  totalPersonalSavers: number;
+}> {
+  const db = getFirestoreDb();
+  let totalDeposits = 0;
+  let totalWithdrawn = 0;
+  let totalFees = 0;
+  const userIds = new Set<string>();
+
+  if (db) {
+    try {
+      const snap = await db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS)
+        .where('status', '==', 'success')
+        .get();
+
+      snap.forEach(doc => {
+        const d = doc.data();
+        const amt = Number(d.amount || 0);
+        const fee = Number(d.fee || 0);
+        const type = d.type || d.purpose || '';
+        const userId = d.user_id;
+        if (userId) userIds.add(userId);
+
+        if (type === 'personal_deposit') {
+          totalDeposits += amt;
+        } else if (type === 'personal_withdrawal' || type === 'personal_withdraw') {
+          totalWithdrawn += amt;
+          totalFees += fee;
+        }
+      });
+
+      // BUG 2 FIX: total_saved = total_deposits - total_withdrawn
+      const totalSavings = Math.max(0, totalDeposits - totalWithdrawn);
+
+      // Sync platformStats/main
+      await db.collection('platformStats').doc('main').set({
+        totalPersonalSavings: totalSavings,
+        totalPersonalDeposits: totalDeposits,
+        totalPersonalWithdrawn: totalWithdrawn,
+        totalPersonalSavers: userIds.size,
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+
+      return {
+        totalPersonalSavings: totalSavings,
+        totalPersonalDeposits: totalDeposits,
+        totalPersonalWithdrawn: totalWithdrawn,
+        totalPersonalFees: totalFees,
+        totalPersonalSavers: userIds.size
+      };
+    } catch (err: any) {
+      console.warn('[fsGetTotalsFromTransactions] error:', err?.message || err);
+    }
+  }
+
+  return {
+    totalPersonalSavings: 0,
+    totalPersonalDeposits: 0,
+    totalPersonalWithdrawn: 0,
+    totalPersonalFees: 0,
+    totalPersonalSavers: 0
+  };
+}
+
+/**
  * Atomic batch commit for Personal Ajo Withdrawal with resilient sequential fallback and read-back verification.
  * Writes:
  * - withdrawals doc
@@ -1886,12 +2201,38 @@ export async function fsExecuteWithdrawalBatch(
     processed: true
   });
 
+  const grossAmt = Number(withdrawal.amount || 0);
+  const feeAmt = Number(withdrawal.fee || Math.round(grossAmt * 0.016));
+  const netAmt = Number(withdrawal.net_amount || (grossAmt - feeAmt));
+  const uName = (withdrawal as any).user_name || 'Personal Saver';
+
+  const txDocData = cleanUndefinedFields({
+    id: `tx_pajo_wth_${withdrawal.id}`,
+    userId: withdrawal.user_id || '',
+    userName: uName,
+    userRole: 'member',
+    role: 'member',
+    ajoId: personal?.id || 'personal-better-ajo',
+    ajoName: 'Personal Better Ajo',
+    type: 'withdraw_earnings',
+    gross_amount: grossAmt,
+    amount: grossAmt,
+    fee: feeAmt,
+    net_payout: netAmt,
+    source: 'Personal Better Ajo',
+    destination: uName,
+    timestamp: FieldValue.serverTimestamp(),
+    status: 'completed',
+    created_at: new Date().toISOString()
+  });
+
   // Tier 1: Primary Atomic Batch Write
   try {
     const batch = db.batch();
     batch.set(db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(withdrawal.id), cleanWithdrawal, { merge: true });
     batch.set(db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id), cleanPersonal, { merge: true });
     batch.set(db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId), withdrawalPayment, { merge: true });
+    batch.set(db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_pajo_wth_${withdrawal.id}`), txDocData, { merge: true });
     await batch.commit();
     console.log(`[Firestore Personal Withdrawal] Batch commit succeeded for withdrawal ${withdrawal.id} in ${Date.now() - startTime}ms`);
     aggregatePersonalAjoSavings().catch(() => {});
@@ -1905,6 +2246,7 @@ export async function fsExecuteWithdrawalBatch(
     await db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(withdrawal.id).set(cleanWithdrawal, { merge: true });
     await db.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personal.id).set(cleanPersonal, { merge: true });
     await db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId).set(withdrawalPayment, { merge: true });
+    await db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_pajo_wth_${withdrawal.id}`).set(txDocData, { merge: true });
     console.log(`[Firestore Personal Withdrawal] Sequential fallback committed for withdrawal ${withdrawal.id}`);
     aggregatePersonalAjoSavings().catch(() => {});
     return true;
@@ -1961,11 +2303,38 @@ export async function fsExecuteAdminWithdrawalBatch(
   const cleanPayment = cleanUndefinedFields(payment);
   const payDocId = payment.id || payment.reference;
 
+  const grossAmt = Number(withdrawal.amount || 0);
+  const feeAmt = Number(withdrawal.fee || 0);
+  const netAmt = Number(withdrawal.net_amount || (grossAmt - feeAmt));
+  const uName = (withdrawal as any).user_name || (withdrawal as any).admin_name || 'Group Admin';
+  const grpName = (withdrawal as any).group_name || 'Ajo Group';
+
+  const txDocData = cleanUndefinedFields({
+    id: `tx_ga_wth_${withdrawal.id}`,
+    userId: withdrawal.user_id || '',
+    userName: uName,
+    userRole: 'group_admin',
+    role: 'group_admin',
+    ajoId: (withdrawal as any).group_id || '',
+    ajoName: grpName,
+    type: 'withdraw_earnings',
+    gross_amount: grossAmt,
+    amount: grossAmt,
+    fee: feeAmt,
+    net_payout: netAmt,
+    source: grpName,
+    destination: uName,
+    timestamp: FieldValue.serverTimestamp(),
+    status: 'completed',
+    created_at: new Date().toISOString()
+  });
+
   // Tier 1: Primary Atomic Batch Write
   try {
     const batch = db.batch();
     batch.set(db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(withdrawal.id), cleanWithdrawal, { merge: true });
     batch.set(db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId), cleanPayment, { merge: true });
+    batch.set(db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_ga_wth_${withdrawal.id}`), txDocData, { merge: true });
     await batch.commit();
     console.log(`[Firestore Admin Withdrawal] Batch write committed for withdrawal ${withdrawal.id} in ${Date.now() - startTime}ms`);
     return true;
@@ -1977,6 +2346,7 @@ export async function fsExecuteAdminWithdrawalBatch(
   try {
     await db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS).doc(withdrawal.id).set(cleanWithdrawal, { merge: true });
     await db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(payDocId).set(cleanPayment, { merge: true });
+    await db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_ga_wth_${withdrawal.id}`).set(txDocData, { merge: true });
     console.log(`[Firestore Admin Withdrawal] Sequential fallback committed for withdrawal ${withdrawal.id}`);
     return true;
   } catch (seqErr: any) {
@@ -2690,7 +3060,7 @@ export async function aggregatePersonalAjoSavings(): Promise<{ totalPersonalSavi
   // In-memory fallback
   try {
     const { db: inMemDb } = await import('./db.js');
-    const personalAjos = inMemDb.getAllPersonalAjos ? inMemDb.getAllPersonalAjos() : (inMemDb.data?.personal_ajos || []);
+    const personalAjos = inMemDb.getAllPersonalAjos ? inMemDb.getAllPersonalAjos() : [];
     totalSavings = personalAjos.reduce((sum: number, p: any) => sum + Number(p.balance || 0), 0);
     totalSavers = personalAjos.length;
   } catch {}

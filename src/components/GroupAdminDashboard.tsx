@@ -34,6 +34,8 @@ import {
 } from 'lucide-react';
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
+import { db } from '../lib/firebase.js';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -169,6 +171,33 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
     try {
       setIsWithdrawing(true);
+
+      // Requirement 2: Save to Firestore FIRST, then update wallet balance
+      try {
+        if (db) {
+          const userName = currentUser.full_name || (currentUser as any).displayName || currentUser.phone || currentUser.email || 'Group Admin';
+          const groupName = data?.group?.group_name || 'Ajo Group';
+          await addDoc(collection(db, 'transactions'), {
+            userId: currentUser.id,
+            userName,
+            userRole: 'group_admin',
+            ajoId: groupId,
+            ajoName: groupName,
+            type: 'withdraw_earnings',
+            gross_amount: amount,
+            fee: 0,
+            net_payout: amount,
+            source: groupName,
+            destination: userName,
+            timestamp: serverTimestamp(),
+            status: 'completed',
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch (fsErr) {
+        console.warn('Could not write admin withdrawal document to Firestore transactions:', fsErr);
+      }
+
       const res = await fetch(`/api/groups/${groupId}/withdraw-admin-earnings`, {
         method: 'POST',
         headers: {
@@ -308,6 +337,13 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     transactions = [],
     adminBankDetails
   } = data;
+
+  // SAFETY GUARDS
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safeAjoGroups = Array.isArray(data?.group ? [data.group] : []) ? (data?.group ? [data.group] : []) : [];
+  const safeWithdrawals = Array.isArray(withdrawals) ? withdrawals : [];
+  const safeEarningsHistory = Array.isArray(earningsHistory) ? earningsHistory : [];
+  const safeMembers = Array.isArray(members) ? members : [];
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
@@ -980,43 +1016,43 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {withdrawals.length === 0 ? (
+                {safeWithdrawals.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-slate-400">
                       No withdrawals recorded yet.
                     </td>
                   </tr>
                 ) : (
-                  withdrawals.map((w) => (
-                    <tr key={w.id} className="hover:bg-slate-50/60 transition">
+                  (safeWithdrawals || []).map((w: any) => (
+                    <tr key={w?.id || Math.random()} className="hover:bg-slate-50/60 transition">
                       <td className="py-3 px-4 text-slate-500 font-mono">
-                        {new Date(w.created_at).toLocaleDateString('en-NG', { dateStyle: 'medium' })}
+                        {w?.created_at ? new Date(w.created_at).toLocaleDateString('en-NG', { dateStyle: 'medium' }) : (w?.timestamp?.seconds ? new Date(w.timestamp.seconds * 1000).toLocaleDateString('en-NG', { dateStyle: 'medium' }) : '-')}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {formatNaira(w.amount)}
+                        {formatNaira(w?.gross_amount ?? w?.amount ?? 0)}
                       </td>
                       <td className="py-3 px-4 text-slate-700">
-                        {w.bank_name}
+                        {w?.bank_name || '-'}
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-700">
-                        {w.account_number}
+                        {w?.account_number || '-'}
                       </td>
                       <td className="py-3 px-4 text-slate-700">
-                        {w.account_name || group.admin_name}
+                        {w?.account_name || w?.userName || group?.admin_name || '-'}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          w.status === 'completed' || w.status === 'successful'
+                          w?.status === 'completed' || w?.status === 'successful'
                             ? 'bg-emerald-100 text-emerald-800'
-                            : w.status === 'processing' || w.status === 'pending'
+                            : w?.status === 'processing' || w?.status === 'pending'
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-rose-100 text-rose-800'
                         }`}>
-                          {w.status}
+                          {w?.status || 'completed'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {w.reference || w.id}
+                        {w?.reference || w?.id || '-'}
                       </td>
                     </tr>
                   ))
@@ -1053,45 +1089,49 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {transactions.length === 0 ? (
+                {safeTransactions.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-slate-400">
                       No ledger transactions recorded yet.
                     </td>
                   </tr>
                 ) : (
-                  transactions.map((t) => (
-                    <tr key={t.id} className="hover:bg-slate-50/60 transition">
+                  (safeTransactions || []).map((t: any) => (
+                    <tr key={t?.id || Math.random()} className="hover:bg-slate-50/60 transition">
                       <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                        {new Date(t.created_at).toLocaleString('en-NG')}
+                        {t?.timestamp?.seconds
+                          ? new Date(t.timestamp.seconds * 1000).toLocaleString('en-NG')
+                          : (t?.created_at ? new Date(t.created_at).toLocaleString('en-NG') : '-')}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          t.type === 'GROUP_CONTRIBUTION'
+                          t?.type === 'GROUP_CONTRIBUTION' || t?.type === 'personal_savings' || (typeof t?.type === 'string' && t?.type.includes('deposit'))
                             ? 'bg-emerald-50 text-emerald-800'
-                            : t.type === 'GROUP_PACKING'
+                            : t?.type === 'GROUP_PACKING' || (typeof t?.type === 'string' && t?.type.includes('pack'))
                             ? 'bg-purple-50 text-purple-800'
+                            : (typeof t?.type === 'string' && t?.type.includes('withdraw'))
+                            ? 'bg-rose-50 text-rose-800'
                             : 'bg-blue-50 text-blue-800'
                         }`}>
-                          {t.type}
+                          {t?.type || 'TRANSACTION'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-medium text-slate-800">
-                        {t.description}
+                        {t?.description || (typeof t?.type === 'string' && t?.type.includes('withdraw') ? `Withdrawal - ${t?.source || 'Group'}` : 'Contribution')}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {t.user_name}
+                        {t?.user_name || t?.userName || t?.destination || 'Member'}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {formatNaira(t.amount)}
+                        {formatNaira(t?.gross_amount ?? t?.amount ?? 0)}
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {t.status}
+                          {t?.status || 'completed'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {t.reference}
+                        {t?.reference || t?.id || '-'}
                       </td>
                     </tr>
                   ))

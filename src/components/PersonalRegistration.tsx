@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Loader2, CreditCard, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Loader2, CreditCard, Mail, Lock, User, Eye, EyeOff, Smartphone } from 'lucide-react';
 import { NIGERIAN_BANKS } from '../lib/formatters.js';
 import { PaystackModal } from './PaystackModal.js';
 import { OtpModal } from './OtpModal.js';
@@ -18,7 +18,7 @@ export const PersonalRegistration: React.FC<PersonalRegistrationProps> = ({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  // Phone state preserved internally without rendering phone UI
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [phone, setPhone] = useState(`080${Math.floor(10000000 + Math.random() * 90000000)}`);
   const [bankName, setBankName] = useState(NIGERIAN_BANKS[0]);
   const [accountNumber, setAccountNumber] = useState('');
@@ -40,8 +40,13 @@ export const PersonalRegistration: React.FC<PersonalRegistrationProps> = ({
 
   const handleStartRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !password || !bankName || !accountNumber || !verificationNumber) {
+    if (!fullName || !email || !password || !bankName || !accountNumber || !verificationNumber || !whatsappNumber) {
       setError('Please complete all required fields.');
+      return;
+    }
+    const cleanWhatsapp = whatsappNumber.replace(/\D/g, '');
+    if (cleanWhatsapp.length !== 11) {
+      setError('Phone / WhatsApp Number must be exactly 11 digits (e.g. 08012345678).');
       return;
     }
     if (!email.includes('@') || !email.includes('.')) {
@@ -65,14 +70,15 @@ export const PersonalRegistration: React.FC<PersonalRegistrationProps> = ({
       setLoading(true);
       setError(null);
 
-      // Direct registration with Email and Password (No phone OTP required)
+      // Direct registration with Email, Password, and Phone/WhatsApp Number
       const data = await apiRequest('/api/personal/register', {
         method: 'POST',
         body: JSON.stringify({
           full_name: fullName.trim(),
           email: email.trim().toLowerCase(),
           password,
-          phone,
+          phone: cleanWhatsapp,
+          whatsappNumber: cleanWhatsapp,
           bank_name: bankName,
           account_number: accountNumber,
           verification_type: verificationType,
@@ -227,6 +233,28 @@ export const PersonalRegistration: React.FC<PersonalRegistrationProps> = ({
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
+          </div>
+
+          {/* Phone / WhatsApp Number */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+              Phone / WhatsApp Number (11 digits) <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="tel"
+                required
+                maxLength={11}
+                value={whatsappNumber}
+                onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ''))}
+                placeholder="e.g. 08012345678"
+                className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none text-sm font-mono text-slate-900 transition"
+              />
+              <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Used for account recovery and real-time transaction notifications.
+            </p>
           </div>
 
           {/* Bank Account Details */}

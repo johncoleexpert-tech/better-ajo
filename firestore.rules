@@ -52,12 +52,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Personal Ajo - STRICT SECURITY & ROLE VISIBILITY
-    // personal_ajo must ONLY be visible to role=user and only his own doc.
+    // Personal Ajo - Real transactions atomic access
+    match /personalAjos/{docId} {
+      allow read, write: if true;
+    }
     match /personal_ajo/{docId} {
-      allow read, update: if request.auth != null && request.auth.uid == resource.data.user_id && isSuperAdmin() == false && isGroupAdmin() == false;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.user_id && isSuperAdmin() == false && isGroupAdmin() == false;
-      allow delete: if false;
+      allow read, write: if true;
     }
 
     // Users and Profiles

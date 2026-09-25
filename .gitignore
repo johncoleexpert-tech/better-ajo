@@ -1,8 +1,9 @@
 node_modules/
-build/
 dist/
-coverage/
+.env
+.env.local
+.env.production
+.firebase/
+firebase-debug.log
 .DS_Store
-*.log
-.env*
-!.env.example
+coverage/

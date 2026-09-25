@@ -28,7 +28,7 @@ import {
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
 import { db, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
 
 interface SuperAdminDashboardProps {
@@ -82,6 +82,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
+  // Real-time transactions ledger from Firestore (single source of truth for all deposits & withdrawals)
+  const [transactions, setTransactions] = useState<any[]>([]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 4000);
@@ -108,6 +111,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       if (json.platformStats?.totalPersonalSavings !== undefined) {
         setTotalPersonalSavings(Number(json.platformStats.totalPersonalSavings || 0));
       }
+      setTransactions((prev) => {
+        if (prev && prev.length > 0) return prev;
+        const list: any[] = [];
+        (json.withdrawals || []).forEach((w: any) => {
+          list.push({ ...w, type: w?.type || 'withdrawal', createdAt: w?.date || w?.created_at });
+        });
+        (json.payments || []).forEach((p: any) => {
+          list.push({ ...p, type: p?.type || 'deposit', createdAt: p?.date || p?.created_at });
+        });
+        list.sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
+        return list;
+      });
     } catch (err: any) {
       setError(err.message || 'Access restricted to authorized Super Administrator.');
     } finally {
@@ -225,11 +240,47 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       }, (err) => console.warn('[Super Admin] platformStats/main listener error:', err));
     } catch (e) {}
 
+    // Real-time listener to transactions collection (single source of truth for all deposits & withdrawals)
+    let unsubTransactions: (() => void) | null = null;
+    try {
+      const txQuery = query(
+        collection(db, 'transactions'),
+        orderBy('createdAt', 'desc')
+      );
+      unsubTransactions = onSnapshot(txQuery, (snapshot) => {
+        const list: any[] = [];
+        snapshot.forEach((d) => {
+          list.push({ id: d.id, ...d.data() });
+        });
+        setTransactions(list);
+      }, (err) => {
+        console.warn('[Super Admin] transactions query with orderBy failed, falling back to simple query:', err);
+        unsubTransactions = onSnapshot(
+          collection(db, 'transactions'),
+          (fallbackSnap) => {
+            const list: any[] = [];
+            fallbackSnap.forEach((d) => {
+              list.push({ id: d.id, ...d.data() });
+            });
+            list.sort((a, b) => {
+              const dateA = new Date(a?.createdAt || a?.created_at || 0).getTime();
+              const dateB = new Date(b?.createdAt || b?.created_at || 0).getTime();
+              return dateB - dateA;
+            });
+            setTransactions(list);
+          }
+        );
+      });
+    } catch (e) {
+      console.warn('[Super Admin] Error setting up transactions listener:', e);
+    }
+
     fetchSuperAdminData();
 
     return () => {
       unsub();
       if (unsubStats) unsubStats();
+      if (unsubTransactions) unsubTransactions();
     };
   }, [userPhone, userId]);
 
@@ -350,11 +401,46 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const stream3Total = revenue?.stream3 ?? superAdminEarnings?.stream3_packing ?? superAdminWallet?.breakdown?.packing_33_total ?? metrics?.superAdminCommission ?? 0;
   const stream4Total = revenue?.stream4 ?? superAdminEarnings?.stream4_withdrawal ?? superAdminWallet?.breakdown?.withdrawal_1_6_total ?? metrics?.totalPersonalWithdrawalFees ?? 0;
 
-  // Filtered withdrawals
-  const filteredWithdrawals = withdrawals.filter((w) => {
-    if (withdrawalStatusFilter === 'all') return true;
-    return w.status === withdrawalStatusFilter;
+  // 1. SAFETY GUARD FIRST - Add this at top of ALL pages that use transactions to prevent Super Admin crash:
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safeAjoGroups = Array.isArray(groups) ? groups : (Array.isArray((data as any)?.ajoGroups) ? (data as any).ajoGroups : []);
+
+  // 4. Super Admin - Recent Transactions (Platform Overview):
+  // const recentAll = (safeTransactions || []).slice(0, 50).sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
+  // Show ALL types: deposit AND withdraw, both member and group_admin
+  const recentAll = (safeTransactions || []).slice(0, 50).sort((a, b) => {
+    const secA = (typeof a?.timestamp?.seconds === 'number')
+      ? a.timestamp.seconds
+      : (new Date(a?.createdAt || a?.created_at || a?.date || 0).getTime() / 1000);
+    const secB = (typeof b?.timestamp?.seconds === 'number')
+      ? b.timestamp.seconds
+      : (new Date(b?.createdAt || b?.created_at || b?.date || 0).getTime() / 1000);
+    return secB - secA;
   });
+
+  // 5. Super Admin - Withdrawals Page:
+  // const withdrawalHistory = (safeTransactions || []).filter(t => t && t.type && t.type.toString().toLowerCase().includes('withdraw'))
+  // Show ALL withdrawals including member earnings and group_admin earnings
+  const withdrawalHistory = (safeTransactions || []).filter(
+    (t) => t && t?.type && t?.type?.toString().toLowerCase().includes('withdraw')
+  );
+
+  // Filtered withdrawals for Withdrawals tab status filter
+  const filteredWithdrawals = (withdrawalHistory || []).filter((w) => {
+    if (withdrawalStatusFilter === 'all') return true;
+    const st = (w?.status || '').toLowerCase();
+    if (withdrawalStatusFilter === 'successful') return st === 'successful' || st === 'success' || st === 'completed';
+    return st === withdrawalStatusFilter;
+  });
+
+  // 6. Super Admin - Payments Page:
+  // const paymentsHistory = (safeTransactions || []).filter(t => t && t.type && (t.type.toLowerCase().includes('withdraw') || t.type.toLowerCase().includes('deposit')))
+  // Show both
+  const paymentsHistory = (safeTransactions || []).filter(
+    (t) => t && t?.type && (t?.type?.toString().toLowerCase().includes('withdraw') || t?.type?.toString().toLowerCase().includes('deposit'))
+  );
+  const paymentList = paymentsHistory;
+  const withdrawalList = withdrawalHistory;
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
@@ -534,9 +620,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           { id: 'overview', label: 'Platform Overview' },
           { id: 'groups', label: `All Groups (${groups.length})` },
           { id: 'members', label: `All Members (${members.length})` },
-          { id: 'payments', label: `Payments (${payments.length})` },
+          { id: 'payments', label: `Payments (${(paymentList || []).length})` },
           { id: 'packings', label: `Packing Payouts (${packings.length})` },
-          { id: 'withdrawals', label: `Withdrawals (${withdrawals.length})` },
+          { id: 'withdrawals', label: `Withdrawals (${(withdrawalList || []).length})` },
           { id: 'admins', label: `Group Admins (${groupAdmins.length})` },
           { id: 'earnings', label: `Super Admin Revenue (${formatNaira(availableRevenue)})` },
           { id: 'ledger', label: `Central Ledger (${ledger.length})` },
@@ -703,42 +789,109 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
           {/* Recent Platform Financial Events */}
           <div className="rounded-3xl bg-white border border-slate-200/80 p-6 shadow-sm">
-            <h3 className="text-sm font-black text-slate-900 mb-4 uppercase tracking-wider">
-              Recent Platform Transactions
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                  Recent Platform Transactions ({(recentAll || []).length})
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Live feed of the 50 most recent transactions (deposits & withdrawals) from the transactions ledger. Newest on top.
+                </p>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
                   <tr>
-                    <th className="py-2.5 px-4">Date</th>
+                    <th className="py-2.5 px-4">Date / Time</th>
                     <th className="py-2.5 px-4">Type</th>
-                    <th className="py-2.5 px-4">Description</th>
                     <th className="py-2.5 px-4">User</th>
-                    <th className="py-2.5 px-4">Amount</th>
+                    <th className="py-2.5 px-4">Ajo Name</th>
+                    <th className="py-2.5 px-4">Amount & Breakdown</th>
+                    <th className="py-2.5 px-4">Net Payout</th>
                     <th className="py-2.5 px-4">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {ledger.slice(0, 10).map((l) => (
-                    <tr key={l.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                        {new Date(l.created_at).toLocaleDateString('en-NG')}
-                      </td>
-                      <td className="py-2.5 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {l.type}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-4 text-slate-800 font-medium">{l.description}</td>
-                      <td className="py-2.5 px-4 font-bold text-slate-900">{l.user_name}</td>
-                      <td className="py-2.5 px-4 font-bold text-slate-900">{formatNaira(l.amount)}</td>
-                      <td className="py-2.5 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {l.status}
-                        </span>
+                  {(recentAll || []).length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        No transactions recorded yet.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    (recentAll || []).map((tx: any) => {
+                      const isDeposit = tx?.type?.toString().toLowerCase().includes('deposit');
+                      const isWithdraw = tx?.type?.toString().toLowerCase().includes('withdraw');
+                      const dateVal = tx?.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000) : (tx?.createdAt || tx?.created_at || tx?.date);
+                      const dateFormatted = dateVal ? new Date(dateVal).toLocaleString('en-NG', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+                      const amtVal = Number(tx?.gross_amount ?? tx?.amount ?? tx?.savings_amount ?? 0);
+                      const feeVal = Number(tx?.fee ?? (isDeposit ? 60 : (isWithdraw ? Math.round(amtVal * 0.016) : 0)));
+                      const netPayout = isWithdraw ? Number(tx?.net_payout ?? tx?.netPayout ?? tx?.net_amount ?? (amtVal - feeVal)) : 0;
+                      const userName = tx?.userName || tx?.user_name || tx?.destination || tx?.user_id || 'User';
+                      const ajoName = tx?.ajoName || tx?.ajo_name || tx?.group_name || tx?.source || 'Personal Better Ajo';
+
+                      return (
+                        <tr key={tx?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                            {dateFormatted}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            {isDeposit ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                                Deposit
+                              </span>
+                            ) : isWithdraw ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 uppercase">
+                                Withdrawal
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 uppercase">
+                                {tx?.type || 'Transaction'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4 font-bold text-slate-900 whitespace-nowrap">
+                            {userName}
+                          </td>
+                          <td className="py-2.5 px-4 text-slate-700 font-medium whitespace-nowrap">
+                            {ajoName}
+                          </td>
+                          <td className="py-2.5 px-4 font-black text-slate-900 whitespace-nowrap">
+                            <div>
+                              {formatNaira(amtVal)}
+                              {isDeposit && (
+                                <div className="text-[10px] text-slate-500 font-normal font-mono">
+                                  + {formatNaira(feeVal)} platform fee (Total: {formatNaira(amtVal + feeVal)})
+                                </div>
+                              )}
+                              {isWithdraw && feeVal > 0 && (
+                                <div className="text-[10px] text-rose-600 font-normal font-mono">
+                                  - {formatNaira(feeVal)} (fee)
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-4 font-mono font-bold whitespace-nowrap">
+                            {isWithdraw ? (
+                              <span className="text-[#008751]">{formatNaira(netPayout)}</span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-4">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              tx?.status === 'success' || tx?.status === 'successful' || tx?.status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {tx?.status || 'completed'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -892,50 +1045,126 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* Tab: Payments */}
       {activeTab === 'payments' && (
         <div className="rounded-3xl bg-white border border-slate-200/80 overflow-hidden shadow-sm">
-          <div className="p-6 border-b border-slate-100">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-              Platform Payment Transactions ({payments.length})
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Complete incoming payment log via Paystack.
-            </p>
+          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                Platform Payment Transactions ({(paymentsHistory || []).length})
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Live single source of truth from transactions ledger. Showing both deposits and withdrawals.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-2"></span>
+                Real-Time Synchronized
+              </span>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
                 <tr>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">Reference</th>
-                  <th className="py-3 px-4">User / Member</th>
-                  <th className="py-3 px-4">Group Name</th>
-                  <th className="py-3 px-4">Payment Type</th>
+                  <th className="py-3 px-4">Date / Time</th>
+                  <th className="py-3 px-4">User Name</th>
+                  <th className="py-3 px-4">Ajo Name</th>
+                  <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Amount</th>
+                  <th className="py-3 px-4">Fee</th>
+                  <th className="py-3 px-4">Net Payout</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Paystack Ref</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {payments.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                      {new Date(p.date).toLocaleDateString('en-NG')}
-                    </td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-900">{p.reference}</td>
-                    <td className="py-3 px-4 font-bold text-slate-800">{p.user_name}</td>
-                    <td className="py-3 px-4 text-slate-700">{p.group_name || '—'}</td>
-                    <td className="py-3 px-4 text-slate-700">{p.payment_type}</td>
-                    <td className="py-3 px-4 font-black text-slate-900">{formatNaira(p.amount)}</td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                      {p.paystack_reference || '—'}
+                {(paymentsHistory || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      No payment transactions found.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  (paymentsHistory || []).map((p: any) => {
+                    const isDeposit = p?.type?.toString().toLowerCase().includes('deposit');
+                    const isWithdraw = p?.type?.toString().toLowerCase().includes('withdraw');
+                    const dateVal = p?.timestamp?.seconds ? new Date(p.timestamp.seconds * 1000) : (p?.createdAt || p?.created_at || p?.date);
+                    const dateFormatted = dateVal ? new Date(dateVal).toLocaleString('en-NG', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+                    const amtVal = Number(p?.gross_amount ?? p?.amount ?? p?.savings_amount ?? 0);
+                    const feeVal = Number(p?.fee ?? (isDeposit ? 60 : (isWithdraw ? Math.round(amtVal * 0.016) : 0)));
+                    const netPayout = isWithdraw ? Number(p?.net_payout ?? p?.netPayout ?? p?.net_amount ?? (amtVal - feeVal)) : 0;
+                    const userName = p?.userName || p?.user_name || p?.destination || p?.user_id || 'User';
+                    const ajoName = p?.ajoName || p?.ajo_name || p?.group_name || p?.source || 'Personal Better Ajo';
+
+                    return (
+                      <tr key={p?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                          {dateFormatted}
+                        </td>
+                        <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
+                          {userName}
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
+                          {ajoName}
+                        </td>
+                        <td className="py-3 px-4">
+                          {isDeposit ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 uppercase">
+                              Deposit
+                            </span>
+                          ) : isWithdraw ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 uppercase">
+                              Withdrawal
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 uppercase">
+                              {p?.type || p?.payment_type || 'Payment'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-black text-slate-900 whitespace-nowrap">
+                          <div>
+                            {formatNaira(amtVal)}
+                            {isDeposit && (
+                              <div className="text-[10px] text-slate-500 font-normal font-mono">
+                                to savings (Total paid: {formatNaira(amtVal + feeVal)})
+                              </div>
+                            )}
+                            {isWithdraw && (
+                              <div className="text-[10px] text-slate-500 font-normal font-mono">
+                                from savings
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold whitespace-nowrap">
+                          {feeVal > 0 ? (
+                            <span className={isWithdraw ? "text-rose-600" : "text-slate-800"}>
+                              {formatNaira(feeVal)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">₦0</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-bold whitespace-nowrap">
+                          {isWithdraw ? (
+                            <span className="text-[#008751] font-black">{formatNaira(netPayout)}</span>
+                          ) : (
+                            <span className="text-slate-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            p?.status === 'success' || p?.status === 'successful' || p?.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {p?.status || 'completed'}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -1003,7 +1232,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                All Withdrawals ({filteredWithdrawals.length})
+                All Withdrawals ({(filteredWithdrawals || []).length})
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Audit trail of all disbursements across Super Admin, Group Admins, and Personal savers.
@@ -1032,53 +1261,73 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-wider text-slate-400 border-b border-slate-100">
                 <tr>
-                  <th className="py-3 px-4">Date</th>
-                  <th className="py-3 px-4">User</th>
+                  <th className="py-3 px-4">User Name</th>
                   <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Group</th>
-                  <th className="py-3 px-4">Amount</th>
-                  <th className="py-3 px-4">Bank Name</th>
-                  <th className="py-3 px-4">Account Number</th>
+                  <th className="py-3 px-4">Ajo Group</th>
+                  <th className="py-3 px-4">Gross</th>
+                  <th className="py-3 px-4">Fee</th>
+                  <th className="py-3 px-4">Net Payout</th>
+                  <th className="py-3 px-4">Date</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Reference</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {filteredWithdrawals.map((w) => (
-                  <tr key={w.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                      {new Date(w.date).toLocaleDateString('en-NG')}
+                {(filteredWithdrawals || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-slate-400">
+                      No withdrawals found.
                     </td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{w.user_name}</td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        w.role === 'SUPER_ADMIN'
-                          ? 'bg-purple-100 text-purple-800'
-                          : w.role === 'GROUP_ADMIN'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {w.role}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">{w.group_name || '—'}</td>
-                    <td className="py-3 px-4 font-black text-slate-900">{formatNaira(w.amount)}</td>
-                    <td className="py-3 px-4 text-slate-700">{w.bank_name}</td>
-                    <td className="py-3 px-4 font-mono text-slate-700">{w.account_number}</td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        w.status === 'successful' || w.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : w.status === 'processing' || w.status === 'pending'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {w.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{w.reference}</td>
                   </tr>
-                ))}
+                ) : (
+                  (filteredWithdrawals || []).map((w: any) => {
+                    const wDate = w?.timestamp?.seconds ? new Date(w.timestamp.seconds * 1000) : (w?.date || w?.createdAt || w?.created_at);
+                    const dateFormatted = wDate ? new Date(wDate).toLocaleDateString('en-NG', { dateStyle: 'medium' }) : '—';
+                    const userName = w?.userName || w?.user_name || w?.destination || w?.user_id || 'User';
+                    const roleVal = w?.userRole || w?.role || (w?.type?.includes('personal') ? 'member' : 'member');
+                    const groupName = w?.ajoName || w?.ajo_name || w?.group_name || w?.source || 'Personal Better Ajo';
+                    const grossAmt = Number(w?.gross_amount ?? w?.amount ?? 0);
+                    const feeAmt = Number(w?.fee ?? 0);
+                    const netPayout = Number(w?.net_payout ?? w?.netPayout ?? w?.net_amount ?? (grossAmt - feeAmt));
+                    const statusVal = w?.status || 'completed';
+
+                    return (
+                      <tr key={w?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3 px-4 font-bold text-slate-900">{userName}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            roleVal?.toString().toLowerCase().includes('super')
+                              ? 'bg-purple-100 text-purple-800'
+                              : roleVal?.toString().toLowerCase().includes('admin')
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {roleVal}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium">{groupName}</td>
+                        <td className="py-3 px-4 font-black text-slate-900">{formatNaira(grossAmt)}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-rose-600">
+                          {feeAmt > 0 ? formatNaira(feeAmt) : '₦0'}
+                        </td>
+                        <td className="py-3 px-4 font-mono font-black text-[#008751]">{formatNaira(netPayout)}</td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                          {dateFormatted}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            statusVal === 'successful' || statusVal === 'completed' || statusVal === 'success'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : statusVal === 'processing' || statusVal === 'pending'
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {statusVal}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>

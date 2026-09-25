@@ -1598,6 +1598,10 @@ class Database {
   }
 
   // Personal Ajo
+  getAllPersonalAjos(): PersonalAjo[] {
+    return this.data.personal_ajo || [];
+  }
+
   getPersonalAjoByUserId(userId: string): PersonalAjo | undefined {
     return this.data.personal_ajo.find(p => p.user_id === userId);
   }

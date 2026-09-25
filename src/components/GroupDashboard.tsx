@@ -27,6 +27,8 @@ import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { PaystackModal, PaymentBreakdown } from './PaystackModal.js';
 import { OtpModal } from './OtpModal.js';
 import { apiRequest } from '../lib/api.js';
+import { db } from '../lib/firebase.js';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface GroupDashboardProps {
   groupId: string;
@@ -232,6 +234,37 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
     if (!data?.userMember) return;
     try {
       setIsPacking(true);
+
+      // Requirement 2: Save to Firestore FIRST before API / wallet balance update
+      try {
+        if (db && data?.group) {
+          const userName = currentUser.full_name || (currentUser as any).displayName || currentUser.phone || currentUser.email || 'Member';
+          const groupName = data.group.group_name || 'Ajo Group';
+          const fullAmount = Number((data.group.contribution_amount || 0) * (data.group.total_members || data.members?.length || 1));
+          const fee = Number(data.group.packing_fee || 0);
+          const netPayout = fullAmount - fee;
+
+          await addDoc(collection(db, 'transactions'), {
+            userId: currentUser.id,
+            userName,
+            userRole: 'member',
+            ajoId: groupId,
+            ajoName: groupName,
+            type: 'withdraw_pack',
+            gross_amount: fullAmount,
+            fee,
+            net_payout: netPayout,
+            source: groupName,
+            destination: userName,
+            timestamp: serverTimestamp(),
+            status: 'completed',
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch (fsErr) {
+        console.warn('Could not write pack withdrawal document to Firestore transactions:', fsErr);
+      }
+
       const resJson = await apiRequest(`/api/groups/${groupId}/pack`, {
         method: 'POST',
         headers: getSimulatedHeaders(),

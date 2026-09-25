@@ -32,6 +32,7 @@ export interface PersonalAjo {
   balance: number;
   total_deposited: number;
   total_withdrawn: number;
+  total_saved?: number;
   status: 'pending_fee' | 'active';
   created_at: string;
 }
@@ -213,6 +214,8 @@ export interface GroupAdminMemberItem {
   user_id: string;
   full_name: string;
   phone: string;
+  whatsapp_number?: string;
+  whatsappNumber?: string;
   position: number;
   status: 'active' | 'left' | 'completed' | 'replaced';
   current_round_status: 'pending_contribution' | 'contributed' | 'packed';
@@ -286,6 +289,7 @@ export interface SuperAdminFullData {
     pendingWithdrawalsCount: number;
     superAdminAvailableBalance: number;
     superAdminWithdrawnAmount: number;
+    totalPersonalSavings?: number;
     totalPersonalPlatformFees?: number;
     totalPersonalWithdrawalFees?: number;
     superAdminCommission?: number;
@@ -434,7 +438,13 @@ export interface SuperAdminFullData {
     }>;
   };
   ledger: CentralLedgerEntry[];
+  transactions?: any[];
   auditLogs?: AuditLogEntry[];
+  platformStats?: {
+    totalPersonalSavings: number;
+    totalPersonalSavers?: number;
+    lastUpdated?: any;
+  } | null;
 }
 
 export interface SuperAdminWallet {
@@ -479,6 +489,7 @@ export interface SuperAdminMetrics {
   groupMembersCount: number;
   totalContributionsAmount: number;
   totalPackingTransactionsCount: number;
+  totalPersonalSavings?: number;
   totalPersonalPlatformFees: number; // ₦600 each
   totalPersonalWithdrawalFees?: number; // 1.6% each
   totalContributionFees?: number; // ₦60 each

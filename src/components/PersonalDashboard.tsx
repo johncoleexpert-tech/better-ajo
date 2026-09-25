@@ -12,7 +12,9 @@ import {
   Loader2,
   X,
   LogOut,
-  Clock
+  Clock,
+  Edit2,
+  Mail
 } from 'lucide-react';
 import { UserProfile, PersonalAjo } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
@@ -22,8 +24,10 @@ import { apiRequest } from '../lib/api.js';
 import {
   subscribeToUserPersonalBalance,
   subscribeToPersonalAjoDoc,
-  subscribeToUserPersonalPayments
+  subscribeToUserPersonalPayments,
+  db
 } from '../lib/firebase.js';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 interface PersonalDashboardProps {
   user: UserProfile;
@@ -56,6 +60,13 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [showTransactionsModal, setShowTransactionsModal] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState<boolean>(true);
+
+  // FIX B: Contact Info state
+  const [currentWhatsapp, setCurrentWhatsapp] = useState(user.whatsapp_number || user.phone || '');
+  const [editingContact, setEditingContact] = useState(false);
+  const [whatsappInput, setWhatsappInput] = useState(user.whatsapp_number || user.phone || '');
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactSuccess, setContactSuccess] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +192,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     }
   };
 
-  // Withdrawal flow
+  // Withdrawal flow - BUG 2 FIX: total_saved = total_saved - amount. Payout to user = amount - fee.
+  const currentTotalSaved = Number(personalAjo.total_saved ?? personalAjo.balance ?? 0);
   const withdrawNum = Number(withdrawAmount) || 0;
   const withdrawFee = Math.round(withdrawNum * 0.016); // 1.6%
   const withdrawNet = Math.max(0, withdrawNum - withdrawFee);
@@ -192,8 +204,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       setError('Enter a valid amount.');
       return;
     }
-    if (withdrawNum > personalAjo.balance) {
-      setError(`Insufficient balance. Your available balance is ${formatNaira(personalAjo.balance)}.`);
+    if (withdrawNum > currentTotalSaved) {
+      setError(`Insufficient balance. Your available savings balance is ${formatNaira(currentTotalSaved)}.`);
       return;
     }
 
@@ -206,6 +218,30 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     try {
       setLoading(true);
       setError(null);
+
+      // 2. When ANY withdrawal happens: Save to Firestore FIRST, then update wallet balance.
+      const currentUid = (user as any)?.uid || user?.id;
+      const currentDisplayName = (user as any)?.displayName || user?.full_name || (user as any)?.name || user?.email || 'Member';
+      try {
+        await addDoc(collection(db, 'transactions'), {
+          userId: currentUid,
+          userName: currentDisplayName,
+          userRole: 'member',
+          ajoId: personalAjo?.id || 'personal-better-ajo',
+          ajoName: 'Personal Better Ajo',
+          type: 'withdraw_earnings',
+          gross_amount: withdrawNum,
+          fee: withdrawFee,
+          net_payout: withdrawNet,
+          source: 'Personal Better Ajo',
+          destination: currentDisplayName,
+          timestamp: serverTimestamp(),
+          status: 'completed'
+        });
+      } catch (fsErr) {
+        console.warn('[Firestore] Withdrawal document save note:', fsErr);
+      }
+
       const data = await apiRequest('/api/personal/withdraw', {
         method: 'POST',
         body: JSON.stringify({
@@ -215,14 +251,64 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         })
       });
 
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Withdrawal failed');
+      }
+
       setShowWithdrawOtp(false);
-      onUpdatePersonalAjo(data.personalAjo);
+      if (data.personalAjo) {
+        onUpdatePersonalAjo(data.personalAjo);
+      }
       setSuccessMessage(data.message || `Withdrawal of ${formatNaira(withdrawNet)} completed!`);
       setTimeout(() => setSuccessMessage(null), 6000);
     } catch (err: any) {
+      setError(err?.message || 'Withdrawal failed');
       throw err;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 1. SAFETY GUARD FIRST - Add this at top of ALL pages that use transactions to prevent Super Admin crash:
+  const safeTransactions = Array.isArray(transactions) ? transactions : [];
+  const safeAjoGroups = Array.isArray((personalAjo as any)?.groups) ? (personalAjo as any).groups : [];
+
+  // 3. Personal Ajo - Transaction History section:
+  // BEFORE: const history = transactions.filter(t => t.type.includes('deposit'))
+  // AFTER SAFE CODE:
+  // const personalHistory = (safeTransactions || []).filter(t => t && t.userId === currentUser?.uid)
+  // - Show BOTH deposit and withdraw
+  // - For deposit: green arrow "Deposit - Pack Ajo"
+  // - For withdraw: red arrow "Withdrawal - Earnings - Pack Ajo"
+  // - Use t?.type, t?.gross_amount with optional chaining
+  const currentUserUid = (user as any)?.uid || user?.id;
+  const personalHistory = (safeTransactions || []).filter(
+    (t) => t && (t?.userId === currentUserUid || t?.user_id === currentUserUid || !t?.userId)
+  );
+
+  // FIX B: Handle updating Phone / WhatsApp Number
+  const handleSaveContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanNum = whatsappInput.replace(/\D/g, '');
+    if (cleanNum.length !== 11) {
+      setError('Phone / WhatsApp Number must be exactly 11 digits (e.g. 08012345678).');
+      return;
+    }
+    try {
+      setSavingContact(true);
+      setError(null);
+      await apiRequest('/api/user/contact-info', {
+        method: 'POST',
+        body: JSON.stringify({ userId: user.id, whatsappNumber: cleanNum })
+      });
+      setCurrentWhatsapp(cleanNum);
+      setEditingContact(false);
+      setContactSuccess('Phone / WhatsApp Number updated successfully!');
+      setTimeout(() => setContactSuccess(null), 4000);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to update contact info');
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -236,6 +322,13 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         </div>
       )}
 
+      {contactSuccess && (
+        <div className="mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-900 text-sm font-semibold flex items-center space-x-3 shadow-xs">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+          <span>{contactSuccess}</span>
+        </div>
+      )}
+
       {error && (
         <div className="mb-6 rounded-2xl bg-red-50 border border-red-200 p-4 text-red-700 text-sm font-semibold flex items-center space-x-3">
           <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
@@ -244,7 +337,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       )}
 
       {/* Main Card */}
-      <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden mb-6">
         {/* Top Balance Banner */}
         <div className="bg-slate-900 p-6 sm:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#008751]/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
@@ -255,7 +348,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 <span>Personal Better Ajo</span>
               </div>
               <div className="text-3xl sm:text-5xl font-black tracking-tight text-white">
-                {formatNaira(personalAjo.balance)}
+                {formatNaira(currentTotalSaved)}
               </div>
               <div className="text-xs text-slate-400 mt-1.5 font-medium">
                 Available Balance Ready For Instant Withdrawal
@@ -309,7 +402,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               Total Saved
             </span>
             <span className="text-xl font-black text-slate-900 mt-1 block">
-              {formatNaira(personalAjo.balance)}
+              {formatNaira(currentTotalSaved)}
             </span>
           </div>
 
@@ -342,7 +435,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           </div>
         </div>
 
-        {/* User Account Info */}
+        {/* User Account Info - Bank & Identity */}
         <div className="p-6 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-600">
           <div className="flex items-center space-x-3.5">
             <div className="h-10 w-10 rounded-xl bg-[#E6F3ED] text-[#008751] flex items-center justify-center shrink-0">
@@ -361,17 +454,76 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
           <div className="flex items-center space-x-3.5 sm:border-l sm:pl-6 border-slate-100">
             <div className="h-10 w-10 rounded-xl bg-[#E6F3ED] text-[#008751] flex items-center justify-center shrink-0">
-              <Smartphone className="h-5 w-5" />
+              <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                Registered Phone Number
+                Identity Verification
               </span>
               <span className="text-sm font-bold text-slate-900 block font-mono">
-                {formatPhone(user.phone)}
+                {user?.verification_type || 'ID'}: {user?.verification_number ? `${user.verification_number.slice(0, 3)}***${user.verification_number.slice(-3)}` : 'Verified'}
               </span>
               <span className="text-[11px] text-[#008751] font-semibold">
-                Verified ({user?.verification_type || 'ID'}: {user?.verification_number ? `${user.verification_number.slice(0, 3)}***${user.verification_number.slice(-3)}` : 'Verified'})
+                NIBSS Verified & Encrypted
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* FIX B: Dedicated Contact Info Section */}
+      <div className="mb-8 rounded-3xl bg-white border border-slate-200/80 p-6 sm:p-7 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-emerald-50 text-[#008751] flex items-center justify-center shrink-0">
+              <Smartphone className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center space-x-2">
+                <span>Contact Info & Alerts</span>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-[#008751] text-[10px] font-bold">
+                  Verified
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Phone / WhatsApp Number used for real-time notifications and payment receipts
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setWhatsappInput(currentWhatsapp || user.phone || '');
+              setEditingContact(true);
+            }}
+            className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border border-slate-200 hover:border-[#008751] bg-slate-50 hover:bg-emerald-50/50 text-slate-700 hover:text-[#008751] font-bold text-xs transition cursor-pointer self-start sm:self-auto"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+            <span>Update WhatsApp Number</span>
+          </button>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
+          <div className="flex items-center space-x-3 p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100">
+            <Smartphone className="h-4 w-4 text-[#008751] shrink-0" />
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Phone / WhatsApp Number
+              </span>
+              <span className="text-sm font-bold text-slate-900 font-mono">
+                {formatPhone(currentWhatsapp || user.phone)}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3 p-3.5 rounded-2xl bg-slate-50/70 border border-slate-100">
+            <Mail className="h-4 w-4 text-[#008751] shrink-0" />
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Registered Email
+              </span>
+              <span className="text-sm font-bold text-slate-900 font-mono truncate max-w-[220px] block">
+                {user.email || 'Not provided'}
               </span>
             </div>
           </div>
@@ -396,7 +548,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           </div>
           <div className="flex items-center space-x-2">
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
-              {transactions.length} record{transactions.length === 1 ? '' : 's'}
+              {(personalHistory || []).length} record{(personalHistory || []).length === 1 ? '' : 's'}
             </span>
           </div>
         </div>
@@ -406,7 +558,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
             <Loader2 className="h-6 w-6 animate-spin text-[#008751]" />
             <span className="text-xs font-medium">Loading transactions...</span>
           </div>
-        ) : transactions.length === 0 ? (
+        ) : (personalHistory || []).length === 0 ? (
           <div className="py-12 text-center text-slate-400 space-y-2">
             <Clock className="h-8 w-8 mx-auto text-slate-300 stroke-[1.5]" />
             <p className="text-sm font-semibold text-slate-600">No transactions recorded yet</p>
@@ -427,18 +579,20 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {transactions.map((tx) => {
-                  const isDeposit = (tx.purpose || tx.type) === 'personal_deposit';
-                  const dateVal = tx.created_at || tx.paid_at || tx.timestamp;
+                {(personalHistory || []).map((tx: any) => {
+                  const txType = tx?.type?.toString().toLowerCase() || tx?.purpose?.toString().toLowerCase() || '';
+                  const isDeposit = txType.includes('deposit');
+                  const dateVal = tx?.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000) : (tx?.created_at || tx?.createdAt || tx?.paid_at || tx?.date);
                   const formattedDate = dateVal
                     ? new Date(dateVal).toLocaleString('en-NG', {
                         dateStyle: 'medium',
                         timeStyle: 'short'
                       })
                     : '—';
+                  const displayAmount = Number(tx?.gross_amount ?? tx?.amount ?? tx?.savings_amount ?? 0);
 
                   return (
-                    <tr key={tx.id || tx.reference} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={tx?.id || tx?.reference || Math.random().toString()} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 font-medium text-slate-700 whitespace-nowrap">
                         {formattedDate}
                       </td>
@@ -451,32 +605,32 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                           }`}
                         >
                           {isDeposit ? (
-                            <ArrowDownLeft className="h-3 w-3" />
+                            <ArrowDownLeft className="h-3 w-3 text-emerald-700" />
                           ) : (
-                            <ArrowUpRight className="h-3 w-3" />
+                            <ArrowUpRight className="h-3 w-3 text-rose-600" />
                           )}
-                          {isDeposit ? 'Deposit' : 'Withdrawal'}
+                          {isDeposit ? 'Deposit - Pack Ajo' : 'Withdrawal - Earnings - Pack Ajo'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                        {tx.reference || tx.id}
+                        {tx?.reference || tx?.id}
                       </td>
                       <td className="py-3 px-4 font-bold text-sm whitespace-nowrap">
-                        <span className={isDeposit ? 'text-emerald-700' : 'text-slate-900'}>
-                          {isDeposit ? '+' : '-'}{formatNaira(Number(tx.amount || 0))}
+                        <span className={isDeposit ? 'text-emerald-700' : 'text-rose-600'}>
+                          {isDeposit ? '+' : '-'}{formatNaira(displayAmount)}
                         </span>
                       </td>
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                            tx.status === 'success' || tx.status === 'completed'
+                            tx?.status === 'success' || tx?.status === 'completed'
                               ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : tx.status === 'pending'
+                              : tx?.status === 'pending'
                               ? 'bg-amber-50 text-amber-700 border border-amber-200'
                               : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}
                         >
-                          {tx.status || 'success'}
+                          {tx?.status || 'completed'}
                         </span>
                       </td>
                     </tr>
@@ -645,12 +799,16 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                   <span className="font-bold text-slate-900">{formatNaira(withdrawNum)}</span>
                 </div>
                 <div className="flex justify-between text-slate-600">
-                  <span>1.6% Withdrawal Fee:</span>
+                  <span>1.6% Better Ajo Fee:</span>
                   <span className="font-bold text-rose-600">- {formatNaira(withdrawFee)}</span>
                 </div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between text-sm font-black text-slate-900">
-                  <span>You Receive (Net):</span>
+                  <span>You Receive (Net in Bank):</span>
                   <span className="text-[#008751]">{formatNaira(withdrawNet)}</span>
+                </div>
+                <div className="border-t border-slate-100 pt-1.5 flex justify-between text-[11px] text-slate-500">
+                  <span>Remaining Savings Balance:</span>
+                  <span className="font-mono font-semibold text-slate-700">{formatNaira(Math.max(0, currentTotalSaved - withdrawNum))}</span>
                 </div>
               </div>
 
@@ -660,7 +818,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
               <button
                 type="submit"
-                disabled={loading || withdrawNum <= 0 || withdrawNum > personalAjo.balance}
+                disabled={loading || withdrawNum <= 0 || withdrawNum > currentTotalSaved}
                 className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Authorize Withdrawal</span>}
@@ -698,25 +856,27 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
             </div>
 
             <div className="py-4 space-y-3 overflow-y-auto max-h-[60vh]">
-              {transactions.length === 0 ? (
+              {(personalHistory || []).length === 0 ? (
                 <div className="py-8 text-center text-slate-400 space-y-2">
                   <Clock className="h-7 w-7 mx-auto text-slate-300" />
                   <p className="text-xs font-semibold text-slate-600">No personal transactions recorded yet</p>
                 </div>
               ) : (
-                transactions.map((tx) => {
-                  const isDeposit = (tx.purpose || tx.type) === 'personal_deposit';
-                  const dateVal = tx.created_at || tx.paid_at || tx.timestamp;
+                (personalHistory || []).map((tx: any) => {
+                  const txType = tx?.type?.toString().toLowerCase() || tx?.purpose?.toString().toLowerCase() || '';
+                  const isDeposit = txType.includes('deposit');
+                  const dateVal = tx?.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000) : (tx?.created_at || tx?.createdAt || tx?.paid_at || tx?.date);
                   const formattedDate = dateVal
                     ? new Date(dateVal).toLocaleString('en-NG', {
                         dateStyle: 'short',
                         timeStyle: 'short'
                       })
                     : '—';
+                  const displayAmount = Number(tx?.gross_amount ?? tx?.amount ?? tx?.savings_amount ?? 0);
 
                   return (
                     <div
-                      key={tx.id || tx.reference}
+                      key={tx?.id || tx?.reference || Math.random().toString()}
                       className="p-3 rounded-xl bg-slate-50 flex items-center justify-between text-xs border border-slate-100"
                     >
                       <div className="flex items-center space-x-2.5">
@@ -725,23 +885,23 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                             isDeposit ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}
                         >
-                          {isDeposit ? <ArrowDownLeft className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
+                          {isDeposit ? <ArrowDownLeft className="h-4 w-4 text-emerald-700" /> : <ArrowUpRight className="h-4 w-4 text-rose-600" />}
                         </div>
                         <div>
                           <span className="font-bold text-slate-900 block">
-                            {isDeposit ? 'Personal Deposit' : 'Bank Withdrawal'}
+                            {isDeposit ? 'Deposit - Pack Ajo' : 'Withdrawal - Earnings - Pack Ajo'}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
-                            {tx.reference || tx.id} • {formattedDate}
+                            {tx?.reference || tx?.id} • {formattedDate}
                           </span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className={`font-bold block ${isDeposit ? 'text-emerald-700' : 'text-slate-900'}`}>
-                          {isDeposit ? '+' : '-'}{formatNaira(Number(tx.amount || 0))}
+                        <span className={`font-bold block ${isDeposit ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {isDeposit ? '+' : '-'}{formatNaira(displayAmount)}
                         </span>
                         <span className="text-[9px] uppercase font-bold text-slate-400">
-                          {tx.status || 'success'}
+                          {tx?.status || 'completed'}
                         </span>
                       </div>
                     </div>
@@ -758,6 +918,86 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FIX B: Contact Info Edit Modal */}
+      {editingContact && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-[#008751] flex items-center justify-center">
+                  <Smartphone className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">Contact Information</h3>
+                  <p className="text-[11px] text-slate-500">Update your Phone / WhatsApp Number</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingContact(false)}
+                className="rounded-full p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveContact} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Phone / WhatsApp Number (11 digits) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    required
+                    maxLength={11}
+                    value={whatsappInput}
+                    onChange={(e) => setWhatsappInput(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g. 08012345678"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono text-sm outline-none text-slate-900 transition"
+                  />
+                  <Smartphone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Must be 11 digits (e.g. 08012345678) used for WhatsApp alerts & receipts.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Registered Email Address
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    disabled
+                    value={user.email || 'None'}
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-500 text-sm font-mono cursor-not-allowed"
+                  />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingContact(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingContact || whatsappInput.replace(/\D/g, '').length !== 11}
+                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
+                >
+                  {savingContact ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Save Contact Info</span>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

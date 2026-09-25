@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Shield, ArrowRight, Wallet, Users, Loader2, X, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { Shield, ArrowRight, Wallet, Users, Loader2, X, Mail, Lock, User, Eye, EyeOff, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { apiRequest } from '../lib/api.js';
 import { PackAjoLogo } from './PackAjoLogo.js';
+import { auth, sendPasswordResetEmail } from '../lib/firebase.js';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -29,6 +30,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // FIX C: Forgot Password State
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
+
   // Hidden Phone & OTP variables preserved so no dependencies break
   const [phone, setPhone] = useState('');
   const [otpStep, setOtpStep] = useState(false);
@@ -45,6 +52,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setEmail('');
       setPassword('');
       setShowPassword(false);
+      setIsForgotPassword(false);
+      setResetEmail('');
+      setResetSuccessMessage(null);
+      setResetLoading(false);
       setError(null);
       setLoading(false);
       // Hidden state cleanup
@@ -59,6 +70,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setEmail('');
     setPassword('');
     setShowPassword(false);
+    setIsForgotPassword(false);
+    setResetEmail('');
+    setResetSuccessMessage(null);
+    setResetLoading(false);
     setError(null);
     setLoading(false);
     onClose();
@@ -91,6 +106,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // FIX C: Firebase sendPasswordResetEmail handler
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetEmail = (resetEmail || email).trim().toLowerCase();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setError('Please enter a valid email address to receive password reset link.');
+      return;
+    }
+
+    try {
+      setResetLoading(true);
+      setError(null);
+      setResetSuccessMessage(null);
+      await sendPasswordResetEmail(auth, targetEmail);
+      setResetSuccessMessage(`Password reset email sent to ${targetEmail}. Please check your inbox (and spam folder) to reset your password.`);
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found') {
+        setError('No account found registered with this email address.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('The email address entered is invalid.');
+      } else {
+        // Fallback message for user
+        setError(err.message || 'Failed to send password reset email. Please try again.');
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -199,6 +243,80 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
               </div>
             </div>
+          ) : isForgotPassword ? (
+            <div data-auth-container>
+              <div className="text-center mb-5">
+                <h3 className="text-lg font-black text-slate-900">
+                  Reset Password
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Enter your email address and we will send you a password reset link.
+                </p>
+              </div>
+
+              {resetSuccessMessage && (
+                <div className="mb-4 rounded-xl bg-emerald-50 border border-emerald-200 p-3.5 text-xs text-emerald-900 font-medium flex items-start space-x-2.5">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+                  <span>{resetSuccessMessage}</span>
+                </div>
+              )}
+
+              {error && (
+                <div className="mb-4 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-medium">
+                  {error}
+                </div>
+              )}
+
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Account Email Address
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      required
+                      value={resetEmail || email}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="name@example.com"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none transition text-sm text-slate-900"
+                      autoFocus
+                    />
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {resetLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Sending reset email...</span>
+                    </>
+                  ) : (
+                    <span>SEND RESET LINK</span>
+                  )}
+                </button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(false);
+                      setError(null);
+                      setResetSuccessMessage(null);
+                    }}
+                    className="inline-flex items-center space-x-1.5 text-xs font-bold text-[#008751] hover:underline cursor-pointer"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>Back to Log In</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           ) : (
             <div data-auth-container>
               <div className="text-center mb-5">
@@ -260,6 +378,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
+                </div>
+
+                {/* Forgot Password Link */}
+                <div className="flex justify-end text-xs pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(email);
+                      setIsForgotPassword(true);
+                      setError(null);
+                      setResetSuccessMessage(null);
+                    }}
+                    className="font-semibold text-[#008751] hover:underline cursor-pointer text-xs"
+                  >
+                    Forgot Password?
+                  </button>
                 </div>
 
                 <button

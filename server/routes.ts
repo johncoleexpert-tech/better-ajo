@@ -53,6 +53,8 @@ import {
   fsExecuteDepositBatch,
   fsExecuteContributionBatch,
   fsExecuteWithdrawalBatch,
+  fsExecuteWithdrawalTransaction,
+  fsGetTotalsFromTransactions,
   fsExecuteAdminWithdrawalBatch,
   fsExecutePersonalDepositTransaction,
   fsRecordRegistrationRevenue,
@@ -597,7 +599,9 @@ apiRouter.post('/personal/register', async (req: Request, res: Response) => {
       verification_number,
       email,
       password,
-      otp_code
+      otp_code,
+      whatsappNumber,
+      whatsapp_number
     } = req.body;
 
     if (!full_name || (!phone && !email) || !bank_name || !account_number || !verification_type || !verification_number) {
@@ -611,6 +615,8 @@ apiRouter.post('/personal/register', async (req: Request, res: Response) => {
     const cleanPhone = phone
       ? phone.replace(/\s+/g, '').replace(/^\+234/, '0')
       : (email ? '080' + Math.abs(email.split('').reduce((a: number, b: string) => a + b.charCodeAt(0), 10000000)).toString().slice(0, 8) : '08012345678');
+
+    const cleanWhatsapp = (whatsappNumber || whatsapp_number || cleanPhone).replace(/\D/g, '');
 
     // Verify OTP if supplied
     if (otp_code) {
@@ -629,11 +635,47 @@ apiRouter.post('/personal/register', async (req: Request, res: Response) => {
       verification_type,
       verification_number: verification_number.trim(),
       email: email ? email.trim() : undefined,
-      password: password || undefined
+      password: password || undefined,
+      whatsapp_number: cleanWhatsapp
     });
 
     // Create Personal Ajo in pending_fee status
     const personalAjo = db.createPersonalAjo(profile.id);
+
+    // FIX B: Save whatsappNumber to users and personalAjos
+    const fDb = getFirestoreDb();
+    if (fDb) {
+      fDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id).set({
+        id: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+        phone: cleanPhone,
+        whatsappNumber: cleanWhatsapp,
+        updatedAt: new Date()
+      }, { merge: true }).catch(() => {});
+
+      fDb.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJOS).doc(personalAjo.id).set({
+        id: personalAjo.id,
+        user_id: profile.id,
+        whatsappNumber: cleanWhatsapp,
+        total_saved: 0,
+        total_deposited: 0,
+        total_withdrawn: 0,
+        balance: 0,
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+
+      fDb.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(personalAjo.id).set({
+        id: personalAjo.id,
+        user_id: profile.id,
+        whatsappNumber: cleanWhatsapp,
+        total_saved: 0,
+        total_deposited: 0,
+        total_withdrawn: 0,
+        balance: 0,
+        updated_at: new Date().toISOString()
+      }, { merge: true }).catch(() => {});
+    }
 
     // Sync profile & personal Ajo safely to Supabase and Firestore in background
     syncProfileToSupabase(profile).catch(() => {});
@@ -670,6 +712,52 @@ apiRouter.post('/personal/register', async (req: Request, res: Response) => {
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Registration failed' });
+  }
+});
+
+// FIX B: Contact Info update route
+apiRouter.post('/user/contact-info', async (req: Request, res: Response) => {
+  try {
+    const { userId, whatsappNumber } = req.body;
+    if (!userId || !whatsappNumber) {
+      return res.status(400).json({ error: 'User ID and WhatsApp number required.' });
+    }
+    const cleanNum = String(whatsappNumber).replace(/\D/g, '');
+    if (cleanNum.length !== 11) {
+      return res.status(400).json({ error: 'Phone / WhatsApp Number must be exactly 11 digits (e.g. 08012345678).' });
+    }
+
+    // Update in-memory db
+    const existing = db.getProfileById(userId);
+    if (existing) {
+      existing.whatsapp_number = cleanNum;
+      existing.phone = cleanNum;
+    }
+
+    const fDb = getFirestoreDb();
+    if (fDb) {
+      await fDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).set({
+        whatsappNumber: cleanNum,
+        phone: cleanNum,
+        updatedAt: new Date()
+      }, { merge: true });
+
+      const pajo = await getOrCreatePersonalAjo(userId);
+      await Promise.all([
+        fDb.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJOS).doc(pajo.id).set({
+          whatsappNumber: cleanNum,
+          updated_at: new Date().toISOString()
+        }, { merge: true }),
+        fDb.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(pajo.id).set({
+          whatsappNumber: cleanNum,
+          updated_at: new Date().toISOString()
+        }, { merge: true })
+      ]);
+    }
+
+    return res.json({ success: true, whatsappNumber: cleanNum });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to update contact info' });
   }
 });
 
@@ -979,7 +1067,10 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
     const fee = Math.round(numAmount * 0.016);
     const netAmount = numAmount - fee;
 
-    const result = db.withdrawPersonalAjo(
+    // FIX A - REAL TRANSACTION ATOMIC WITHDRAWAL:
+    // Inside runTransaction, check personalAjos total_saved >= amount+fee from Firestore snapshot, if insufficient throw error, else deduct total_saved.
+    // Do NOT update UI to SUCCESS before transaction commits.
+    const txResult = await fsExecuteWithdrawalTransaction(
       userId,
       numAmount,
       fee,
@@ -988,16 +1079,27 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       profile.account_number
     );
 
-    // CRITICAL WRITE CONFIRMATION:
-    // Both withdrawal record and deducted personal balance MUST be confirmed in Firestore
-    const confirmed = await fsExecuteWithdrawalBatch(result.withdrawal, result.personal);
-    if (!confirmed) {
-      console.error(`[Personal Withdraw] Firestore persistence failed for withdrawal: ${result.withdrawal.id}, rolling back local balance`);
-      db.rollbackPersonalWithdrawal(userId, result.withdrawal.id, numAmount);
-      return res.status(503).json({
-        error: 'Withdrawal could not be confirmed safely in cloud storage. Your balance has been preserved. Please try again in a few moments.'
+    if (!txResult.success || !txResult.personalAjo) {
+      return res.status(400).json({
+        error: txResult.error || 'Withdrawal could not be processed due to insufficient balance or transaction error.'
       });
     }
+
+    // In-memory sync for consistent state
+    const result = {
+      personal: txResult.personalAjo,
+      withdrawal: {
+        id: txResult.withdrawalId || `wth_${Date.now()}`,
+        user_id: userId,
+        amount: numAmount,
+        fee,
+        net_amount: netAmount,
+        bank_name: profile.bank_name,
+        account_number: profile.account_number,
+        status: 'success',
+        created_at: new Date().toISOString()
+      }
+    };
 
     // Audit log
     db.recordAudit({
@@ -1033,18 +1135,6 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
         profile.full_name || ''
       ).catch(err => console.warn('[Firestore Revenue Warn]:', err?.message || err));
     }
-
-    // Update Firestore users collection with the new personalBalance
-    try {
-      const fDb = getFirestoreDb();
-      if (fDb) {
-        fDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).set({
-          personalBalance: result.personal.balance,
-          balance: result.personal.balance,
-          updatedAt: new Date()
-        }, { merge: true }).catch(() => {});
-      }
-    } catch (e) {}
 
     return res.json({
       success: true,
@@ -1088,7 +1178,7 @@ apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) 
       }
     }
     // Also include withdrawals and payments from local db fallback
-    const localWithdrawals = db.data?.withdrawals?.filter((w: any) => w.user_id === userId) || [];
+    const localWithdrawals = db.getAllWithdrawals().filter((w: any) => w.user_id === userId);
     for (const w of localWithdrawals) {
       const payId = `pay_wth_${w.id}`;
       if (!payments.some(p => p.id === payId || p.reference === w.id)) {
@@ -1106,7 +1196,7 @@ apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) 
       }
     }
 
-    const localPayments = db.data?.payments?.filter((p: any) => p.user_id === userId) || [];
+    const localPayments = db.getPaymentsByUserId(userId);
     for (const p of localPayments) {
       const purpose = p.purpose || p.type || '';
       if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
@@ -2217,6 +2307,9 @@ apiRouter.post('/groups/:groupId/withdraw-commission', async (req: Request, res:
     );
 
     const withdrawal = db.withdrawGroupAdminEarnings(groupId, adminId, numericAmount, transferResult);
+    (withdrawal as any).user_name = admin.full_name;
+    (withdrawal as any).group_name = group.group_name;
+    (withdrawal as any).group_id = groupId;
     const payment = db.getPaymentById(`pay_${withdrawal.id}`);
     const confirmed = payment
       ? await fsExecuteAdminWithdrawalBatch(withdrawal, payment)
@@ -2420,6 +2513,9 @@ apiRouter.post('/groups/:groupId/withdraw-admin-earnings', async (req: Request, 
 
     withdrawal.status = 'completed';
     payment.status = 'success';
+    (withdrawal as any).user_name = targetName;
+    (withdrawal as any).group_name = group.group_name;
+    (withdrawal as any).group_id = groupId;
 
     // 4. Commit confirmed withdrawal to local database state immediately
     db.recordConfirmedWithdrawal(withdrawal, payment);
@@ -2643,8 +2739,12 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
     }
 
     try {
-      const stats = (await fsGetPlatformStats()) || (await aggregatePersonalAjoSavings());
+      // SuperAdminFullData must read totals from same transactions collection filtering status==success only, so both dashboards match.
+      const stats = await fsGetTotalsFromTransactions();
       data.platformStats = stats;
+      if (data.metrics) {
+        data.metrics.totalPersonalSavings = stats.totalPersonalSavings;
+      }
     } catch (err) {}
 
     return res.json(data);

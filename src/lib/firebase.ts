@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
 import {
   getFirestore,
   enableIndexedDbPersistence,
@@ -27,6 +28,8 @@ const firebaseConfig = {
 
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const db: Firestore = getFirestore(app);
+export const auth = getAuth(app);
+export { sendPasswordResetEmail };
 
 // Enable offline persistence in firebase.ts: enableIndexedDbPersistence(db)
 if (typeof window !== 'undefined') {
@@ -94,8 +97,8 @@ export function subscribeToUserPersonalBalance(
 }
 
 /**
- * Real-time listener for personal_ajo doc using onSnapshot.
- * Fixes: "Personal Ajo dashboard: change get() to onSnapshot() for personal_ajo doc. Balance updates instantly."
+ * Real-time listener for personalAjos doc using onSnapshot.
+ * FIX A: Dashboard balance must read from personalAjos total_saved via onSnapshot, not local state.
  */
 export function subscribeToPersonalAjoDoc(
   userId: string,
@@ -104,35 +107,62 @@ export function subscribeToPersonalAjoDoc(
 ): Unsubscribe {
   if (!userId) return () => {};
 
-  // Listen directly to personal_ajo doc (by userId)
-  const docRef = doc(db, 'personal_ajo', userId);
-  const unsubDoc = onSnapshot(docRef, (snap) => {
+  const handleDoc = (data: any) => {
+    if (!data) return;
+    const totalSaved = Number(data.total_saved ?? data.balance ?? 0);
+    onUpdate({
+      ...data,
+      total_saved: totalSaved,
+      balance: totalSaved
+    });
+  };
+
+  // 1. Listen directly to personalAjos doc (by userId)
+  const docRef1 = doc(db, 'personalAjos', userId);
+  const unsubDoc1 = onSnapshot(docRef1, (snap) => {
     if (snap.exists()) {
-      onUpdate(snap.data());
+      handleDoc(snap.data());
     }
   }, (err) => {
     if (onError) onError(err);
   });
 
-  // Also query where user_id == userId for docs named by pajo_id
-  const q = query(collection(db, 'personal_ajo'), where('user_id', '==', userId));
-  const unsubQuery = onSnapshot(q, (snapshot) => {
+  // 2. Query personalAjos by user_id
+  const q1 = query(collection(db, 'personalAjos'), where('user_id', '==', userId));
+  const unsubQuery1 = onSnapshot(q1, (snapshot) => {
     if (!snapshot.empty) {
-      const firstDoc = snapshot.docs[0].data();
-      onUpdate(firstDoc);
+      handleDoc(snapshot.docs[0].data());
     }
   }, (err) => {
     if (onError) onError(err);
   });
+
+  // 3. Fallback listen to personal_ajo doc
+  const docRef2 = doc(db, 'personal_ajo', userId);
+  const unsubDoc2 = onSnapshot(docRef2, (snap) => {
+    if (snap.exists()) {
+      handleDoc(snap.data());
+    }
+  }, () => {});
+
+  // 4. Query personal_ajo by user_id
+  const q2 = query(collection(db, 'personal_ajo'), where('user_id', '==', userId));
+  const unsubQuery2 = onSnapshot(q2, (snapshot) => {
+    if (!snapshot.empty) {
+      handleDoc(snapshot.docs[0].data());
+    }
+  }, () => {});
 
   return () => {
-    unsubDoc();
-    unsubQuery();
+    unsubDoc1();
+    unsubQuery1();
+    unsubDoc2();
+    unsubQuery2();
   };
 }
 
 /**
- * Real-time listener for personal payments (deposits & withdrawals) for user_id == me
+ * Real-time listener for personal payments (deposits & withdrawals) for user_id / userId == me
  */
 export function subscribeToUserPersonalPayments(
   userId: string,
@@ -141,30 +171,79 @@ export function subscribeToUserPersonalPayments(
 ): Unsubscribe {
   if (!userId) return () => {};
 
-  const q = query(
+  const paymentsMap: Record<string, any> = {};
+  const txMap: Record<string, any> = {};
+
+  const emit = () => {
+    const combined = Object.values({ ...paymentsMap, ...txMap });
+    combined.sort((a, b) => {
+      const timeA = a?.timestamp?.seconds ? (a.timestamp.seconds * 1000) : new Date(a?.created_at || a?.createdAt || a?.paid_at || 0).getTime();
+      const timeB = b?.timestamp?.seconds ? (b.timestamp.seconds * 1000) : new Date(b?.created_at || b?.createdAt || b?.paid_at || 0).getTime();
+      return timeB - timeA;
+    });
+    onPaymentsUpdate(combined);
+  };
+
+  const qPayments = query(
     collection(db, 'payments'),
     where('user_id', '==', userId)
   );
 
-  return onSnapshot(
-    q,
+  const unsubPayments = onSnapshot(
+    qPayments,
     (snapshot) => {
-      const list: any[] = [];
       snapshot.forEach((doc) => {
-        const d = doc.data();
-        const purpose = d.purpose || d.type || '';
-        if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
-          list.push({ id: doc.id, ...d });
-        }
+        paymentsMap[doc.id] = { id: doc.id, ...doc.data() };
       });
-      list.sort((a, b) => new Date(b.created_at || b.paid_at || 0).getTime() - new Date(a.created_at || a.paid_at || 0).getTime());
-      onPaymentsUpdate(list);
+      emit();
     },
     (err) => {
       console.warn('[Firestore] personal payments listener error:', err);
       if (onError) onError(err);
     }
   );
+
+  const qTx1 = query(
+    collection(db, 'transactions'),
+    where('userId', '==', userId)
+  );
+
+  const unsubTx1 = onSnapshot(
+    qTx1,
+    (snapshot) => {
+      snapshot.forEach((doc) => {
+        txMap[doc.id] = { id: doc.id, ...doc.data() };
+      });
+      emit();
+    },
+    (err) => {
+      console.warn('[Firestore] user transactions listener 1 error:', err);
+    }
+  );
+
+  const qTx2 = query(
+    collection(db, 'transactions'),
+    where('user_id', '==', userId)
+  );
+
+  const unsubTx2 = onSnapshot(
+    qTx2,
+    (snapshot) => {
+      snapshot.forEach((doc) => {
+        txMap[doc.id] = { id: doc.id, ...doc.data() };
+      });
+      emit();
+    },
+    (err) => {
+      console.warn('[Firestore] user transactions listener 2 error:', err);
+    }
+  );
+
+  return () => {
+    unsubPayments();
+    unsubTx1();
+    unsubTx2();
+  };
 }
 
 export interface PlatformRevenueMainData {
