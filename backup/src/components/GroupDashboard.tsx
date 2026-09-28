@@ -80,7 +80,6 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
   // Copied indicator
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedMemberVa, setCopiedMemberVa] = useState(false);
 
   // Calendar date state (defaults to real date, can be simulated)
   const [simulatedDate, setSimulatedDate] = useState<string>('');
@@ -736,7 +735,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
           {/* Action Button: Pay Contribution or Pack Now */}
           <div className="flex flex-col sm:flex-row items-end sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
-            {userMember && !hasUserContributed && group.status !== 'round_completed' && (
+            {userMember && !hasUserContributed && group.status !== 'round_completed' && isCycleOpen && (
               <button
                 onClick={() => handleInitContribution()}
                 disabled={isProcessingContrib}
@@ -744,11 +743,10 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
               >
                 <div className="flex items-center space-x-1.5 text-xs">
                   <CreditCard className="h-4 w-4" />
-                  <span>{isCycleOpen ? 'PAY YOUR CONTRIBUTION TODAY' : 'PAY EARLY AHEAD'}</span>
+                  <span>PAY YOUR CONTRIBUTION TODAY</span>
                 </div>
                 <span className="text-emerald-200 text-[11px] font-mono font-black mt-0.5">
                   {formatNaira(group.contribution_amount)} (+ ₦60 fee)
-                  {Number(userMember.credit_balance || 0) > 0 && ` • ₦${Number(userMember.credit_balance).toLocaleString()} credit`}
                 </span>
               </button>
             )}
@@ -756,7 +754,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
             {userMember && hasUserContributed && (
               <div className="flex items-center space-x-1.5 px-4 py-2.5 rounded-xl bg-[#E6F3ED] text-[#008751] font-bold text-xs border border-[#008751]/20">
                 <CheckCircle2 className="h-4 w-4 text-[#008751]" />
-                <span>{(userMember as any)?.isPaidAhead ? '✓ PAID AHEAD' : '✓ CONTRIBUTION PAID'}</span>
+                <span>✓ CONTRIBUTION PAID</span>
               </div>
             )}
 
@@ -797,38 +795,15 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
           </div>
         </div>
 
-        {/* Scheduled Disbursement & Pause Alerts */}
-        {cycleStatus?.isPaused && (
-          <div className="px-6 py-3.5 bg-amber-50 border-b border-amber-200 text-amber-900 text-xs font-semibold flex items-center space-x-2.5">
-            <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-            <span>
-              <strong>CYCLE PAUSED:</strong> Due date reached ({cycleInfo?.scheduledPackDateDisplay}), but only {cycleStatus.paidCount} of {cycleStatus.totalRequired} members have paid. Payout is paused until all {cycleStatus.totalRequired} members complete payment.
-            </span>
-          </div>
-        )}
-
-        {cycleStatus?.isEarlyWaiting && (
-          <div className="px-6 py-3.5 bg-teal-50 border-b border-teal-200 text-teal-900 text-xs font-semibold flex items-center space-x-2.5">
-            <Clock className="h-4 w-4 text-teal-600 shrink-0" />
-            <span>
-              <strong>ALL MEMBERS PAID EARLY:</strong> All {cycleStatus.totalRequired} members completed their contributions ahead of time! Scheduled disbursement will unlock on <strong>{cycleInfo?.scheduledPackDateDisplay}</strong> once the cycle duration is reached.
-            </span>
-          </div>
-        )}
-
         {/* Member Action Alerts */}
-        {userMember && !hasUserContributed && group.status !== 'round_completed' && (
+        {userMember && !hasUserContributed && group.status !== 'round_completed' && isCycleOpen && (
           <div className="px-6 py-3.5 bg-amber-50/80 border-b border-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900 font-medium">
-            <span>
-              {isCycleOpen
-                ? <>Your contribution of <strong>{formatNaira(group.contribution_amount)}</strong> (+ ₦60 fee = <strong>{formatNaira(group.contribution_amount + 60)}</strong>) is currently <strong>Pending</strong>.</>
-                : <>Next cycle due date is <strong>{cycleInfo?.scheduledPackDateDisplay}</strong>. Early payment of <strong>{formatNaira(group.contribution_amount + 60)}</strong> is open anytime!</>}
-            </span>
+            <span>Your contribution of <strong>{formatNaira(group.contribution_amount)}</strong> for Round {group.current_round} is currently <strong>Pending</strong>.</span>
             <button
               onClick={handleInitContribution}
               className="text-xs font-bold text-amber-950 underline hover:text-black cursor-pointer self-start sm:self-auto"
             >
-              {isCycleOpen ? 'PAY YOUR CONTRIBUTION TODAY' : 'PAY EARLY AHEAD'}
+              PAY YOUR CONTRIBUTION TODAY
             </button>
           </div>
         )}
@@ -837,135 +812,104 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
       {/* Dedicated Group Member Contribution Section */}
       <div className="rounded-3xl bg-white border border-slate-200 p-6 sm:p-7 shadow-sm mb-8">
         {userMember ? (
-          <div className="space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 pb-6 border-b border-slate-100">
-              <div>
-                <div className="flex items-center space-x-2 mb-1.5">
-                  <span className="text-xs font-black uppercase tracking-wider text-slate-500">
-                    Group Member Contribution
-                  </span>
-                  <span className="text-[11px] font-mono text-slate-400">
-                    • Round {group.current_round} ({group.cycle_type})
-                  </span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+            <div>
+              <div className="flex items-center space-x-2 mb-1.5">
+                <span className="text-xs font-black uppercase tracking-wider text-slate-500">
+                  Group Member Contribution
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">
+                  • Round {group.current_round} ({group.cycle_type})
+                </span>
+              </div>
+
+              {!isCycleOpen ? (
+                <div>
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                    NEXT CONTRIBUTION
+                  </div>
+                  <div className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight mt-1 font-mono">
+                    {cycleInfo?.scheduledPackDateDisplay}
+                  </div>
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mt-3">
+                    NEXT PACKING
+                  </div>
+                  <div className="text-xl sm:text-2xl font-black text-[#008751] tracking-tight mt-0.5 font-mono">
+                    {cycleInfo?.scheduledPackDateDisplay}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Cycle {cycleInfo?.cycleNumber ? cycleInfo.cycleNumber - 1 : 1} completed. The next contribution of <strong>{formatNaira(group.contribution_amount)}</strong> will open on <strong>{cycleInfo?.scheduledPackDateDisplay}</strong> according to the <strong>{group.cycle_type}</strong> group frequency.
+                  </p>
                 </div>
-
-                {!hasUserContributed ? (
-                  <div>
-                    <div className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-                      {isCycleOpen ? 'YOUR CONTRIBUTION TODAY' : 'UPCOMING CYCLE CONTRIBUTION (EARLY PAYMENT ALLOWED)'}
-                    </div>
-                    <div className="flex items-baseline gap-2 mt-1">
-                      <span className="text-3xl sm:text-4xl font-black text-slate-900 font-mono tracking-tight">
-                        {formatNaira(Math.max(0, (group.contribution_amount + 60) - Number(userMember.credit_balance || 0)))}
-                      </span>
-                      <span className="text-xs text-slate-500 font-medium">
-                        (Contribution: {formatNaira(group.contribution_amount)} + Fee: ₦60 = Total: {formatNaira(group.contribution_amount + 60)})
-                      </span>
-                    </div>
-
-                    {Number(userMember.credit_balance || 0) > 0 && (
-                      <p className="text-xs text-emerald-800 font-bold mt-2 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span>Credit Wallet: ₦{Number(userMember.credit_balance).toLocaleString()} automatically deducted. You only need to pay ₦{Math.max(0, (group.contribution_amount + 60) - Number(userMember.credit_balance || 0)).toLocaleString()}.</span>
-                      </p>
-                    )}
-
-                    <p className="text-xs text-slate-600 mt-2">
-                      {!isCycleOpen ? (
-                        <>Scheduled pack date is <strong>{cycleInfo?.scheduledPackDateDisplay}</strong>. Early payments are fully accepted anytime and marked as <strong>PAID AHEAD</strong>!</>
-                      ) : (
-                        <>Cycle is open for Round {group.current_round}. Complete payment to ensure uninterrupted rotation.</>
-                      )}
-                    </p>
+              ) : !hasUserContributed ? (
+                <div>
+                  <div className="text-xs font-bold text-slate-600 uppercase tracking-wide">
+                    YOUR CONTRIBUTION TODAY
                   </div>
-                ) : (
-                  <div>
-                    <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#E6F3ED] text-[#008751] font-black text-sm mb-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-[#008751]" />
-                      <span>{(userMember as any)?.isPaidAhead ? '✓ PAID AHEAD' : '✓ CONTRIBUTION PAID'}</span>
-                    </div>
-                    <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
-                      {formatNaira(group.contribution_amount)}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Verified on server • Confirmed for Round {group.current_round} rotation pool.
-                      {Number(userMember.credit_balance || 0) > 0 && (
-                        <span className="block text-xs font-bold text-emerald-700 mt-1">
-                          Credit Wallet: ₦{Number(userMember.credit_balance).toLocaleString()} (will be used automatically on next cycle).
-                        </span>
-                      )}
-                      {userContribution?.paid_at && (
-                        <span className="block text-[11px] text-slate-400 font-mono mt-0.5">
-                          Paid on {new Date(userContribution.paid_at).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                        </span>
-                      )}
-                    </p>
+                  <div className="text-3xl sm:text-4xl font-black text-slate-900 font-mono tracking-tight mt-1">
+                    {formatNaira(group.contribution_amount)}
                   </div>
-                )}
-              </div>
-
-              <div className="flex items-center">
-                {!hasUserContributed ? (
-                  <button
-                    onClick={() => handleInitContribution()}
-                    disabled={isProcessingContrib || group.status === 'round_completed'}
-                    className="w-full sm:w-auto flex flex-col items-center justify-center px-8 py-4 rounded-2xl bg-[#008751] hover:bg-[#007345] active:scale-[0.98] text-white font-black text-sm sm:text-base shadow-lg shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer text-center"
-                  >
-                    {isProcessingContrib ? (
-                      <div className="flex items-center space-x-2">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <span>Connecting to Paystack...</span>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center space-x-2">
-                          <CreditCard className="h-5 w-5" />
-                          <span>{isCycleOpen ? 'PAY YOUR CONTRIBUTION TODAY' : 'PAY EARLY AHEAD'}</span>
-                        </div>
-                        <span className="text-emerald-200 font-mono text-xs sm:text-sm font-bold mt-0.5">
-                          {formatNaira(Math.max(0, (group.contribution_amount + 60) - Number(userMember.credit_balance || 0)))}
-                        </span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <div className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#E6F3ED] border border-[#008751]/30 text-[#008751] text-xs font-bold">
+                  <p className="text-xs text-amber-800 font-medium mt-1.5 flex items-center space-x-1.5">
+                    <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                    <span>Your required contribution for the current cycle has not been paid.</span>
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#E6F3ED] text-[#008751] font-black text-sm mb-1.5">
                     <CheckCircle2 className="h-4 w-4 text-[#008751]" />
-                    <span>Contribution Complete for this Cycle</span>
+                    <span>✓ CONTRIBUTION PAID</span>
                   </div>
-                )}
-              </div>
+                  <div className="text-2xl sm:text-3xl font-black text-slate-900 font-mono tracking-tight">
+                    {formatNaira(group.contribution_amount)}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Verified on server • Confirmed for Round {group.current_round} rotation pool.
+                    {userContribution?.paid_at && (
+                      <span className="block text-[11px] text-slate-400 font-mono mt-0.5">
+                        Paid on {new Date(userContribution.paid_at).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Dedicated Moniepoint Virtual Account Card for Group Member */}
-            <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-emerald-950 p-5 text-white border border-emerald-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1.5">
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
-                  <Building className="h-3 w-3 text-emerald-400" />
-                  <span>Moniepoint MFB • Your Dedicated Member Virtual Account</span>
+            <div className="flex items-center">
+              {!isCycleOpen ? (
+                <div className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold">
+                  <Clock className="h-4 w-4 text-slate-500" />
+                  <span>Next Cycle: {cycleInfo?.scheduledPackDateDisplay}</span>
                 </div>
-                <div className="text-xs text-slate-300">
-                  Account Name: <strong className="text-white font-mono">{userMember.virtual_account_name || `BETTERAJO-${userMember.full_name.toUpperCase()}`}</strong>
+              ) : !hasUserContributed ? (
+                <button
+                  onClick={() => handleInitContribution()}
+                  disabled={isProcessingContrib || group.status === 'round_completed'}
+                  className="w-full sm:w-auto flex flex-col items-center justify-center px-8 py-4 rounded-2xl bg-[#008751] hover:bg-[#007345] active:scale-[0.98] text-white font-black text-sm sm:text-base shadow-lg shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer text-center"
+                >
+                  {isProcessingContrib ? (
+                    <div className="flex items-center space-x-2">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Connecting to Paystack...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center space-x-2">
+                        <CreditCard className="h-5 w-5" />
+                        <span>PAY YOUR CONTRIBUTION TODAY</span>
+                      </div>
+                      <span className="text-emerald-200 font-mono text-xs sm:text-sm font-bold mt-0.5">
+                        {formatNaira(group.contribution_amount)}
+                      </span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="flex items-center space-x-2 px-5 py-3 rounded-2xl bg-[#E6F3ED] border border-[#008751]/30 text-[#008751] text-xs font-bold">
+                  <CheckCircle2 className="h-4 w-4 text-[#008751]" />
+                  <span>Contribution Complete for this Cycle</span>
                 </div>
-                <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono tracking-wider flex items-center gap-3">
-                  <span>{userMember.virtual_account_number || ('810' + Math.abs((userMember.id || 'mem').split('').reduce((a, b) => a + b.charCodeAt(0), 1234567)).toString().slice(0, 7).padStart(7, '0'))}</span>
-                  <button
-                    onClick={() => {
-                      const num = userMember.virtual_account_number || ('810' + Math.abs((userMember.id || 'mem').split('').reduce((a, b) => a + b.charCodeAt(0), 1234567)).toString().slice(0, 7).padStart(7, '0'));
-                      navigator.clipboard.writeText(num);
-                      setCopiedMemberVa(true);
-                      setTimeout(() => setCopiedMemberVa(false), 2000);
-                    }}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-sans transition cursor-pointer"
-                  >
-                    <Copy className="h-3.5 w-3.5" />
-                    <span>{copiedMemberVa ? 'Copied!' : 'Copy'}</span>
-                  </button>
-                </div>
-                <p className="text-[11px] text-slate-300 pt-0.5">
-                  Transfer ANY amount directly from GTBank, Zenith, OPay, PalmPay, etc. Exact contributions mark cycle paid; surplus goes to credit wallet; underpayments save partial credit!
-                </p>
-              </div>
+              )}
             </div>
           </div>
         ) : (

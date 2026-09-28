@@ -1845,7 +1845,7 @@ export async function fsExecuteContributionBatch(
     if (cleanMember && member?.id) {
       batch.set(db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS).doc(member.id), cleanMember, { merge: true });
     }
-    // Also record STREAM_2_CONTRIBUTION platform revenue and update platformRevenue/main
+    // Also record STREAM_2_CONTRIBUTION platform revenue
     const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc();
     batch.set(revRef, {
       stream: 'STREAM_2_CONTRIBUTION',
@@ -1860,13 +1860,6 @@ export async function fsExecuteContributionBatch(
       reference: payment.reference,
       createdAt: new Date()
     });
-    const mainRevRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
-    batch.set(mainRevRef, {
-      stream2: FieldValue.increment(60),
-      totalGross: FieldValue.increment(60),
-      unifiedAvailable: FieldValue.increment(60),
-      lastUpdated: FieldValue.serverTimestamp()
-    }, { merge: true });
     await batch.commit();
     console.log(`[Firestore Contribution Batch] Committed atomic batch with platform revenue for ref ${payment.reference} in ${Date.now() - startTime}ms`);
     return true;
@@ -1894,12 +1887,6 @@ export async function fsExecuteContributionBatch(
       reference: payment.reference,
       createdAt: new Date()
     });
-    await db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main').set({
-      stream2: FieldValue.increment(60),
-      totalGross: FieldValue.increment(60),
-      unifiedAvailable: FieldValue.increment(60),
-      lastUpdated: FieldValue.serverTimestamp()
-    }, { merge: true });
     console.log(`[Firestore Contribution Batch] Sequential fallback write successfully committed for ref: ${payment.reference}`);
     return true;
   } catch (seqErr: any) {

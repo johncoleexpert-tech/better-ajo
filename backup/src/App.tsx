@@ -54,11 +54,11 @@ export default function App() {
 
   // Check URL query parameters and local session on mount
   useEffect(() => {
-    const pathname = window.location.pathname;
     const params = new URLSearchParams(window.location.search);
-    if (pathname === '/member-login' || pathname === '/join' || pathname.startsWith('/join') || params.get('code')) {
-      window.history.replaceState({}, '', '/');
-      setCurrentView('home');
+    const codeParam = params.get('code');
+    if (codeParam) {
+      setJoinCode(codeParam.toUpperCase());
+      setCurrentView('group_join');
     }
 
     // Restore saved session if any
@@ -87,7 +87,7 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const isSuperAdminUser = user.phone === '08154267469' || user.role === 'SUPER_ADMIN' || user.role === 'superadmin' || user.email === 'realheavenict@gmail.com' || user.email === 'superadmin@packajo.ng' || user.email === 'paulakinyele54@gmail.com';
+    const isSuperAdminUser = user.phone === '08154267469' || user.role === 'SUPER_ADMIN' || user.role === 'superadmin' || user.email === 'superadmin@packajo.ng' || user.email === 'paulakinyele54@gmail.com';
     const isGroupAdminUser = user.role === 'GROUP_ADMIN' || user.role === 'groupadmin';
 
     // Strict rule: personal_ajo must ONLY be visible to role=user
@@ -143,7 +143,7 @@ export default function App() {
   // Route protection: prevent admin roles from viewing personal ajo routes
   useEffect(() => {
     if (!user) return;
-    const isSuperAdminUser = user.phone === '08154267469' || user.role === 'SUPER_ADMIN' || user.role === 'superadmin' || user.email === 'realheavenict@gmail.com' || user.email === 'superadmin@packajo.ng' || user.email === 'paulakinyele54@gmail.com';
+    const isSuperAdminUser = user.phone === '08154267469' || user.role === 'SUPER_ADMIN' || user.role === 'superadmin' || user.email === 'superadmin@packajo.ng' || user.email === 'paulakinyele54@gmail.com';
     const isGroupAdminUser = user.role === 'GROUP_ADMIN' || user.role === 'groupadmin';
     if ((isSuperAdminUser || isGroupAdminUser) && (currentView === 'personal_dashboard' || currentView === 'personal_register')) {
       if (isSuperAdminUser) setCurrentView('super_admin');
@@ -192,7 +192,7 @@ export default function App() {
     // For an existing Group Admin -> Existing Group Admin Dashboard
     // For an existing Group Member -> Existing Group Member Dashboard
     // For an existing Personal Ajo user -> Existing Personal Ajo Dashboard
-    const isSuper = userProfile.phone === '08154267469' || userProfile.role === 'SUPER_ADMIN' || userProfile.role === 'superadmin' || userProfile.email === 'realheavenict@gmail.com' || userProfile.email === 'superadmin@packajo.ng' || userProfile.email === 'paulakinyele54@gmail.com';
+    const isSuper = userProfile.phone === '08154267469' || userProfile.role === 'SUPER_ADMIN' || userProfile.role === 'superadmin' || userProfile.email === 'superadmin@packajo.ng' || userProfile.email === 'paulakinyele54@gmail.com';
     const isGroupAdm = adminGroups.length > 0 || userProfile.role === 'GROUP_ADMIN' || userProfile.role === 'groupadmin';
 
     if (isSuper) {
@@ -264,6 +264,10 @@ export default function App() {
         onNavigateHome={() => setCurrentView('home')}
         onOpenAbout={() => setInfoModalType('about')}
         onOpenPrivacy={() => setInfoModalType('privacy')}
+        onOpenJoinWithCode={() => {
+          setJoinCode('');
+          setCurrentView('group_join');
+        }}
         onOpenLogin={() => {
           setAuthModalKey(prev => prev + 1);
           setAuthModalMode('login');
@@ -316,6 +320,10 @@ export default function App() {
               }}
               onSelectGroup={() => {
                 setCurrentView('group_create');
+              }}
+              onJoinWithCode={() => {
+                setJoinCode('');
+                setCurrentView('group_join');
               }}
               onLogin={() => {
                 setAuthModalMode('login');
@@ -513,6 +521,12 @@ export default function App() {
                     >
                       Create Group (₦0 Fee)
                     </button>
+                    <button
+                      onClick={() => setCurrentView('group_join')}
+                      className="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+                    >
+                      Join with Code
+                    </button>
                   </div>
                 </div>
               </div>
@@ -557,11 +571,6 @@ export default function App() {
                 onBack={() => setCurrentView('home')}
                 onLogout={handleLogout}
                 onOpenGroupView={() => setCurrentView('group_dashboard')}
-                onCreateNewGroup={() => setCurrentView('group_create')}
-                onSwitchGroup={(newGid) => {
-                  setActiveGroupId(newGid);
-                  saveSession(user, personalAjo, userGroups, newGid);
-                }}
               />
             ) : (
               <div className="mx-auto max-w-lg px-4 py-16 text-center">

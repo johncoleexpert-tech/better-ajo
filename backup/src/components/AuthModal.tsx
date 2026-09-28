@@ -24,7 +24,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onNavigateHome
 }) => {
   const [currentMode, setCurrentMode] = useState<'choice' | 'login'>(mode);
-  const [loginRole, setLoginRole] = useState<'agent' | 'superadmin'>('agent');
 
   // Form Fields - Email & Password ONLY
   const [email, setEmail] = useState('');
@@ -140,8 +139,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const autofillSuperAdmin = () => {
-    setEmail('realheavenict@gmail.com');
-    setPassword('BetterAjo@RealHeaven2026!');
+    setEmail('superadmin@packajo.ng');
+    setPassword('admin123');
     setError(null);
   };
 
@@ -320,50 +319,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           ) : (
             <div data-auth-container>
-              {/* Dual Role Selector Tabs: ONLY Agent/Collector & Super Admin */}
-              <div className="flex rounded-xl bg-slate-100 p-1 mb-5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginRole('agent');
-                    setEmail('');
-                    setPassword('');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    loginRole === 'agent'
-                      ? 'bg-white text-[#008751] shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Agent / Collector Login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLoginRole('superadmin');
-                    setEmail('realheavenict@gmail.com');
-                    setPassword('BetterAjo@RealHeaven2026!');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                    loginRole === 'superadmin'
-                      ? 'bg-[#008751] text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  Super Admin Login
-                </button>
-              </div>
-
-              <div className="text-center mb-4">
-                <h3 className="text-base font-black text-slate-900">
-                  {loginRole === 'superadmin' ? 'Super Admin Portal Access' : 'Agent / Collector & Saver Access'}
+              <div className="text-center mb-5">
+                <h3 className="text-lg font-black text-slate-900">
+                  Welcome Back
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {loginRole === 'superadmin'
-                    ? 'Enter Super Admin master credentials to oversee platform finances.'
-                    : 'Manage your savings group, member virtual accounts, or personal ajo.'}
+                <p className="text-xs text-slate-500 mt-1">
+                  Log in with your email and password to access Personal or Group Ajo.
                 </p>
               </div>
 
@@ -452,7 +413,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                 {/* Super Admin Quick Helper */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                  <span>Super Admin: <strong className="text-slate-700">realheavenict@gmail.com</strong></span>
+                  <span>Super Admin: <strong className="text-slate-700">superadmin@packajo.ng</strong></span>
                   <button
                     type="button"
                     onClick={autofillSuperAdmin}

@@ -573,12 +573,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
         <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-            Total Contribution Collected
+            Contributions
           </span>
           <span className="text-xl font-black text-slate-900 block">
             {formatNaira(metrics.totalContributionsAmount)}
           </span>
-          <span className="text-[10px] text-emerald-600 mt-1 block font-bold">Includes member credits</span>
+          <span className="text-[10px] text-emerald-600 mt-1 block font-bold">100% collected</span>
         </div>
 
         <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-xs">

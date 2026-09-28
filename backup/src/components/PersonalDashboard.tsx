@@ -14,9 +14,7 @@ import {
   LogOut,
   Clock,
   Edit2,
-  Mail,
-  Copy,
-  Check
+  Mail
 } from 'lucide-react';
 import { UserProfile, PersonalAjo } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
@@ -73,13 +71,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // Moniepoint Virtual Account state
-  const [copiedVA, setCopiedVA] = useState(false);
-  const [showSimulateTransferModal, setShowSimulateTransferModal] = useState(false);
-  const [simulateTransferAmount, setSimulateTransferAmount] = useState('10000');
-  const [simulatingTransfer, setSimulatingTransfer] = useState(false);
-  const [simulateSuccess, setSimulateSuccess] = useState<string | null>(null);
 
   // Durable real-time Firestore listeners for user personal balance and transaction history
   useEffect(() => {
@@ -228,7 +219,29 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       setLoading(true);
       setError(null);
 
-      // Authoritative withdrawal transaction is committed atomically by the server in /api/personal/withdraw
+      // 2. When ANY withdrawal happens: Save to Firestore FIRST, then update wallet balance.
+      const currentUid = (user as any)?.uid || user?.id;
+      const currentDisplayName = (user as any)?.displayName || user?.full_name || (user as any)?.name || user?.email || 'Member';
+      try {
+        await addDoc(collection(db, 'transactions'), {
+          userId: currentUid,
+          userName: currentDisplayName,
+          userRole: 'member',
+          ajoId: personalAjo?.id || 'personal-better-ajo',
+          ajoName: 'Personal Better Ajo',
+          type: 'withdraw_earnings',
+          gross_amount: withdrawNum,
+          fee: withdrawFee,
+          net_payout: withdrawNet,
+          source: 'Personal Better Ajo',
+          destination: currentDisplayName,
+          timestamp: serverTimestamp(),
+          status: 'completed'
+        });
+      } catch (fsErr) {
+        console.warn('[Firestore] Withdrawal document save note:', fsErr);
+      }
+
       const data = await apiRequest('/api/personal/withdraw', {
         method: 'POST',
         body: JSON.stringify({
@@ -269,16 +282,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   // - For withdraw: red arrow "Withdrawal - Earnings - Pack Ajo"
   // - Use t?.type, t?.gross_amount with optional chaining
   const currentUserUid = (user as any)?.uid || user?.id;
-  const seenRefs = new Set<string>();
-  const personalHistory = (safeTransactions || []).filter((t) => {
-    if (!t) return false;
-    const isUserMatch = t?.userId === currentUserUid || t?.user_id === currentUserUid || !t?.userId;
-    if (!isUserMatch) return false;
-    const refKey = t.reference || t.id || `${t.type}_${t.amount}_${t.created_at || t.timestamp}`;
-    if (seenRefs.has(refKey)) return false;
-    seenRefs.add(refKey);
-    return true;
-  });
+  const personalHistory = (safeTransactions || []).filter(
+    (t) => t && (t?.userId === currentUserUid || t?.user_id === currentUserUid || !t?.userId)
+  );
 
   // FIX B: Handle updating Phone / WhatsApp Number
   const handleSaveContact = async (e: React.FormEvent) => {
@@ -306,63 +312,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     }
   };
 
-  const userFullName = (user?.full_name || 'Member').trim().toUpperCase().replace(/[^A-Z\s]/g, '');
-  const vaAccountName = user?.virtual_account_name || personalAjo?.virtual_account_name || `BETTERAJO-${userFullName}`;
-  const vaAccountNumber = user?.virtual_account_number || personalAjo?.virtual_account_number || ('8152' + Math.abs((user?.id || 'user').split('').reduce((a, b) => a + b.charCodeAt(0), 123456)).toString().slice(0, 6).padStart(6, '0'));
-
-  const handleCopyVa = () => {
-    navigator.clipboard.writeText(vaAccountNumber);
-    setCopiedVA(true);
-    setTimeout(() => setCopiedVA(false), 2500);
-  };
-
-  const handleSimulateBankTransfer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = Number(simulateTransferAmount);
-    if (isNaN(amt) || amt <= 0) {
-      setError('Please enter a valid transfer amount.');
-      return;
-    }
-
-    try {
-      setSimulatingTransfer(true);
-      setError(null);
-      const res = await apiRequest('/api/virtual-account/transfer', {
-        method: 'POST',
-        body: JSON.stringify({
-          account_number: vaAccountNumber,
-          amount: amt,
-          savings_amount: amt,
-          fee: 60,
-          total: amt + 60
-        })
-      });
-
-      if (res.personalAjo) {
-        onUpdatePersonalAjo(res.personalAjo);
-      }
-      setSimulateSuccess(`Transfer Confirmed! Savings: ₦${amt.toLocaleString()} credited in full (+ ₦60 platform fee paid to Super Admin). Total: ₦${(amt + 60).toLocaleString()}.`);
-      
-      // Refresh transactions from server
-      apiRequest(`/api/personal/payments/${encodeURIComponent(user.id)}`)
-        .then((pRes) => {
-          if (pRes?.payments && Array.isArray(pRes.payments)) {
-            setTransactions(pRes.payments);
-          }
-        })
-        .catch(() => {});
-
-      setTimeout(() => {
-        setSimulateSuccess(null);
-        setShowSimulateTransferModal(false);
-      }, 2500);
-    } catch (err: any) {
-      setError(err.message || 'Transfer failed');
-    } finally {
-      setSimulatingTransfer(false);
-    }
-  };
-
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       {/* Success / Error Alerts */}
@@ -386,71 +335,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           <span>{error}</span>
         </div>
       )}
-
-      {/* DEDICATED PERMANENT VIRTUAL ACCOUNT CARD (BIG FONT) */}
-      <div className="rounded-3xl bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 p-6 sm:p-8 text-white shadow-xl border border-emerald-500/30 mb-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-[#008751]/15 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16"></div>
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-bold uppercase tracking-wider">
-              <Building className="h-3.5 w-3.5 text-emerald-400" />
-              <span>YOUR PERSONAL AJO DEDICATED ACCOUNT - MONIEPOINT MFB</span>
-            </div>
-
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">
-                Bank: <strong className="text-white font-mono">Moniepoint MFB</strong> • Account Name
-              </div>
-              <div className="text-xl sm:text-2xl font-black text-white tracking-wide font-mono">
-                {vaAccountName}
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold mb-1">
-                Account No (Moniepoint MFB - Transfer ANY Amount)
-              </div>
-              <div className="text-3xl sm:text-5xl font-black text-emerald-400 font-mono tracking-widest flex items-center flex-wrap gap-3">
-                <span>{vaAccountNumber}</span>
-                <button
-                  onClick={handleCopyVa}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold font-sans transition-all active:scale-95 cursor-pointer"
-                  title="Copy Account Number"
-                >
-                  {copiedVA ? (
-                    <>
-                      <Check className="h-4 w-4 text-emerald-400" />
-                      <span className="text-emerald-300">Copied!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4" />
-                      <span>Copy Number</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 max-w-xl leading-relaxed pt-1">
-              Transfer <strong className="text-white">ANY amount</strong> from any Nigerian bank app (GTBank, Zenith, OPay, PalmPay, Kuda, etc.) directly into this account. Bank: <strong className="text-emerald-300">Moniepoint MFB</strong>. Funds are automatically credited to your Personal Better Ajo savings!
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2.5 sm:self-center shrink-0">
-            <button
-              onClick={() => setShowSimulateTransferModal(true)}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-[#008751] hover:bg-[#007345] text-white font-black text-xs shadow-lg shadow-[#008751]/25 active:scale-95 transition-all cursor-pointer"
-            >
-              <ArrowDownLeft className="h-4 w-4" />
-              <span>Simulate Bank Transfer</span>
-            </button>
-            <div className="text-[11px] text-center text-slate-400">
-              Bank: <strong className="text-slate-200">Moniepoint MFB</strong>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Main Card */}
       <div className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden mb-6">
@@ -696,9 +580,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {(personalHistory || []).map((tx: any) => {
-                  const txType = (tx?.type || tx?.purpose || '').toString().toUpperCase();
-                  const isFee = txType.includes('FEE') || tx?.category === 'ACTIVATION_FEE' || tx?.purpose === 'personal_registration';
-                  const isDeposit = !isFee && (txType === 'DEPOSIT' || txType.includes('DEPOSIT') || tx?.purpose === 'personal_deposit' || tx?.purpose === 'personal_virtual_account_transfer');
+                  const txType = tx?.type?.toString().toLowerCase() || tx?.purpose?.toString().toLowerCase() || '';
+                  const isDeposit = txType.includes('deposit');
                   const dateVal = tx?.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000) : (tx?.created_at || tx?.createdAt || tx?.paid_at || tx?.date);
                   const formattedDate = dateVal
                     ? new Date(dateVal).toLocaleString('en-NG', {
@@ -707,11 +590,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                       })
                     : '—';
                   const displayAmount = Number(tx?.gross_amount ?? tx?.amount ?? tx?.savings_amount ?? 0);
-                  const displayTitle = isFee
-                    ? 'ACTIVATION FEE - PERSONAL AJO - Paid'
-                    : isDeposit
-                    ? 'DEPOSIT - PERSONAL AJO SAVINGS'
-                    : 'WITHDRAWAL - PERSONAL AJO';
 
                   return (
                     <tr key={tx?.id || tx?.reference || Math.random().toString()} className="hover:bg-slate-50/80 transition-colors">
@@ -721,9 +599,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                       <td className="py-3 px-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                            isFee
-                              ? 'bg-blue-100 text-blue-800'
-                              : isDeposit
+                            isDeposit
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-rose-100 text-rose-800'
                           }`}
@@ -733,14 +609,14 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                           ) : (
                             <ArrowUpRight className="h-3 w-3 text-rose-600" />
                           )}
-                          {displayTitle}
+                          {isDeposit ? 'Deposit - Pack Ajo' : 'Withdrawal - Earnings - Pack Ajo'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
                         {tx?.reference || tx?.id}
                       </td>
                       <td className="py-3 px-4 font-bold text-sm whitespace-nowrap">
-                        <span className={isDeposit ? 'text-emerald-700' : isFee ? 'text-blue-700' : 'text-rose-600'}>
+                        <span className={isDeposit ? 'text-emerald-700' : 'text-rose-600'}>
                           {isDeposit ? '+' : '-'}{formatNaira(displayAmount)}
                         </span>
                       </td>
@@ -987,9 +863,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 </div>
               ) : (
                 (personalHistory || []).map((tx: any) => {
-                  const txType = (tx?.type || tx?.purpose || '').toString().toUpperCase();
-                  const isFee = txType.includes('FEE') || tx?.category === 'ACTIVATION_FEE' || tx?.purpose === 'personal_registration';
-                  const isDeposit = !isFee && (txType === 'DEPOSIT' || txType.includes('DEPOSIT') || tx?.purpose === 'personal_deposit' || tx?.purpose === 'personal_virtual_account_transfer');
+                  const txType = tx?.type?.toString().toLowerCase() || tx?.purpose?.toString().toLowerCase() || '';
+                  const isDeposit = txType.includes('deposit');
                   const dateVal = tx?.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000) : (tx?.created_at || tx?.createdAt || tx?.paid_at || tx?.date);
                   const formattedDate = dateVal
                     ? new Date(dateVal).toLocaleString('en-NG', {
@@ -998,11 +873,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                       })
                     : '—';
                   const displayAmount = Number(tx?.gross_amount ?? tx?.amount ?? tx?.savings_amount ?? 0);
-                  const displayTitle = isFee
-                    ? 'ACTIVATION FEE - PERSONAL AJO - Paid'
-                    : isDeposit
-                    ? 'DEPOSIT - PERSONAL AJO SAVINGS'
-                    : 'WITHDRAWAL - PERSONAL AJO';
 
                   return (
                     <div
@@ -1012,14 +882,14 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                       <div className="flex items-center space-x-2.5">
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                            isFee ? 'bg-blue-100 text-blue-800' : isDeposit ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                            isDeposit ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                           }`}
                         >
                           {isDeposit ? <ArrowDownLeft className="h-4 w-4 text-emerald-700" /> : <ArrowUpRight className="h-4 w-4 text-rose-600" />}
                         </div>
                         <div>
                           <span className="font-bold text-slate-900 block">
-                            {displayTitle}
+                            {isDeposit ? 'Deposit - Pack Ajo' : 'Withdrawal - Earnings - Pack Ajo'}
                           </span>
                           <span className="text-[10px] text-slate-400 font-mono">
                             {tx?.reference || tx?.id} • {formattedDate}
@@ -1027,7 +897,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className={`font-bold block ${isDeposit ? 'text-emerald-700' : isFee ? 'text-blue-700' : 'text-rose-600'}`}>
+                        <span className={`font-bold block ${isDeposit ? 'text-emerald-700' : 'text-rose-600'}`}>
                           {isDeposit ? '+' : '-'}{formatNaira(displayAmount)}
                         </span>
                         <span className="text-[9px] uppercase font-bold text-slate-400">
@@ -1128,136 +998,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Simulate Bank Transfer Modal (Instant Moniepoint Transfer Simulation) */}
-      {showSimulateTransferModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#008751] flex items-center justify-center">
-                  <Building className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Simulate Bank Transfer</h3>
-                  <p className="text-[11px] text-slate-500">Test incoming Moniepoint MFB transfer</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowSimulateTransferModal(false)}
-                className="rounded-full p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {simulateSuccess ? (
-              <div className="py-6 text-center space-y-3">
-                <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="h-8 w-8" />
-                </div>
-                <h4 className="font-black text-slate-900 text-base">Transfer Confirmed!</h4>
-                <p className="text-xs text-slate-600">{simulateSuccess}</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSimulateBankTransfer} className="space-y-4">
-                <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Bank Name:</span>
-                    <strong className="text-slate-900 font-bold">Moniepoint MFB</strong>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-500 font-medium">Account Name:</span>
-                    <strong className="text-slate-900 font-mono font-bold">{vaAccountName}</strong>
-                  </div>
-                  <div className="flex justify-between items-center pt-1 border-t border-slate-200">
-                    <span className="text-slate-500 font-medium">Virtual Account No:</span>
-                    <div className="flex items-center gap-2">
-                      <strong className="text-emerald-700 font-mono text-sm font-black">{vaAccountNumber}</strong>
-                      <button
-                        type="button"
-                        onClick={handleCopyVa}
-                        className="px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[10px] font-bold cursor-pointer"
-                      >
-                        {copiedVA ? 'Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Savings Amount (₦)
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    step="100"
-                    required
-                    value={simulateTransferAmount}
-                    onChange={(e) => setSimulateTransferAmount(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono text-base font-bold text-slate-900 outline-none transition"
-                    placeholder="e.g. 5000"
-                  />
-                  <div className="flex gap-2 mt-2">
-                    {['2000', '5000', '10000', '25000'].map((quickAmt) => (
-                      <button
-                        key={quickAmt}
-                        type="button"
-                        onClick={() => setSimulateTransferAmount(quickAmt)}
-                        className="flex-1 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
-                      >
-                        ₦{Number(quickAmt).toLocaleString()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Addition Fee Model Breakdown */}
-                <div className="rounded-2xl bg-emerald-50/60 p-3.5 border border-emerald-200/80 space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-medium">Savings (Full Credit):</span>
-                    <span className="font-bold text-slate-900 text-sm">₦{Number(simulateTransferAmount || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-medium">Platform Fee:</span>
-                    <span className="font-bold text-amber-700 text-sm">+₦60</span>
-                  </div>
-                  <div className="border-t border-emerald-200 pt-1.5 flex justify-between items-center text-sm font-black text-slate-900">
-                    <span>Total Transfer:</span>
-                    <span className="text-[#008751] text-base font-black">₦{(Number(simulateTransferAmount || 0) + 60).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-slate-500 leading-relaxed">
-                  ✓ <strong>Addition Model:</strong> ₦{Number(simulateTransferAmount || 0).toLocaleString()} is credited in full to your savings. ₦60 platform fee is credited to Super Admin platform wallet.
-                </div>
-
-                <div className="pt-2 flex items-center justify-end space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowSimulateTransferModal(false)}
-                    className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={simulatingTransfer}
-                    className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
-                  >
-                    {simulatingTransfer ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <span>Simulate Bank Transfer (Total: ₦{(Number(simulateTransferAmount || 0) + 60).toLocaleString()})</span>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
           </div>
         </div>
       )}

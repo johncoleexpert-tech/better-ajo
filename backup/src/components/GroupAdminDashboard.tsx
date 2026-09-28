@@ -30,14 +30,10 @@ import {
   ShieldCheck,
   Eye,
   Check,
-  LogOut,
-  UserPlus,
-  Edit3,
-  PlusCircle,
-  Coins
+  LogOut
 } from 'lucide-react';
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
-import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
+import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { db } from '../lib/firebase.js';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -47,8 +43,6 @@ interface GroupAdminDashboardProps {
   onBack: () => void;
   onLogout?: () => void;
   onOpenGroupView?: () => void;
-  onCreateNewGroup?: () => void;
-  onSwitchGroup?: (groupId: string) => void;
 }
 
 export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
@@ -56,21 +50,14 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   currentUser,
   onBack,
   onLogout,
-  onOpenGroupView,
-  onCreateNewGroup,
-  onSwitchGroup
+  onOpenGroupView
 }) => {
   const [data, setData] = useState<GroupAdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [adminGroups, setAdminGroups] = useState<any[]>([]);
-
-  // Payment Simulation State (Test Moniepoint payments)
-  const [simulatingMember, setSimulatingMember] = useState<GroupAdminMemberItem | null>(null);
-  const [simulateAmount, setSimulateAmount] = useState<string>('');
-  const [isSimulating, setIsSimulating] = useState(false);
-  const [simulateError, setSimulateError] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'earnings' | 'withdrawals' | 'ledger'>('overview');
@@ -89,128 +76,6 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const [isSendingNotification, setIsSendingNotification] = useState(false);
   const [selectedMemberDetails, setSelectedMemberDetails] = useState<GroupAdminMemberItem | null>(null);
   const [isStartingNextRound, setIsStartingNextRound] = useState(false);
-
-  // Edit Member State (Ability to edit member later if needed)
-  const [editingMember, setEditingMember] = useState<GroupAdminMemberItem | null>(null);
-  const [editFullName, setEditFullName] = useState('');
-  const [editPhone, setEditPhone] = useState('');
-  const [editAccount, setEditAccount] = useState('');
-  const [editBank, setEditBank] = useState('Moniepoint MFB');
-  const [isUpdatingMember, setIsUpdatingMember] = useState(false);
-  const [editMemberError, setEditMemberError] = useState<string | null>(null);
-  const [copiedMemberId, setCopiedMemberId] = useState<string | null>(null);
-  const [copiedVaNumId, setCopiedVaNumId] = useState<string | null>(null);
-  const [copiedVaNameId, setCopiedVaNameId] = useState<string | null>(null);
-
-  const openSimulateModal = (m: GroupAdminMemberItem) => {
-    setSimulatingMember(m);
-    const expected = (data?.group?.contribution_amount || 10000) + 60;
-    setSimulateAmount(expected.toString());
-    setSimulateError(null);
-  };
-
-  const handleConfirmSimulatePayment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!simulatingMember) return;
-    const amt = Number(simulateAmount);
-    if (isNaN(amt) || amt <= 0) {
-      setSimulateError('Please enter a valid positive payment amount.');
-      return;
-    }
-
-    try {
-      setIsSimulating(true);
-      setSimulateError(null);
-      const res = await fetch(`/api/groups/${groupId}/members/${simulatingMember.id}/simulate-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': currentUser.id
-        },
-        body: JSON.stringify({ amount: amt })
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'Payment simulation failed');
-      }
-      showToast(json.message || 'Payment simulation confirmed!');
-      setSimulatingMember(null);
-      fetchDashboardData();
-    } catch (err: any) {
-      setSimulateError(err.message || 'Error processing simulated payment');
-    } finally {
-      setIsSimulating(false);
-    }
-  };
-
-  const openEditMemberModal = (m: GroupAdminMemberItem) => {
-    setEditingMember(m);
-    setEditFullName(m.full_name || '');
-    setEditPhone(m.phone || '');
-    setEditAccount(m.account_number || '');
-    setEditBank(m.bank_name || 'Moniepoint MFB');
-    setEditMemberError(null);
-  };
-
-  const handleSaveEditMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingMember) return;
-
-    if (!editFullName.trim() || editFullName.trim().length < 2) {
-      setEditMemberError('Please enter a valid full name.');
-      return;
-    }
-    const cleanPhone = editPhone.replace(/\D/g, '');
-    if (cleanPhone.length !== 11) {
-      setEditMemberError('Phone number must be exactly 11 digits (e.g. 08012345678).');
-      return;
-    }
-    const cleanAcc = editAccount.replace(/\D/g, '');
-    if (cleanAcc.length !== 10) {
-      setEditMemberError('Bank account number must be exactly 10 digits.');
-      return;
-    }
-
-    try {
-      setIsUpdatingMember(true);
-      setEditMemberError(null);
-      const res = await fetch(`/api/groups/${groupId}/members/${editingMember.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': currentUser.id
-        },
-        body: JSON.stringify({
-          full_name: editFullName.trim(),
-          phone: cleanPhone,
-          account_number: cleanAcc,
-          bank_name: editBank.trim()
-        })
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'Failed to update member');
-      }
-      showToast('Member details updated successfully!');
-      setEditingMember(null);
-      fetchDashboardData();
-    } catch (err: any) {
-      setEditMemberError(err.message || 'Error updating member');
-    } finally {
-      setIsUpdatingMember(false);
-    }
-  };
-
-  const handleCopyVirtualAccount = (m: GroupAdminMemberItem) => {
-    const accNum = m.virtual_account_number || 'Pending';
-    const accName = m.virtual_account_name || `BETTERAJO-${m.full_name.toUpperCase()}`;
-    const totalToPay = (data?.group?.contribution_amount || 0) + 60;
-    const textToCopy = `*BETTER AJO CONTRIBUTION ACCOUNT*\nMember: ${m.full_name}\nBank: Moniepoint MFB\nAccount Number: ${accNum}\nAccount Name: ${accName}\nAmount: ₦${totalToPay.toLocaleString()} (₦${(data?.group?.contribution_amount || 0).toLocaleString()} contribution + ₦60 fee)\n\nPlease transfer your contribution directly into this dedicated account. Your payment is verified instantly!`;
-    navigator.clipboard.writeText(textToCopy);
-    setCopiedMemberId(m.id);
-    showToast(`Copied Moniepoint Virtual Account for ${m.full_name}! Ready to paste into WhatsApp.`);
-    setTimeout(() => setCopiedMemberId(null), 3000);
-  };
 
   const handleStartNextRound = async () => {
     try {
@@ -264,16 +129,24 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
   useEffect(() => {
     fetchDashboardData();
-    // Fetch all admin groups for multi-group switching
-    fetch(`/api/users/${currentUser.id}/admin-groups`)
-      .then(r => r.json())
-      .then(groups => {
-        if (Array.isArray(groups)) {
-          setAdminGroups(groups);
-        }
-      })
-      .catch(() => {});
   }, [groupId, currentUser.id]);
+
+  const handleCopyCode = () => {
+    if (!data?.group?.group_code) return;
+    navigator.clipboard.writeText(data.group.group_code);
+    setCopiedCode(true);
+    showToast(`Invite code ${data.group.group_code} copied!`);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleCopyLink = () => {
+    if (!data?.group?.group_code) return;
+    const url = `${window.location.origin}?joinCode=${data.group.group_code}`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    showToast('Group invitation link copied to clipboard!');
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   const handleInitiateWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -508,37 +381,6 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               <p className="text-xs text-slate-500 mt-0.5">
                 Admin: <strong className="text-slate-700">{group.admin_name}</strong> • Managed exclusively by creator (Non-contributor position)
               </p>
-
-              {/* Multi-Group Switcher & Create New Group */}
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className="text-xs font-bold text-slate-500">Your Groups:</span>
-                <select
-                  value={group.id}
-                  onChange={(e) => {
-                    if (onSwitchGroup && e.target.value !== group.id) {
-                      onSwitchGroup(e.target.value);
-                    }
-                  }}
-                  className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 outline-none cursor-pointer shadow-xs"
-                >
-                  {(adminGroups.length > 0 ? adminGroups : [{ id: group.id, group_name: group.group_name, membersCount: members.length }]).map((ag: any) => (
-                    <option key={ag.id} value={ag.id}>
-                      {ag.group_name} ({ag.membersCount ?? ag.member_limit ?? members.length} members)
-                    </option>
-                  ))}
-                </select>
-
-                {onCreateNewGroup && (
-                  <button
-                    onClick={onCreateNewGroup}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-[#008751] text-xs font-bold transition cursor-pointer border border-emerald-200 shadow-xs"
-                    title="Create a new independent savings group under this admin account"
-                  >
-                    <PlusCircle className="h-3.5 w-3.5" />
-                    <span>Create New Group</span>
-                  </button>
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -603,16 +445,23 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
       {/* Hero Overview Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* Card 1: Total Contribution Collected */}
+        {/* Card 1: Group Identity & Code */}
         <div className="rounded-3xl bg-white border border-slate-200/80 p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Total Contribution Collected</span>
-            <Coins className="h-4 w-4 text-emerald-600" />
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Group Code & Invite</span>
+            <Share2 className="h-4 w-4 text-emerald-600" />
           </div>
           <div className="flex items-baseline gap-2 mb-3">
             <span className="text-2xl font-black text-slate-900 tracking-tight font-mono">
-              {formatNaira(data.totalContributionsAmount)}
+              {group.group_code}
             </span>
+            <button
+              onClick={handleCopyCode}
+              className="p-1 rounded-lg hover:bg-slate-100 text-slate-500 transition cursor-pointer"
+              title="Copy group code"
+            >
+              {copiedCode ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+            </button>
           </div>
           <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 text-xs">
             <span className="text-slate-500 font-medium">Frequency:</span>
@@ -929,16 +778,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 All registered contributors in rotation order. The group admin is not a contributor.
               </p>
             </div>
-            <div className="flex items-center flex-wrap gap-2">
-              {onCreateNewGroup && (
-                <button
-                  onClick={onCreateNewGroup}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#008751] hover:bg-[#007345] text-white shadow-sm shadow-[#008751]/20 transition cursor-pointer"
-                >
-                  <PlusCircle className="h-3.5 w-3.5" />
-                  <span>+ Create New Group</span>
-                </button>
-              )}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => {
                   setSelectedMemberForNotify(null);
@@ -951,6 +791,13 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span>Notify Members</span>
               </button>
+              <button
+                onClick={handleCopyLink}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                <span>Share Group Link</span>
+              </button>
             </div>
           </div>
 
@@ -958,165 +805,95 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             <table className="w-full text-left text-xs text-slate-600">
               <thead className="bg-slate-50 text-[11px] font-black uppercase tracking-wider text-slate-500 border-b border-slate-100">
                 <tr>
-                  <th className="py-3 px-4">Pos / Packing Order</th>
+                  <th className="py-3 px-4">Pos</th>
                   <th className="py-3 px-4">Member Name</th>
-                  <th className="py-3 px-4">Phone</th>
-                  <th className="py-3 px-4">Personal Bank</th>
-                  <th className="py-3 px-4">Virtual Account Number</th>
-                  <th className="py-3 px-4">Virtual Account Name</th>
-                  <th className="py-3 px-4">Contribution / Credit</th>
+                  <th className="py-3 px-4">Phone Number</th>
+                  <th className="py-3 px-4">Bank Details</th>
+                  <th className="py-3 px-4">Verification</th>
+                  <th className="py-3 px-4">Round Contribution</th>
+                  <th className="py-3 px-4">Total Contributed</th>
+                  <th className="py-3 px-4">Packing Status</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
                 {members.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400">
-                      No members registered in this group yet.
+                    <td colSpan={9} className="py-8 text-center text-slate-400">
+                      No members have joined this group yet. Share the code <strong>{group.group_code}</strong> to invite members!
                     </td>
                   </tr>
                 ) : (
-                  members.map((m) => {
-                    const posNum = m.position || m.packing_position || 1;
-                    const posSuffix = posNum === 1 ? '1st' : posNum === 2 ? '2nd' : posNum === 3 ? '3rd' : `${posNum}th`;
-                    const accNum = m.virtual_account_number || '810' + Math.abs(m.id.split('').reduce((a, b) => a + b.charCodeAt(0), 1000000)).toString().slice(0, 7).padStart(7, '0');
-                    const accName = m.virtual_account_name || `BETTERAJO-${m.full_name.toUpperCase()}`;
-                    const creditBal = Number(m.credit_balance || 0);
-                    const isCopied = copiedMemberId === m.id;
-                    const isNumCopied = copiedVaNumId === m.id;
-                    const isNameCopied = copiedVaNameId === m.id;
-
-                    return (
-                      <tr key={m.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4 font-bold text-slate-900">
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-900 text-white font-mono text-xs">
-                              {posNum}
-                            </span>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              posNum === 1
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              Packs {posSuffix} {posNum === 1 ? '(First)' : ''}
-                            </span>
+                  members.map((m) => (
+                    <tr key={m.id} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 text-slate-800 font-mono text-xs">
+                          {m.position}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {m.full_name}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-slate-600">
+                        <div>{formatPhone(m.phone)}</div>
+                        {(m.whatsapp_number || m.whatsappNumber) && (m.whatsapp_number || m.whatsappNumber) !== m.phone && (
+                          <div className="text-[10px] text-emerald-700 flex items-center gap-0.5 font-sans font-semibold">
+                            <Phone className="h-2.5 w-2.5" /> WA: {m.whatsapp_number || m.whatsappNumber}
                           </div>
-                        </td>
-                        <td className="py-3 px-4 font-bold text-slate-900">
-                          {m.full_name}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-slate-600">
-                          <div>{formatPhone(m.phone)}</div>
-                        </td>
-                        <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
-                          {m.bank_name ? `${m.bank_name} • ${m.account_number}` : 'Not provided'}
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-950 font-mono font-black text-xs border border-emerald-200">
-                            <span>{accNum}</span>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(accNum);
-                                setCopiedVaNumId(m.id);
-                                showToast(`Copied Account Number: ${accNum}`);
-                                setTimeout(() => setCopiedVaNumId(null), 2000);
-                              }}
-                              className="p-0.5 hover:bg-emerald-200/60 rounded text-emerald-800 transition cursor-pointer"
-                              title="Copy Account Number"
-                            >
-                              {isNumCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="inline-flex items-center gap-1 font-mono font-bold text-[#008751] text-xs">
-                            <span>{accName}</span>
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(accName);
-                                setCopiedVaNameId(m.id);
-                                showToast(`Copied Account Name: ${accName}`);
-                                setTimeout(() => setCopiedVaNameId(null), 2000);
-                              }}
-                              className="p-0.5 hover:bg-emerald-100/60 rounded text-emerald-700 transition cursor-pointer"
-                              title="Copy Account Name"
-                            >
-                              {isNameCopied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                            </button>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="space-y-1">
-                            {!m.hasContributed && creditBal <= 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-rose-100 text-rose-700 border border-rose-200">
-                                Unpaid - ₦0 of {formatNaira(group.contribution_amount)} paid
-                              </span>
-                            ) : m.hasContributed && creditBal <= 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                PAID - {formatNaira(group.contribution_amount)}
-                              </span>
-                            ) : m.hasContributed && creditBal > 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-blue-100 text-blue-800 border border-blue-200">
-                                PAID AHEAD - {formatNaira(group.contribution_amount)} | Credit: {formatNaira(creditBal)}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-amber-100 text-amber-800 border border-amber-200">
-                                PARTIAL - {formatNaira(creditBal)} of {formatNaira(group.contribution_amount)} paid
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                          <button
-                            onClick={() => openSimulateModal(m)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] transition cursor-pointer border border-amber-200 shadow-2xs"
-                            title="Simulate Moniepoint payment for this member"
-                          >
-                            <Coins className="h-3 w-3 text-amber-600" />
-                            <span>SIMULATE PAYMENT (Test)</span>
-                          </button>
-                          <button
-                            onClick={() => handleCopyVirtualAccount(m)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                              isCopied
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-[#E6F3ED] hover:bg-[#d8ece2] text-[#008751]'
-                            }`}
-                            title="Copy full Moniepoint Virtual Account details"
-                          >
-                            {isCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                            <span>{isCopied ? 'Copied ✓' : 'Copy'}</span>
-                          </button>
-                          <a
-                            href={getWhatsAppLink(m, m.full_name)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#008751] font-bold text-[11px] transition"
-                            title="Open WhatsApp chat with member"
-                          >
-                            <Phone className="h-3 w-3" />
-                            <span>WhatsApp</span>
-                          </a>
-                          <button
-                            onClick={() => openEditMemberModal(m)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[11px] transition cursor-pointer"
-                            title="Edit member details"
-                          >
-                            <Edit3 className="h-3 w-3" />
-                            <span>Edit</span>
-                          </button>
-                          <button
-                            onClick={() => setSelectedMemberDetails(m)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition cursor-pointer"
-                            title="View member full details"
-                          >
-                            <Eye className="h-3 w-3" />
-                            <span>Details</span>
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
+                        {m.bank_name ? `${m.bank_name} • ${m.account_number}` : 'Not provided'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-100">
+                          <ShieldCheck className="h-3 w-3 text-[#008751]" />
+                          <span>{m.verification_masked || 'Verified'}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          m.hasContributed
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {m.hasContributed ? 'Paid ✓' : 'Pending'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {formatNaira(m.totalContributed)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          m.hasPacked
+                            ? 'bg-purple-100 text-purple-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {m.hasPacked ? 'Packed ✓' : 'Awaiting Turn'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+                        <a
+                          href={getWhatsAppLink(m, m.full_name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#008751] font-bold text-[11px] transition"
+                          title="Open WhatsApp chat with member"
+                        >
+                          <Phone className="h-3 w-3" />
+                          <span>WhatsApp</span>
+                        </a>
+                        <button
+                          onClick={() => setSelectedMemberDetails(m)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition cursor-pointer"
+                          title="View member full details"
+                        >
+                          <Eye className="h-3 w-3" />
+                          <span>Details</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -1494,7 +1271,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                     Notify Group Members
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {group.group_name} • Round {group.current_round}
+                    {group.group_name} • Code: <strong className="text-slate-800">{group.group_code}</strong>
                   </p>
                 </div>
               </div>
@@ -1807,219 +1584,6 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Group Admin Edit Member Details */}
-      {editingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
-                  <Edit3 className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Edit Member Details</h3>
-                  <p className="text-[11px] text-slate-500">Position #{editingMember.position} • {editingMember.full_name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setEditingMember(null)}
-                className="rounded-full p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {editMemberError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{editMemberError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveEditMember} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Member Full Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={editFullName}
-                  onChange={(e) => setEditFullName(e.target.value)}
-                  placeholder="e.g. John Musa"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 text-xs text-slate-900 outline-none transition"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Virtual account name will be: <strong className="text-[#008751]">BETTERAJO-{editFullName ? editFullName.trim().toUpperCase() : 'MEMBER'}</strong>
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Phone Number (11 digits) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="tel"
-                  required
-                  maxLength={11}
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 08012345678"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono text-xs text-slate-900 outline-none transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Personal Bank Account Number (10 digits) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={10}
-                  value={editAccount}
-                  onChange={(e) => setEditAccount(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g. 0123456789"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono text-xs text-slate-900 outline-none transition"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Personal Bank Name
-                </label>
-                <select
-                  value={editBank}
-                  onChange={(e) => setEditBank(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 text-xs text-slate-900 outline-none transition cursor-pointer bg-white"
-                >
-                  {NIGERIAN_BANKS.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingMember(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdatingMember}
-                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {isUpdatingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Save Changes</span>}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: Test Payment Simulator */}
-      {simulatingMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <Coins className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Simulate Payment (Test)</h3>
-                  <p className="text-[11px] text-slate-500">Position #{simulatingMember.position} • {simulatingMember.full_name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSimulatingMember(null)}
-                className="rounded-full p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="mb-4 p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 space-y-1">
-              <p className="font-bold">Moniepoint Test Virtual Account Simulator</p>
-              <p className="text-[11px] text-amber-800">
-                Required for this cycle: <strong>{formatNaira(group.contribution_amount)}</strong> contribution + <strong>₦60</strong> platform fee = <strong>{formatNaira(group.contribution_amount + 60)}</strong>.
-              </p>
-              <ul className="text-[10px] text-amber-800 list-disc list-inside space-y-0.5 pt-1">
-                <li>Exact ({formatNaira(group.contribution_amount + 60)}): Marks as <strong>PAID</strong></li>
-                <li>Extra ({formatNaira(group.contribution_amount + 60 + 1000)}): Marks <strong>PAID AHEAD</strong> & adds extra to Credit Wallet</li>
-                <li>Less than {formatNaira(group.contribution_amount + 60)}: Marks as <strong>PARTIAL</strong> and adds to Credit Wallet</li>
-              </ul>
-            </div>
-
-            {simulateError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{simulateError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmSimulatePayment} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Amount Paid (₦) <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₦</span>
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    value={simulateAmount}
-                    onChange={(e) => setSimulateAmount(e.target.value)}
-                    placeholder="e.g. 50060"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono font-bold text-sm text-slate-900 outline-none transition"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span className="text-[11px] text-slate-400 font-medium mr-1">Presets:</span>
-                  {[
-                    { label: 'Exact (Fee Incl.)', val: group.contribution_amount + 60 },
-                    { label: '+₦1,000 Credit', val: group.contribution_amount + 60 + 1000 },
-                    { label: 'Partial', val: Math.round(group.contribution_amount / 2) }
-                  ].map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setSimulateAmount(p.val.toString())}
-                      className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition border border-slate-200"
-                    >
-                      {p.label}: ₦{p.val.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setSimulatingMember(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSimulating}
-                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {isSimulating ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Confirm Payment</span>}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

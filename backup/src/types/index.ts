@@ -23,10 +23,6 @@ export interface UserProfile {
   verification_number: string;
   whatsapp_number?: string;
   whatsappNumber?: string;
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
   created_at: string;
 }
 
@@ -38,41 +34,6 @@ export interface PersonalAjo {
   total_withdrawn: number;
   total_saved?: number;
   status: 'pending_fee' | 'active';
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
-  created_at: string;
-}
-
-export interface PersonalTransaction {
-  id: string;
-  user_id: string;
-  type: 'DEPOSIT' | 'WITHDRAWAL' | 'PLATFORM_FEE';
-  category: 'PERSONAL_SAVINGS' | 'ACTIVATION_FEE' | 'PERSONAL_PAYOUT' | 'EARNINGS';
-  amount: number;
-  direction: 'CREDIT' | 'DEBIT';
-  reference: string;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED';
-  description?: string;
-  display_title?: string;
-  created_at: string;
-  updated_at?: string;
-  paid_at?: string;
-}
-
-export interface SuperAdminTransaction {
-  id: string;
-  type: 'FEE_INCOME' | 'WITHDRAWAL';
-  category: 'PLATFORM_FEE' | 'EARNINGS' | 'REGISTRATION_FEE' | 'CONTRIBUTION_FEE' | 'PACKING_FEE' | 'WITHDRAWAL_FEE' | 'ACTIVATION_FEE';
-  amount: number;
-  direction: 'CREDIT' | 'DEBIT';
-  reference: string;
-  paystack_reference?: string;
-  status: 'SUCCESS' | 'PENDING' | 'FAILED';
-  user_id?: string;
-  description?: string;
-  display_title?: string;
   created_at: string;
 }
 
@@ -93,10 +54,6 @@ export interface GroupAjo {
   status: 'recruiting' | 'active' | 'round_completed';
   current_round: number;
   currentRound?: number;
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
   created_at: string;
   round_started_at?: string;
   roundStartedAt?: string;
@@ -115,14 +72,9 @@ export interface GroupMember {
   bank_name: string;
   account_number: string;
   position: number;
-  packing_position?: number;
   status: 'active' | 'left' | 'completed';
   current_round_status: 'pending_contribution' | 'contributed' | 'packed';
   hasPackedThisRound?: boolean;
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
   joined_at: string;
   next_round_consent?: boolean;
 }
@@ -136,12 +88,8 @@ export interface Contribution {
   cycle_number?: number;
   calendar_date?: string;
   amount: number;
-  status: 'Paid' | 'Pending' | 'Partial';
+  status: 'Paid' | 'Pending';
   reference?: string;
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
   paid_at?: string;
   created_at?: string;
 }
@@ -231,10 +179,6 @@ export interface PaymentRecord {
   updated_at?: string;
   type?: string;
   paystack_reference?: string;
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
 }
 
 export type CentralLedgerType =
@@ -273,7 +217,6 @@ export interface GroupAdminMemberItem {
   whatsapp_number?: string;
   whatsappNumber?: string;
   position: number;
-  packing_position?: number;
   status: 'active' | 'left' | 'completed' | 'replaced';
   current_round_status: 'pending_contribution' | 'contributed' | 'packed';
   hasContributed: boolean;
@@ -283,10 +226,6 @@ export interface GroupAdminMemberItem {
   totalContributed: number;
   bank_name?: string;
   account_number?: string;
-  virtual_account_number?: string;
-  virtual_account_name?: string;
-  credit_balance?: number;
-  payment_type?: string;
   verification_type?: 'NIN' | 'BVN';
   verification_masked?: string;
   verification_status?: string;
@@ -333,15 +272,6 @@ export interface GroupAdminDashboardData {
     account_number: string;
     account_name: string;
   };
-  cycleStatus?: {
-    totalRequired: number;
-    paidCount: number;
-    allPaid: boolean;
-    unpaidMemberIds: string[];
-    isEarlyWaiting?: boolean;
-    isPaused?: boolean;
-  };
-  cycleInfo?: GroupCycleInfo;
 }
 
 export interface SuperAdminFullData {

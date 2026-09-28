@@ -3,7 +3,6 @@ import { GoogleGenAI } from '@google/genai';
 import { Contribution, PaymentRecord, GroupMember, Withdrawal } from '../src/types/index.js';
 import { db, getNigeriaCalendarDate, addCycleIntervalToCalendarDate, formatCalendarDateDisplay, normalizeNigerianPhone } from './db.js';
 import { initializePaystackPayment, verifyPaystackPayment, setTestPaymentCharge, initiatePaystackTransfer } from './paystack.js';
-import { formatPersonalAccountName, formatGroupMemberAccountName, generateMoniepointAccountNumber, generateGroupMemberVirtualAccount } from './moniepoint.js';
 import { createRateLimiter } from './rateLimiter.js';
 import {
   isSupabaseConfigured,
@@ -282,12 +281,12 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
       let profile = db.getProfileByEmail(cleanEmail);
 
       // Check for Super Admin auto-resolution
-      if (!profile && (cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com')) {
+      if (!profile && (cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com')) {
         profile = db.getProfiles().find(p => p.role === 'SUPER_ADMIN') || db.upsertProfile({
           full_name: 'Super Administrator',
           phone: '08154267469',
           email: cleanEmail,
-          password: password || 'BetterAjo@RealHeaven2026!',
+          password: password,
           bank_name: 'Guaranty Trust Bank (GTB)',
           account_number: '0123456789',
           verification_type: 'NIN',
@@ -304,12 +303,8 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
         });
       }
 
-      // Verify password
-      if (cleanEmail === 'realheavenict@gmail.com' && password === 'BetterAjo@RealHeaven2026!') {
-        profile.password = password;
-        profile.role = 'SUPER_ADMIN';
-        db.upsertProfile(profile);
-      } else if (profile.password) {
+      // Verify password if one exists on profile; otherwise set it on first login
+      if (profile.password) {
         if (profile.password !== password) {
           return res.status(401).json({ error: 'Incorrect password. Please verify your credentials and try again.' });
         }
@@ -319,7 +314,7 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
         db.upsertProfile(profile);
       }
 
-      const isSuper = profile.role === 'SUPER_ADMIN' || profile.role === 'superadmin' || cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com' || profile.phone === '08154267469';
+      const isSuper = profile.role === 'SUPER_ADMIN' || profile.role === 'superadmin' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com' || profile.phone === '08154267469';
       const isGroupAdmin = profile.role === 'GROUP_ADMIN' || profile.role === 'groupadmin';
 
       // personal_ajo must ONLY be visible to role=user and only his own doc.
@@ -457,7 +452,7 @@ apiRouter.post('/auth/signup', authRateLimiter, async (req: Request, res: Respon
     }
 
     const cleanPhone = phone ? normalizeNigerianPhone(phone) : `080${Math.floor(10000000 + Math.random() * 90000000)}`;
-    const isSuperAdminEmail = cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com';
+    const isSuperAdminEmail = cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com';
 
     const profile = db.upsertProfile({
       full_name: (full_name && full_name.trim()) ? full_name.trim() : cleanEmail.split('@')[0],
@@ -833,9 +828,6 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
     const personalAjo = db.activatePersonalAjo(userId);
     syncPersonalAjoToSupabase(personalAjo).catch(() => {});
 
-    // TASK 2: Record dedicated Platform Fee Transaction (-₦600 for user, +₦600 for super admin)
-    db.createPlatformFeeTransaction(userId, 600, 'PERSONAL_AJO');
-
     // CRITICAL WRITE CONFIRMATION:
     // Both payment record and activated personalAjo MUST be confirmed in Firestore before reporting success
     const confirmed = updatedPayment
@@ -1018,13 +1010,6 @@ apiRouter.post(['/paystack/webhook', '/webhook'], async (req: Request, res: Resp
       return res.status(200).json({ received: true });
     }
 
-    // Webhook Idempotency Check: if reference already exists with status SUCCESS / success, return 200 and skip
-    const existingPayment = db.getPaymentByReference(reference);
-    if (existingPayment && (existingPayment.status === 'success' || (existingPayment.status as string) === 'successful')) {
-      console.log(`[Paystack Webhook Idempotency] Skipping duplicate processed payment: ${reference}`);
-      return res.status(200).json({ success: true, duplicate: true, message: 'Payment already processed successfully.' });
-    }
-
     const amountKobo = Number(data.amount || 0);
     const amountNaira = amountKobo > 0 ? (amountKobo > 10000000 ? amountKobo / 100 : amountKobo / 100) : 0;
     const metadata = data.metadata || {};
@@ -1174,28 +1159,8 @@ apiRouter.get('/platform/stats', async (_req: Request, res: Response) => {
 apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const personalTxs = db.getPersonalTransactions(userId);
-    const payments: any[] = [];
-
-    for (const tx of personalTxs) {
-      payments.push({
-        id: tx.id,
-        user_id: tx.user_id,
-        type: tx.type,
-        category: tx.category,
-        amount: Math.abs(tx.amount),
-        direction: tx.direction,
-        reference: tx.reference,
-        status: tx.status.toLowerCase(),
-        display_title: tx.display_title,
-        purpose: tx.type === 'DEPOSIT' ? 'personal_deposit' : tx.type === 'PLATFORM_FEE' ? 'personal_registration' : 'personal_withdrawal',
-        created_at: tx.created_at,
-        paid_at: tx.paid_at || tx.created_at
-      });
-    }
-
-    // Also include Firestore payments if available
     const fDb = getFirestoreDb();
+    const payments: any[] = [];
     if (fDb) {
       try {
         const snap = await fDb.collection(FIRESTORE_COLLECTIONS.PAYMENTS)
@@ -1203,8 +1168,8 @@ apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) 
           .get();
         snap.forEach(doc => {
           const d = doc.data();
-          const ref = d.reference || doc.id;
-          if (!payments.some(p => p.reference === ref || p.id === doc.id)) {
+          const purpose = d.purpose || d.type || '';
+          if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
             payments.push({ id: doc.id, ...d });
           }
         });
@@ -1212,19 +1177,37 @@ apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) 
         console.warn('Firestore personal payments query warn:', err);
       }
     }
-
-    const deduped: any[] = [];
-    const seenRefs = new Set<string>();
-    for (const p of payments) {
-      const refKey = p.reference || p.id;
-      if (!seenRefs.has(refKey)) {
-        seenRefs.add(refKey);
-        deduped.push(p);
+    // Also include withdrawals and payments from local db fallback
+    const localWithdrawals = db.getAllWithdrawals().filter((w: any) => w.user_id === userId);
+    for (const w of localWithdrawals) {
+      const payId = `pay_wth_${w.id}`;
+      if (!payments.some(p => p.id === payId || p.reference === w.id)) {
+        payments.push({
+          id: payId,
+          user_id: w.user_id,
+          amount: w.amount,
+          reference: w.reference || w.id,
+          purpose: 'personal_withdrawal',
+          type: 'withdrawal',
+          status: 'success',
+          gateway_response: 'Successful',
+          created_at: w.created_at || new Date().toISOString()
+        });
       }
     }
 
-    deduped.sort((a, b) => new Date(b.created_at || b.paid_at || 0).getTime() - new Date(a.created_at || a.paid_at || 0).getTime());
-    return res.json({ success: true, payments: deduped });
+    const localPayments = db.getPaymentsByUserId(userId);
+    for (const p of localPayments) {
+      const purpose = p.purpose || p.type || '';
+      if (['personal_deposit', 'personal_withdrawal'].includes(purpose)) {
+        if (!payments.some(x => x.id === p.id || (p.reference && x.reference === p.reference))) {
+          payments.push(p);
+        }
+      }
+    }
+
+    payments.sort((a, b) => new Date(b.created_at || b.paid_at || 0).getTime() - new Date(a.created_at || a.paid_at || 0).getTime());
+    return res.json({ success: true, payments });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -1256,8 +1239,7 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       cycle_type,
       packing_fee,
       whatsapp_number,
-      whatsappNumber,
-      members
+      whatsappNumber
     } = req.body;
 
     const waNumber = whatsapp_number || whatsappNumber;
@@ -1291,30 +1273,6 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       });
     }
 
-    // Validate members list if provided
-    if (members !== undefined && members !== null) {
-      if (!Array.isArray(members) || members.length !== limit) {
-        return res.status(400).json({
-          error: `Exactly ${limit} member details are required. Received ${Array.isArray(members) ? members.length : 0}.`
-        });
-      }
-
-      for (let i = 0; i < members.length; i++) {
-        const m = members[i];
-        if (!m || !m.full_name || m.full_name.trim().length < 2) {
-          return res.status(400).json({ error: `Member ${i + 1}: Full Name is required.` });
-        }
-        const cleanP = normalizeNigerianPhone(m.phone || '');
-        if (!cleanP || cleanP.length !== 11) {
-          return res.status(400).json({ error: `Member ${i + 1} (${m.full_name}): Valid 11-digit phone number is required.` });
-        }
-        const cleanAcc = (m.account_number || '').toString().replace(/\D/g, '');
-        if (cleanAcc.length !== 10) {
-          return res.status(400).json({ error: `Member ${i + 1} (${m.full_name}): Valid 10-digit bank account number is required.` });
-        }
-      }
-    }
-
     const result = db.createGroup({
       admin_id,
       admin_name: admin_name.trim(),
@@ -1333,94 +1291,6 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       db.save();
     }
 
-    // If bulk members provided, create them in strict packing order 1..limit
-    const createdMembers: GroupMember[] = [];
-    if (Array.isArray(members) && members.length > 0) {
-      for (let i = 0; i < members.length; i++) {
-        const m = members[i];
-        const packingPosition = i + 1;
-        const cleanPhone = normalizeNigerianPhone(m.phone);
-        const cleanAcc = m.account_number.toString().replace(/\D/g, '');
-        const bankName = (m.bank_name || 'Moniepoint MFB').trim();
-        const memId = `mem_${Date.now()}_${packingPosition}_${Math.random().toString(36).substring(2, 6)}`;
-
-        let profile = db.getProfileByPhone(cleanPhone);
-        if (!profile) {
-          profile = db.upsertProfile({
-            full_name: m.full_name.trim(),
-            phone: cleanPhone,
-            bank_name: bankName,
-            account_number: cleanAcc,
-            verification_type: 'BVN',
-            verification_number: '12345678901',
-            role: 'MEMBER'
-          });
-        } else {
-          if (bankName) profile.bank_name = bankName;
-          if (cleanAcc) profile.account_number = cleanAcc;
-          db.save();
-        }
-
-        // Generate Moniepoint Virtual Account named BETTERAJO-[FULL NAME]
-        let vaDetails;
-        try {
-          vaDetails = await generateGroupMemberVirtualAccount(result.group.id, memId, m.full_name.trim(), cleanPhone);
-        } catch {
-          vaDetails = {
-            account_name: formatGroupMemberAccountName(m.full_name.trim()),
-            account_number: generateMoniepointAccountNumber(`group_${result.group.id}_${packingPosition}_${m.full_name}_${cleanPhone}`)
-          };
-        }
-
-        const groupMember: GroupMember = {
-          id: memId,
-          group_id: result.group.id,
-          user_id: profile.id,
-          full_name: m.full_name.trim(),
-          phone: cleanPhone,
-          whatsapp_number: cleanPhone,
-          whatsappNumber: cleanPhone,
-          bank_name: bankName,
-          account_number: cleanAcc,
-          position: packingPosition,
-          packing_position: packingPosition,
-          status: 'active',
-          current_round_status: 'pending_contribution',
-          virtual_account_name: vaDetails.account_name || formatGroupMemberAccountName(m.full_name.trim()),
-          virtual_account_number: vaDetails.account_number || generateMoniepointAccountNumber(`group_${result.group.id}_${packingPosition}_${m.full_name}_${cleanPhone}`),
-          credit_balance: 0,
-          payment_type: 'bank_transfer',
-          joined_at: new Date().toISOString()
-        };
-
-        db.data.group_members.push(groupMember);
-
-        // Create initial pending contribution for round 1
-        db.data.contributions.push({
-          id: `cnt_${Date.now()}_${groupMember.id}`,
-          group_id: result.group.id,
-          member_id: groupMember.id,
-          user_id: profile.id,
-          round_number: result.group.current_round,
-          amount: result.group.contribution_amount,
-          virtual_account_name: groupMember.virtual_account_name,
-          virtual_account_number: groupMember.virtual_account_number,
-          credit_balance: 0,
-          payment_type: 'bank_transfer',
-          status: 'Pending'
-        });
-
-        createdMembers.push(groupMember);
-
-        syncGroupMemberToSupabase(groupMember).catch(() => {});
-        fsUpsertGroupMember(groupMember).catch(() => {});
-      }
-
-      // Group is fully recruited and ready
-      result.group.status = 'active';
-      db.save();
-    }
-
     await syncGroupToSupabase(result.group).catch(() => {});
     await fsUpsertGroup(result.group).catch(() => {});
     if (result.adminProfile) {
@@ -1433,79 +1303,10 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
     return res.json({
       success: true,
       group: result.group,
-      adminProfile,
-      members: createdMembers
+      adminProfile
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
-  }
-});
-
-// Update Group Member Details (Group Admin can edit member later if needed)
-apiRouter.put('/groups/:groupId/members/:memberId', async (req: Request, res: Response) => {
-  try {
-    const { groupId, memberId } = req.params;
-    const { full_name, phone, account_number, bank_name } = req.body;
-    const authUserId = (req.headers['x-user-id'] as string) || req.body.admin_id;
-
-    const group = db.getGroupById(groupId);
-    if (!group) return res.status(404).json({ error: 'Group not found.' });
-
-    if (authUserId && group.admin_id !== authUserId) {
-      return res.status(403).json({ error: 'Forbidden: Only the group admin can update member details.' });
-    }
-
-    const member = db.data.group_members.find(m => m.id === memberId && m.group_id === groupId);
-    if (!member) return res.status(404).json({ error: 'Member not found in this group.' });
-
-    if (full_name && full_name.trim().length >= 2) {
-      member.full_name = full_name.trim();
-      member.virtual_account_name = formatGroupMemberAccountName(full_name.trim());
-    }
-    if (phone) {
-      const cleanPhone = normalizeNigerianPhone(phone);
-      if (cleanPhone && cleanPhone.length === 11) {
-        member.phone = cleanPhone;
-        member.whatsapp_number = cleanPhone;
-        member.whatsappNumber = cleanPhone;
-      }
-    }
-    if (account_number) {
-      const cleanAcc = account_number.toString().replace(/\D/g, '');
-      if (cleanAcc.length === 10) {
-        member.account_number = cleanAcc;
-      }
-    }
-    if (bank_name && bank_name.trim()) {
-      member.bank_name = bank_name.trim();
-    }
-
-    // Also update associated profile if exists
-    const profile = db.getProfileById(member.user_id);
-    if (profile) {
-      if (member.full_name) profile.full_name = member.full_name;
-      if (member.phone) profile.phone = member.phone;
-      if (member.bank_name) profile.bank_name = member.bank_name;
-      if (member.account_number) profile.account_number = member.account_number;
-    }
-
-    // Update pending contribution virtual account name if any
-    const pendingContrib = db.data.contributions.find(c => c.member_id === member.id && c.status === 'Pending');
-    if (pendingContrib) {
-      pendingContrib.virtual_account_name = member.virtual_account_name;
-    }
-
-    db.save();
-    syncGroupMemberToSupabase(member).catch(() => {});
-    fsUpsertGroupMember(member).catch(() => {});
-
-    return res.json({
-      success: true,
-      message: 'Member details updated successfully.',
-      member
-    });
-  } catch (err: any) {
-    return res.status(400).json({ error: err.message || 'Failed to update member' });
   }
 });
 
@@ -1659,301 +1460,6 @@ apiRouter.post('/groups/join', async (req: Request, res: Response) => {
   }
 });
 
-// Group Admin direct member addition with auto-generated Moniepoint Virtual Account
-apiRouter.post('/groups/:groupId/members/add', async (req: Request, res: Response) => {
-  try {
-    const { groupId } = req.params;
-    const { full_name, phone, account_number, bank_name } = req.body;
-    const authUserId = (req.headers['x-user-id'] as string) || req.body.admin_id;
-
-    const group = db.getGroupById(groupId);
-    if (!group) return res.status(404).json({ error: 'Group not found.' });
-
-    if (authUserId && group.admin_id !== authUserId) {
-      return res.status(403).json({ error: 'Forbidden: Only the group admin can add members directly.' });
-    }
-
-    if (!full_name || !phone || !account_number) {
-      return res.status(400).json({ error: 'Full name, phone number, and bank account number are required.' });
-    }
-
-    const member = db.addMemberByGroupAdmin(groupId, {
-      full_name: full_name.trim(),
-      phone: phone.trim(),
-      account_number: account_number.trim(),
-      bank_name: (bank_name || 'Moniepoint MFB').trim()
-    });
-
-    return res.json({
-      success: true,
-      message: `Member ${member.full_name} added successfully! Assigned Position ${member.position}. Virtual account ${member.virtual_account_name} (${member.virtual_account_number}) created.`,
-      member
-    });
-  } catch (err: any) {
-    return res.status(400).json({ error: err.message || 'Failed to add member' });
-  }
-});
-
-// Universal Virtual Account Transfer Webhook / Simulation API
-// Accepts transfers from Nigerian bank apps into Personal or Group Virtual Accounts
-apiRouter.post(['/virtual-account/transfer', '/moniepoint/webhook'], async (req: Request, res: Response) => {
-  try {
-    const { account_number, amount, reference, sender_name } = req.body;
-    const simulatedDate = (req.headers['x-simulated-date'] as string) || (req.body.simulatedDate as string);
-
-    if (!account_number || !amount || Number(amount) <= 0) {
-      return res.status(400).json({ error: 'Valid virtual account number and positive amount are required.' });
-    }
-
-    const cleanAcc = account_number.trim();
-    const transferAmount = Math.round(Number(amount));
-    const effectiveRef = reference || `VA_TRF_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
-    // Idempotency check: if reference already succeeded, return 200 immediately
-    if (reference) {
-      const existingPay = db.getPaymentByReference(reference);
-      if (existingPay && (existingPay.status === 'success' || (existingPay.status as string) === 'successful')) {
-        console.log(`[VA Webhook Idempotency] Skipping duplicate processed reference: ${reference}`);
-        return res.status(200).json({
-          success: true,
-          duplicate: true,
-          message: 'Transfer already processed successfully.',
-          reference
-        });
-      }
-    }
-
-    // 1. Check if recipient is a Personal Ajo user
-    const userProfile = db.getProfileByVirtualAccount(cleanAcc);
-    const personalAjo = userProfile
-      ? db.getPersonalAjoByUserId(userProfile.id)
-      : db.getPersonalAjoByVirtualAccount(cleanAcc);
-
-    if (userProfile || personalAjo) {
-      const targetUserId = userProfile ? userProfile.id : personalAjo!.user_id;
-
-      // Better Ajo Addition Model:
-      // User savings amount (e.g. 5000) is credited IN FULL to user savings.
-      // Platform fee (₦60) is ADDED on top, total = 5060.
-      // Super Admin receives ₦60 platform fee in Firebase platformRevenue/main.
-      const savingsAmount = Number(req.body.savings_amount) || transferAmount;
-      const platformFee = 60;
-      const totalAmount = savingsAmount + platformFee;
-
-      // 1. Atomically process in Firestore:
-      // - Creates ONE transaction in 'transactions' with status: 'success', fee: 60, total_amount: totalAmount
-      // - Credits savingsAmount to personalAjos and personal_ajo (balance, total_saved)
-      // - Credits ₦60 to platformRevenue/main (stream2, totalGross, unifiedAvailable)
-      await onPaymentSuccess({
-        reference: effectiveRef,
-        amount: savingsAmount,
-        user_id: targetUserId,
-        channel: 'virtual_account',
-        gateway_response: 'Successful (Moniepoint Virtual Account)',
-        paid_at: new Date().toISOString(),
-        purpose: 'personal_deposit'
-      });
-
-      // 2. Synchronize local in-memory DB
-      db.createPersonalDepositTransaction(targetUserId, savingsAmount, effectiveRef, 'SUCCESS');
-      db.recordAdminRevenue({
-        type: 'contribution_60',
-        amount: platformFee,
-        reference: effectiveRef,
-        group_or_user: userProfile?.full_name || 'Personal Saver',
-        user_id: targetUserId,
-        gross_amount: savingsAmount,
-        description: `₦60 Personal Ajo Deposit Processing Fee (${userProfile?.full_name || 'Personal Saver'})`
-      });
-
-      let paymentRec = db.getPaymentByReference(effectiveRef);
-      if (!paymentRec) {
-        paymentRec = db.createPendingPayment(
-          targetUserId,
-          effectiveRef,
-          totalAmount * 100,
-          'personal_deposit'
-        );
-      }
-      paymentRec.status = 'success';
-      paymentRec.virtual_account_number = cleanAcc;
-      paymentRec.payment_type = 'virtual_account';
-      db.save();
-
-      const updatedPersonal = await getOrCreatePersonalAjo(targetUserId).catch(() => db.getPersonalAjoByUserId(targetUserId));
-
-      return res.json({
-        success: true,
-        type: 'personal',
-        message: `₦${savingsAmount.toLocaleString()} received via Moniepoint Virtual Account ${cleanAcc}! Credited in full to Personal Better Ajo savings. ₦60 platform fee credited to Super Admin wallet.`,
-        personalAjo: updatedPersonal,
-        amount: savingsAmount,
-        savings_amount: savingsAmount,
-        fee: platformFee,
-        total: totalAmount,
-        reference: effectiveRef
-      });
-    }
-
-    // 2. Check if recipient is a Group Ajo member
-    const groupMember = db.getGroupMemberByVirtualAccount(cleanAcc);
-    if (groupMember) {
-      const result = db.processContributionPayment(
-        groupMember.group_id,
-        groupMember.id,
-        transferAmount,
-        'virtual_account',
-        effectiveRef,
-        simulatedDate,
-        groupMember.user_id
-      );
-
-      return res.json({
-        success: true,
-        type: 'group_contribution',
-        ...result,
-        message: result.isPaid
-          ? (result.isPaidAhead
-              ? `Contribution of ₦${transferAmount.toLocaleString()} verified and marked PAID AHEAD via Moniepoint Virtual Account!`
-              : `Contribution of ₦${transferAmount.toLocaleString()} verified and marked PAID via Moniepoint Virtual Account!`)
-          : `Partial payment of ₦${transferAmount.toLocaleString()} credited to Credit Wallet. Remaining ₦${result.remainingRequired.toLocaleString()} required to complete cycle.`
-      });
-    }
-
-    return res.status(404).json({
-      error: `No Better Ajo account found for Moniepoint virtual account number ${cleanAcc}.`
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Transfer processing failed' });
-  }
-});
-
-// Dedicated Member Test Payment Simulator Route
-// Used by Group Admin to test payment verification, packing, and commission flow
-apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req: Request, res: Response) => {
-  try {
-    const { groupId, memberId } = req.params;
-    const { amount } = req.body;
-    const authUserId = (req.headers['x-user-id'] as string) || req.body.admin_id;
-
-    const group = db.getGroupById(groupId);
-    if (!group) return res.status(404).json({ error: 'Group not found.' });
-
-    if (authUserId && group.admin_id !== authUserId) {
-      return res.status(403).json({ error: 'Only the group admin can simulate member payments.' });
-    }
-
-    const member = db.data.group_members.find(m => m.id === memberId && m.group_id === groupId);
-    if (!member) return res.status(404).json({ error: 'Member not found in this group.' });
-
-    const numAmount = Number(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      return res.status(400).json({ error: 'Valid payment amount is required.' });
-    }
-
-    const ref = `SIM_PAY_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-    // Process contribution payment
-    const result = db.processContributionPayment(
-      groupId,
-      memberId,
-      numAmount,
-      'simulation',
-      ref,
-      undefined,
-      member.user_id
-    );
-
-    // Save payment record in central payments
-    const paymentRec = db.createPendingPayment(
-      member.user_id,
-      ref,
-      numAmount * 100,
-      'group_contribution'
-    );
-    paymentRec.status = 'success';
-    paymentRec.virtual_account_number = member.virtual_account_number;
-    paymentRec.virtual_account_name = member.virtual_account_name;
-    paymentRec.payment_type = 'simulation';
-    db.save();
-
-    syncPaymentRecordToSupabase(paymentRec).catch(() => {});
-    fsUpsertPayment(paymentRec).catch(() => {});
-
-    return res.json({
-      success: true,
-      result,
-      message: result.isPaid
-        ? (result.isPaidAhead
-            ? `Payment of ₦${numAmount.toLocaleString()} confirmed! Marked PAID AHEAD (Credit: ₦${result.newCreditBalance.toLocaleString()}).`
-            : `Payment of ₦${numAmount.toLocaleString()} confirmed! Marked PAID.`)
-        : `Partial payment of ₦${numAmount.toLocaleString()} credited to Credit Wallet. Remaining ₦${result.remainingRequired.toLocaleString()} required.`
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Payment simulation failed' });
-  }
-});
-
-// Scheduled Disbursement Evaluation Route
-apiRouter.post('/groups/:groupId/check-disbursement', async (req: Request, res: Response) => {
-  try {
-    const { groupId } = req.params;
-    const simulatedDate = (req.headers['x-simulated-date'] as string) || (req.body.simulatedDate as string);
-
-    const group = db.getGroupById(groupId);
-    if (!group) return res.status(404).json({ error: 'Group not found.' });
-
-    const cycleInfo = db.getGroupCycleInfo(groupId, group.current_round, simulatedDate);
-    const cycleStatus = db.getCycleContributionStatus(groupId, group.current_round, simulatedDate);
-
-    // Condition 1: Cycle duration has reached (todayDate >= scheduledPackDate)
-    const isDurationReached = cycleInfo.isCycleOpen;
-    // Condition 2: All members have completed payment
-    const allMembersPaid = cycleStatus.allPaid;
-
-    if (isDurationReached && allMembersPaid) {
-      const currentPacker = db.getCurrentPacker(groupId, group.current_round);
-      if (currentPacker && !db.isMemberPacked(groupId, currentPacker.id, group.current_round) && !cycleInfo.hasPackedToday) {
-        const packResult = db.executePack(groupId, currentPacker.id, group.current_round, simulatedDate);
-        return res.json({
-          disbursed: true,
-          scheduledPackDate: cycleInfo.scheduledPackDate,
-          packer: currentPacker,
-          transaction: packResult.transaction,
-          message: `Scheduled disbursement executed! ₦${packResult.transaction.member_amount.toLocaleString()} paid out to ${currentPacker.full_name}.`
-        });
-      }
-    }
-
-    if (isDurationReached && !allMembersPaid) {
-      return res.json({
-        disbursed: false,
-        isPaused: true,
-        unpaidCount: cycleStatus.unpaidMemberIds.length,
-        message: 'Rotation paused: Cycle due date reached, but waiting for all members to complete contributions before packing proceeds.'
-      });
-    }
-
-    if (!isDurationReached && allMembersPaid) {
-      return res.json({
-        disbursed: false,
-        isEarlyWaiting: true,
-        scheduledPackDate: cycleInfo.scheduledPackDate,
-        scheduledPackDateDisplay: cycleInfo.scheduledPackDateDisplay,
-        message: `All members have paid ahead! Payout is scheduled for ${cycleInfo.scheduledPackDateDisplay}.`
-      });
-    }
-
-    return res.json({
-      disbursed: false,
-      cycleInfo,
-      cycleStatus
-    });
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
 apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
   try {
     const { groupId } = req.params;
@@ -2024,14 +1530,6 @@ apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
         scheduledPackDateDisplay = formatCalendarDateDisplay(scheduledPackDate);
       }
 
-      const vaName = m.virtual_account_name || formatGroupMemberAccountName(m.full_name);
-      const vaNumber = m.virtual_account_number || generateMoniepointAccountNumber(`group_${groupId}_${m.id}_${m.full_name}`);
-      const creditBal = Number(m.credit_balance || 0);
-      const totalExpected = group.contribution_amount + 60;
-      const isPaidAhead = Boolean(hasContributed && cycleInfo.scheduledPackDate > cycleInfo.todayDate);
-      const isPartial = Boolean(!hasContributed && creditBal > 0);
-      const remainingToPay = !hasContributed ? Math.max(0, totalExpected - creditBal) : 0;
-
       return {
         id: m.id,
         user_id: m.user_id,
@@ -2041,13 +1539,6 @@ apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
         isPacked,
         hasPackedThisRound: Boolean(m.hasPackedThisRound || isPacked),
         hasContributed,
-        virtual_account_name: vaName,
-        virtual_account_number: vaNumber,
-        credit_balance: creditBal,
-        payment_type: m.payment_type || 'bank_transfer',
-        isPaidAhead,
-        isPartial,
-        remainingToPay,
         scheduledPackDate,
         scheduledPackDateDisplay,
         current_round_status: isPacked ? 'packed' : (hasContributed ? 'contributed' : 'pending_contribution'),
@@ -2081,25 +1572,14 @@ apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
       }
     }
 
-    const userVaName = rawUserMember?.virtual_account_name || (rawUserMember ? formatGroupMemberAccountName(rawUserMember.full_name) : '');
-    const userVaNumber = rawUserMember?.virtual_account_number || (rawUserMember ? generateMoniepointAccountNumber(`group_${groupId}_${rawUserMember.id}_${rawUserMember.full_name}`) : '');
-    const userCreditBal = Number(rawUserMember?.credit_balance || 0);
-    const userHasContributed = rawUserMember ? db.hasMemberPaidCurrentCycle(groupId, rawUserMember.id, group.current_round, simulatedDate) : false;
-
     const userMember = rawUserMember ? {
       ...rawUserMember,
       isPacked: db.isMemberPacked(groupId, rawUserMember.id, group.current_round),
       hasPackedThisRound: Boolean(rawUserMember.hasPackedThisRound || db.isMemberPacked(groupId, rawUserMember.id, group.current_round)),
-      hasContributed: userHasContributed,
-      virtual_account_name: userVaName,
-      virtual_account_number: userVaNumber,
-      credit_balance: userCreditBal,
-      isPaidAhead: Boolean(userHasContributed && cycleInfo.scheduledPackDate > cycleInfo.todayDate),
-      isPartial: Boolean(!userHasContributed && userCreditBal > 0),
-      remainingToPay: !userHasContributed ? Math.max(0, (group.contribution_amount + 60) - userCreditBal) : 0,
+      hasContributed: db.hasMemberPaidCurrentCycle(groupId, rawUserMember.id, group.current_round, simulatedDate),
       current_round_status: db.isMemberPacked(groupId, rawUserMember.id, group.current_round)
         ? ('packed' as const)
-        : (userHasContributed ? ('contributed' as const) : ('pending_contribution' as const))
+        : (db.hasMemberPaidCurrentCycle(groupId, rawUserMember.id, group.current_round, simulatedDate) ? ('contributed' as const) : ('pending_contribution' as const))
     } : null;
 
     // Admin commission balance
@@ -2133,9 +1613,7 @@ apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
       cycleStatus: {
         totalRequired: cycleStatus.totalRequired,
         paidCount: cycleStatus.paidCount,
-        allPaid: cycleStatus.allPaid,
-        isPaused: cycleStatus.isPaused,
-        isEarlyWaiting: cycleStatus.isEarlyWaiting
+        allPaid: cycleStatus.allPaid
       },
       cycleInfo,
       canPackNow,
@@ -2183,51 +1661,24 @@ apiRouter.post('/groups/:groupId/contribute/init', async (req: Request, res: Res
 
     const cycleInfo = db.getGroupCycleInfo(groupId, group.current_round, simulatedDate);
 
+    // If cycle is not open yet, do not allow contributions for a future cycle
+    if (!cycleInfo.isCycleOpen) {
+      return res.status(400).json({
+        error: `The next contribution cycle (${group.cycle_type}) opens on ${cycleInfo.scheduledPackDateDisplay} (${cycleInfo.cycleOpenDate}). No payment is required today.`
+      });
+    }
+
     // Check if member has already paid for this active cycle
     const alreadyPaidCurrent = db.hasMemberPaidCurrentCycle(groupId, member.id, group.current_round, simulatedDate);
     if (alreadyPaidCurrent) {
       return res.status(400).json({ error: 'You have already paid your contribution for this cycle.' });
     }
 
-    // Requirement 3: Automatically add compulsory ₦60 transaction fee to every contribution payment
-    // If contribution = ₦10,000, member pays ₦10,060 (₦10,000 base, ₦60 fee)
-    // Next cycle, automatically deducts credit_balance (e.g. John has 1,000 credit, only pays 9,060)
+    // Requirement 3 & 4: Automatically add compulsory ₦60 transaction fee to every contribution payment
+    // If contribution = ₦5,000, member pays ₦5,060 (₦5,000 to contribution balance, ₦60 fee)
     const contributionAmount = group.contribution_amount;
     const transactionFee = 60;
-    const totalExpected = contributionAmount + transactionFee;
-    const creditBalance = Number(member.credit_balance || 0);
-    const amountToPay = Math.max(0, totalExpected - creditBalance);
-
-    // If existing credit balance covers the full cycle, apply it immediately without Paystack
-    if (amountToPay === 0) {
-      const creditRef = `CREDIT_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const result = db.processContributionPayment(
-        groupId,
-        member.id,
-        0,
-        'credit_wallet',
-        creditRef,
-        simulatedDate,
-        authUserId
-      );
-
-      return res.json({
-        success: true,
-        coveredByCredit: true,
-        message: 'Your contribution was fully covered by your available credit balance!',
-        result,
-        breakdown: {
-          baseAmount: contributionAmount,
-          baseLabel: 'Contribution Amount',
-          feeAmount: transactionFee,
-          feeLabel: 'Transaction Fee',
-          totalAmount: totalExpected,
-          creditBalance,
-          amountToPay: 0,
-          isEarlyPayment: cycleInfo.scheduledPackDate > cycleInfo.todayDate
-        }
-      });
-    }
+    const totalAmount = contributionAmount + transactionFee;
 
     // Pre-flight check: ensure cloud persistence is operational BEFORE prompting member for payment
     if (isFirebaseConfigured()) {
@@ -2242,7 +1693,7 @@ apiRouter.post('/groups/:groupId/contribute/init', async (req: Request, res: Res
 
     const paystack = await initializePaystackPayment(
       `${member.phone}@packajo.ng`,
-      amountToPay,
+      totalAmount,
       `Group Contribution: ${group.group_name} (Cycle ${cycleInfo.cycleNumber})`,
       {
         groupId: group.id,
@@ -2253,9 +1704,7 @@ apiRouter.post('/groups/:groupId/contribute/init', async (req: Request, res: Res
         calendarDate: cycleInfo.todayDate,
         contributionAmount,
         transactionFee,
-        totalAmount: totalExpected,
-        creditBalance,
-        amountToPay,
+        totalAmount,
         type: 'group_contribution'
       }
     );
@@ -2264,7 +1713,7 @@ apiRouter.post('/groups/:groupId/contribute/init', async (req: Request, res: Res
     db.createPendingPayment(
       member.user_id,
       paystack.reference,
-      Math.round(amountToPay * 100),
+      Math.round(totalAmount * 100),
       'group_contribution'
     );
 
@@ -2277,10 +1726,7 @@ apiRouter.post('/groups/:groupId/contribute/init', async (req: Request, res: Res
           baseLabel: 'Contribution Amount',
           feeAmount: transactionFee,
           feeLabel: 'Transaction Fee',
-          totalAmount: totalExpected,
-          creditBalance,
-          amountToPay,
-          isEarlyPayment: cycleInfo.scheduledPackDate > cycleInfo.todayDate
+          totalAmount
         }
       }
     });
@@ -3152,20 +2598,8 @@ apiRouter.post('/groups/:groupId/notify', (req: Request, res: Response) => {
 apiRouter.get('/users/:userId/admin-groups', (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const profile = db.getProfileById(userId) || db.getProfileByPhone(userId);
-    const groups = db.getAllGroups().filter(g => 
-      g.admin_id === userId || 
-      (profile && g.admin_id === profile.id) ||
-      (profile && g.whatsapp_number === profile.phone)
-    );
-    const enriched = groups.map(g => {
-      const activeMems = db.getGroupMembers(g.id);
-      return {
-        ...g,
-        membersCount: activeMems.length
-      };
-    });
-    return res.json(enriched);
+    const groups = db.getAllGroups().filter(g => g.admin_id === userId);
+    return res.json(groups);
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -3187,7 +2621,7 @@ apiRouter.get('/superadmin/metrics', (req: Request, res: Response) => {
                     (phone ? db.getProfileByPhone(phone) : null);
 
     const cleanReqEmail = email ? email.trim().toLowerCase() : (profile?.email ? profile.email.trim().toLowerCase() : '');
-    const isSuperAdminEmail = cleanReqEmail === 'realheavenict@gmail.com' || cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
+    const isSuperAdminEmail = cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
     const cleanReqPhone = phone ? normalizeNigerianPhone(phone) : (profile ? normalizeNigerianPhone(profile.phone) : '');
 
     const isAuthorized = (profile && profile.role === 'SUPER_ADMIN') ||
@@ -3239,7 +2673,7 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
     }
 
     const cleanReqEmail = email ? email.trim().toLowerCase() : (profile?.email ? profile.email.trim().toLowerCase() : '');
-    const isSuperAdminEmail = cleanReqEmail === 'realheavenict@gmail.com' || cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
+    const isSuperAdminEmail = cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
     const cleanReqPhone = phone ? normalizeNigerianPhone(phone) : (profile ? normalizeNigerianPhone(profile.phone) : '');
     const isAuthorized = (profile && profile.role === 'SUPER_ADMIN') || cleanReqPhone === superAdminPhone || isSuperAdminEmail;
 
@@ -3351,7 +2785,7 @@ apiRouter.get('/superadmin/audit-logs', async (req: Request, res: Response) => {
     }
 
     const cleanReqEmail = email ? email.trim().toLowerCase() : (profile?.email ? profile.email.trim().toLowerCase() : '');
-    const isSuperAdminEmail = cleanReqEmail === 'realheavenict@gmail.com' || cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
+    const isSuperAdminEmail = cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
     const cleanReqPhone = phone ? normalizeNigerianPhone(phone) : (profile ? normalizeNigerianPhone(profile.phone) : '');
     const isAuthorized = (profile && profile.role === 'SUPER_ADMIN') || cleanReqPhone === superAdminPhone || isSuperAdminEmail;
 
@@ -3416,7 +2850,7 @@ apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: 
 
     const profilePhoneClean = normalizeNigerianPhone(profile.phone);
     const cleanReqEmail = email ? email.trim().toLowerCase() : (profile?.email ? profile.email.trim().toLowerCase() : '');
-    const isSuperAdminEmail = cleanReqEmail === 'realheavenict@gmail.com' || cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
+    const isSuperAdminEmail = cleanReqEmail === 'superadmin@packajo.ng' || cleanReqEmail === 'paulakinyele54@gmail.com';
     const isSuperAdmin = profile.role === 'SUPER_ADMIN' || profilePhoneClean === superAdminPhone || isSuperAdminEmail;
 
     if (!isSuperAdmin) {
@@ -3501,7 +2935,6 @@ apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: 
 
     // 4. Commit confirmed withdrawal to local database state and deduct from wallet immediately
     db.recordConfirmedWithdrawal(withdrawal, payment);
-    db.createSuperAdminWithdrawalTransaction(effectiveAmount, reference);
     try {
       db.deductAdminRevenueWithdrawal(withdrawal, payment);
       db.withdrawFromSuperAdminEarnings(effectiveAmount, {

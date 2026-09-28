@@ -175,26 +175,7 @@ export function subscribeToUserPersonalPayments(
   const txMap: Record<string, any> = {};
 
   const emit = () => {
-    // Deduplicate by reference or ID to prevent x3 duplicate transaction bug
-    const dedupedMap = new Map<string, any>();
-
-    // 1. First add payments
-    for (const p of Object.values(paymentsMap)) {
-      const refKey = p?.reference || p?.id;
-      if (refKey) {
-        dedupedMap.set(refKey, p);
-      }
-    }
-
-    // 2. Merge/overwrite with transactions (transactions contain detailed status, fee, savings_amount, etc.)
-    for (const t of Object.values(txMap)) {
-      const refKey = t?.reference || t?.ref || t?.id;
-      if (refKey) {
-        dedupedMap.set(refKey, t);
-      }
-    }
-
-    const combined = Array.from(dedupedMap.values());
+    const combined = Object.values({ ...paymentsMap, ...txMap });
     combined.sort((a, b) => {
       const timeA = a?.timestamp?.seconds ? (a.timestamp.seconds * 1000) : new Date(a?.created_at || a?.createdAt || a?.paid_at || 0).getTime();
       const timeB = b?.timestamp?.seconds ? (b.timestamp.seconds * 1000) : new Date(b?.created_at || b?.createdAt || b?.paid_at || 0).getTime();

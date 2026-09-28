@@ -67,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const activeUser = user || currentUser || null;
-  const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.role === 'superadmin' || activeUser?.email === 'realheavenict@gmail.com' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
+  const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.role === 'superadmin' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
   const isGroupAdmin = hasAdminGroups || activeUser?.role === 'GROUP_ADMIN' || activeUser?.role === 'groupadmin';
   // Personal Ajo is strictly visible to role == 'user' only (hidden for superadmin & groupadmin)
   const isUserRole = Boolean(activeUser && !isSuperAdmin && !isGroupAdmin && (activeUser.role === 'user' || activeUser.role === 'MEMBER' || !activeUser.role));
@@ -250,6 +250,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             ) : (
               // UNAUTHENTICATED STATE: Main actions
               <div className="flex items-center gap-2 sm:gap-3">
+                {onOpenJoinWithCode && (
+                  <button
+                    onClick={onOpenJoinWithCode}
+                    className="hidden sm:inline-flex items-center px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    Join with Code
+                  </button>
+                )}
+
                 <button
                   onClick={onOpenLogin}
                   className="px-4 py-2 text-xs sm:text-sm font-bold border border-[#008751] text-[#008751] rounded-xl hover:bg-[#E6F3ED]/50 transition-colors cursor-pointer"
@@ -405,6 +414,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     CREATE / SIGN UP
                   </button>
+
+                  {onOpenJoinWithCode && (
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        onOpenJoinWithCode();
+                      }}
+                      className="w-full py-3 rounded-xl bg-white border border-slate-200 text-slate-800 font-bold text-xs hover:bg-slate-50 transition text-center cursor-pointer"
+                    >
+                      JOIN AJO WITH CODE
+                    </button>
+                  )}
 
                   <button
                     onClick={() => {

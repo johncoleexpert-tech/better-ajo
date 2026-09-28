@@ -20,16 +20,9 @@ import {
   GroupAdminEarningItem,
   AuditLogEntry,
   SuperAdminWallet,
-  AdminRevenueLedgerEntry,
-  PersonalTransaction,
-  SuperAdminTransaction
+  AdminRevenueLedgerEntry
 } from '../src/types/index.js';
 import { PaystackTransferResult } from './paystack.js';
-import {
-  formatPersonalAccountName,
-  formatGroupMemberAccountName,
-  generateMoniepointAccountNumber
-} from './moniepoint.js';
 import {
   loadAllFromSupabase,
   syncProfileToSupabase,
@@ -70,8 +63,6 @@ interface DatabaseSchema {
   pack_transactions: PackTransaction[];
   commissions: Commission[];
   withdrawals: Withdrawal[];
-  personal_transactions?: PersonalTransaction[];
-  super_admin_transactions?: SuperAdminTransaction[];
   payments: PaymentRecord[];
   otps: { phone: string; code: string; purpose: string; expires_at: number; attempts?: number }[];
   audit_logs?: AuditLogEntry[];
@@ -172,8 +163,6 @@ function getInitialData(): DatabaseSchema {
     pack_transactions: [],
     commissions: [],
     withdrawals: [],
-    personal_transactions: [],
-    super_admin_transactions: [],
     payments: [],
     otps: [],
     audit_logs: [],
@@ -286,7 +275,7 @@ export function normalizeNigerianPhone(phone: string | undefined | null): string
 }
 
 class Database {
-  public data: DatabaseSchema;
+  private data: DatabaseSchema;
   private otpRequestTimes: Map<string, number[]> = new Map();
   private phoneLockouts: Map<string, number> = new Map();
 
@@ -330,7 +319,7 @@ class Database {
       baseData = JSON.parse(JSON.stringify(INITIAL_DATABASE_SNAPSHOT));
     }
 
-    // Guard: Merge profiles from INITIAL_DATABASE_SNAPSHOT that might be absent (preserves super admin login)
+    // Guard: Merge any records from INITIAL_DATABASE_SNAPSHOT that might be absent
     const snap = INITIAL_DATABASE_SNAPSHOT as unknown as DatabaseSchema;
     if (snap.profiles && Array.isArray(snap.profiles)) {
       if (!baseData.profiles) baseData.profiles = [];
@@ -341,14 +330,38 @@ class Database {
         }
       }
     }
-
-    if (!baseData.groups) baseData.groups = [];
-    if (!baseData.group_members) baseData.group_members = [];
-    if (!baseData.personal_ajo) baseData.personal_ajo = [];
-    if (!baseData.payments) baseData.payments = [];
-    if (!baseData.personal_transactions) baseData.personal_transactions = [];
-    if (!baseData.super_admin_transactions) baseData.super_admin_transactions = [];
-    if (!baseData.admin_revenue_ledger) baseData.admin_revenue_ledger = [];
+    if (snap.groups && Array.isArray(snap.groups)) {
+      if (!baseData.groups) baseData.groups = [];
+      for (const sg of snap.groups) {
+        if (!baseData.groups.some(g => g.id === sg.id || g.group_code === sg.group_code)) {
+          baseData.groups.push(sg as any);
+        }
+      }
+    }
+    if (snap.group_members && Array.isArray(snap.group_members)) {
+      if (!baseData.group_members) baseData.group_members = [];
+      for (const sm of snap.group_members) {
+        if (!baseData.group_members.some(m => m.id === sm.id)) {
+          baseData.group_members.push(sm as any);
+        }
+      }
+    }
+    if (snap.personal_ajo && Array.isArray(snap.personal_ajo)) {
+      if (!baseData.personal_ajo) baseData.personal_ajo = [];
+      for (const spa of snap.personal_ajo) {
+        if (!baseData.personal_ajo.some(pa => pa.id === spa.id || pa.user_id === spa.user_id)) {
+          baseData.personal_ajo.push(spa as any);
+        }
+      }
+    }
+    if (snap.payments && Array.isArray(snap.payments)) {
+      if (!baseData.payments) baseData.payments = [];
+      for (const spay of snap.payments) {
+        if (!baseData.payments.some(p => p.id === spay.id || (spay.reference && p.reference === spay.reference))) {
+          baseData.payments.push(spay as any);
+        }
+      }
+    }
 
     if (!baseData.payments) baseData.payments = [];
     if (!baseData.support_messages) baseData.support_messages = [];
@@ -467,16 +480,10 @@ class Database {
     const reg_600_count = regSavers.size;
     const reg_600_total = reg_600_count * 600;
 
-    // 2. Group Contribution Fee = ₦60 per every contribution by any member (Deduplicated)
-    const seenContribRefs = new Set<string>();
-    const paidContribs = (this.data.contributions || []).filter(c => {
-      const isPaid = c.status === 'Paid' || (c.status as string) === 'success' || (c.status as string) === 'successful';
-      if (!isPaid) return false;
-      const ref = c.reference || c.id;
-      if (seenContribRefs.has(ref)) return false;
-      seenContribRefs.add(ref);
-      return true;
-    });
+    // 2. Group Contribution Fee = ₦60 per every contribution by any member
+    const paidContribs = (this.data.contributions || []).filter(
+      c => c.status === 'Paid' || (c.status as string) === 'success' || (c.status as string) === 'successful'
+    );
     const contrib_60_count = paidContribs.length;
     const contrib_60_total = contrib_60_count * 60;
 
@@ -490,32 +497,22 @@ class Database {
       packing_33_total += share;
     }
 
-    // 4. Personal Ajo Withdrawal Fee = 1.6% of withdrawal amount (Strictly deduplicated by reference/id)
-    const seenWithdrawalRefs = new Set<string>();
+    // 4. Personal Ajo Withdrawal Fee = 1.6% of withdrawal amount
     const personalWithdrawals = (this.data.withdrawals || []).filter(
-      w => w.withdrawal_type === 'personal' && (w.status === 'completed' || w.status === 'successful')
+      w => w.withdrawal_type === 'personal' && (w.status === 'completed' || w.status === 'successful' || !w.status || w.status === 'pending')
     );
     let withdrawal_1_6_total = 0;
     for (const w of personalWithdrawals) {
-      const ref = w.reference || w.id;
-      if (seenWithdrawalRefs.has(ref)) continue;
-      seenWithdrawalRefs.add(ref);
       const fee = typeof w.fee === 'number' && w.fee > 0 ? w.fee : Math.round(w.amount * 0.016);
       withdrawal_1_6_total += fee;
     }
 
     const total_gross = reg_600_total + contrib_60_total + packing_33_total + withdrawal_1_6_total;
 
-    // b) Calculate Total Already Withdrawn by Super Admin (Deduplicated):
-    const seenSaWithdrawalRefs = new Set<string>();
-    const completedSaWithdrawals = (this.data.withdrawals || []).filter(w => {
-      const isSa = w.withdrawal_type === 'super_admin_revenue' && (w.status === 'completed' || w.status === 'successful');
-      if (!isSa) return false;
-      const ref = w.reference || w.id;
-      if (seenSaWithdrawalRefs.has(ref)) return false;
-      seenSaWithdrawalRefs.add(ref);
-      return true;
-    });
+    // b) Calculate Total Already Withdrawn by Super Admin:
+    const completedSaWithdrawals = (this.data.withdrawals || []).filter(
+      w => w.withdrawal_type === 'super_admin_revenue' && (w.status === 'completed' || w.status === 'successful')
+    );
     const total_withdrawn = completedSaWithdrawals.reduce((sum, w) => sum + w.amount, 0);
 
     // c) Real Available Balance:
@@ -1230,23 +1227,123 @@ class Database {
   }
 
   private seedDefaultsIfNeeded() {
-    // Fresh start: No demo groups or synthetic contributions created automatically.
-    // New Group Admins / Agents will register and create groups fresh.
+    // If empty, create one demo group "Family Monthly Pack" with a few members so "JOIN AJO WITH CODE" is immediately testable!
+    if (this.data.groups.length === 0) {
+      const demoAdmin: UserProfile = {
+        id: 'user_admin_demo',
+        full_name: 'Babatunde Adeleke',
+        phone: '08012345678',
+        email: 'babatunde@example.com',
+        bank_name: 'Access Bank',
+        account_number: '0123456789',
+        verification_type: 'BVN',
+        verification_number: '22114455667',
+        created_at: new Date(Date.now() - 86400000 * 5).toISOString()
+      };
+      this.data.profiles.push(demoAdmin);
+
+      const demoGroup: GroupAjo = {
+        id: 'grp_family_demo',
+        admin_id: demoAdmin.id,
+        admin_name: demoAdmin.full_name,
+        group_name: 'Family Monthly Pack',
+        member_limit: 10,
+        contribution_amount: 50000,
+        cycle_type: 'Every Month',
+        packing_amount: 500000,
+        packing_fee: 3000,
+        group_code: 'PAK-82K4M',
+        status: 'recruiting',
+        current_round: 1,
+        created_at: new Date(Date.now() - 86400000 * 3).toISOString()
+      };
+      this.data.groups.push(demoGroup);
+
+      // Add admin as member #1
+      const member1: GroupMember = {
+        id: 'mem_1',
+        group_id: demoGroup.id,
+        user_id: demoAdmin.id,
+        full_name: demoAdmin.full_name,
+        phone: demoAdmin.phone,
+        bank_name: demoAdmin.bank_name,
+        account_number: demoAdmin.account_number,
+        position: 1,
+        status: 'active',
+        current_round_status: 'contributed',
+        joined_at: new Date(Date.now() - 86400000 * 3).toISOString()
+      };
+
+      // Add 2 more sample members to show rotation in action
+      const user2: UserProfile = {
+        id: 'user_2',
+        full_name: 'Ngozi Okonjo',
+        phone: '08098765432',
+        bank_name: 'Guaranty Trust Bank (GTB)',
+        account_number: '0234567891',
+        verification_type: 'NIN',
+        verification_number: '12345678901',
+        created_at: new Date(Date.now() - 86400000 * 2).toISOString()
+      };
+      this.data.profiles.push(user2);
+
+      const member2: GroupMember = {
+        id: 'mem_2',
+        group_id: demoGroup.id,
+        user_id: user2.id,
+        full_name: user2.full_name,
+        phone: user2.phone,
+        bank_name: user2.bank_name,
+        account_number: user2.account_number,
+        position: 2,
+        status: 'active',
+        current_round_status: 'contributed',
+        joined_at: new Date(Date.now() - 86400000 * 2).toISOString()
+      };
+
+      this.data.group_members.push(member1, member2);
+
+      // Add sample contributions
+      this.data.contributions.push(
+        {
+          id: 'cnt_1',
+          group_id: demoGroup.id,
+          member_id: member1.id,
+          user_id: demoAdmin.id,
+          round_number: 1,
+          amount: 50000,
+          status: 'Paid',
+          paid_at: new Date(Date.now() - 86400000 * 2).toISOString()
+        },
+        {
+          id: 'cnt_2',
+          group_id: demoGroup.id,
+          member_id: member2.id,
+          user_id: user2.id,
+          round_number: 1,
+          amount: 50000,
+          status: 'Paid',
+          paid_at: new Date(Date.now() - 86400000).toISOString()
+        }
+      );
+
+      this.save();
+    }
   }
 
   ensureSuperAdminAndRoles() {
     const superAdminPhone = '08154267469';
     let superAdmin = this.data.profiles.find(
-      p => (p.email && (p.email.toLowerCase() === 'realheavenict@gmail.com' || p.email.toLowerCase() === 'superadmin@packajo.ng')) ||
+      p => (p.email && p.email.toLowerCase() === 'superadmin@packajo.ng') ||
            p.phone.replace(/\s+/g, '').replace(/^\+234/, '0') === superAdminPhone
     );
     if (!superAdmin) {
       superAdmin = {
-        id: 'usr_superadmin_realheaven',
+        id: 'usr_superadmin_08154267469',
         full_name: 'Super Administrator',
         phone: superAdminPhone,
-        email: 'realheavenict@gmail.com',
-        password: 'BetterAjo@RealHeaven2026!',
+        email: 'superadmin@packajo.ng',
+        password: 'admin123',
         bank_name: 'Guaranty Trust Bank (GTB)',
         account_number: '0123456789',
         verification_type: 'NIN',
@@ -1257,15 +1354,15 @@ class Database {
       this.data.profiles.push(superAdmin);
     } else {
       superAdmin.role = 'SUPER_ADMIN';
-      superAdmin.email = 'realheavenict@gmail.com';
-      superAdmin.password = 'BetterAjo@RealHeaven2026!';
+      if (!superAdmin.password) superAdmin.password = 'admin123';
+      if (!superAdmin.email) superAdmin.email = 'superadmin@packajo.ng';
     }
 
     const groupAdminIds = new Set(this.data.groups.map(g => g.admin_id));
     for (const p of this.data.profiles) {
       const clean = normalizeNigerianPhone(p.phone);
       const emailLower = p.email ? p.email.toLowerCase() : '';
-      if (clean === superAdminPhone || emailLower === 'realheavenict@gmail.com' || emailLower === 'superadmin@packajo.ng' || emailLower === 'paulakinyele54@gmail.com') {
+      if (clean === superAdminPhone || emailLower === 'superadmin@packajo.ng' || emailLower === 'paulakinyele54@gmail.com') {
         p.role = 'SUPER_ADMIN';
       } else if (groupAdminIds.has(p.id)) {
         p.role = 'GROUP_ADMIN';
@@ -1331,7 +1428,7 @@ class Database {
     );
 
     const superAdminPhone = '08154267469';
-    const isSuperAdminEmail = cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com';
+    const isSuperAdminEmail = cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com';
 
     if (existingIndex >= 0) {
       const existing = this.data.profiles[existingIndex];
@@ -1340,19 +1437,12 @@ class Database {
         ? 'SUPER_ADMIN'
         : (existing.role || profile.role || 'MEMBER');
 
-      const vaName = profile.virtual_account_name || existing.virtual_account_name || formatPersonalAccountName(profile.full_name || existing.full_name || 'Member');
-      const vaNumber = profile.virtual_account_number || existing.virtual_account_number || generateMoniepointAccountNumber(`personal_${existing.id}_${cleanPhone}`);
-
       const updated: UserProfile = {
         ...existing,
         ...profile,
         role: safeRole,
         phone: cleanPhone || existing.phone || `080${Math.floor(10000000 + Math.random() * 90000000)}`,
         email: cleanEmail || existing.email,
-        virtual_account_name: vaName,
-        virtual_account_number: vaNumber,
-        credit_balance: typeof profile.credit_balance === 'number' ? profile.credit_balance : (existing.credit_balance ?? 0),
-        payment_type: profile.payment_type || existing.payment_type || 'bank_transfer',
         id: existing.id,
         created_at: existing.created_at
       };
@@ -1363,20 +1453,12 @@ class Database {
       return updated;
     }
 
-    const newId = profile.id || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const vaName = profile.virtual_account_name || formatPersonalAccountName(profile.full_name || 'Member');
-    const vaNumber = profile.virtual_account_number || generateMoniepointAccountNumber(`personal_${newId}_${cleanPhone}`);
-
     const newProfile: UserProfile = {
       ...profile,
       role: (cleanPhone === superAdminPhone || isSuperAdminEmail) ? 'SUPER_ADMIN' : (profile.role || 'MEMBER'),
-      id: newId,
+      id: profile.id || `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       phone: cleanPhone || `080${Math.floor(10000000 + Math.random() * 90000000)}`,
       email: cleanEmail || undefined,
-      virtual_account_name: vaName,
-      virtual_account_number: vaNumber,
-      credit_balance: typeof profile.credit_balance === 'number' ? profile.credit_balance : 0,
-      payment_type: profile.payment_type || 'bank_transfer',
       created_at: new Date().toISOString()
     };
     this.data.profiles.push(newProfile);
@@ -1524,34 +1606,9 @@ class Database {
     return this.data.personal_ajo.find(p => p.user_id === userId);
   }
 
-  getPersonalAjoByVirtualAccount(accountNumber: string): PersonalAjo | undefined {
-    return (this.data.personal_ajo || []).find(p => p.virtual_account_number === accountNumber);
-  }
-
-  getProfileByVirtualAccount(accountNumber: string): UserProfile | undefined {
-    return (this.data.profiles || []).find(p => p.virtual_account_number === accountNumber);
-  }
-
-  getGroupMemberByVirtualAccount(accountNumber: string): GroupMember | undefined {
-    return (this.data.group_members || []).find(m => m.virtual_account_number === accountNumber && m.status === 'active');
-  }
-
   createPersonalAjo(userId: string): PersonalAjo {
     let existing = this.getPersonalAjoByUserId(userId);
-    const prof = this.getProfileById(userId);
-    const vaName = prof?.virtual_account_name || formatPersonalAccountName(prof?.full_name || 'Member');
-    const vaNumber = prof?.virtual_account_number || generateMoniepointAccountNumber(`personal_${userId}`);
-
-    if (existing) {
-      if (!existing.virtual_account_number) {
-        existing.virtual_account_number = vaNumber;
-        existing.virtual_account_name = vaName;
-        existing.credit_balance = existing.credit_balance ?? 0;
-        existing.payment_type = existing.payment_type || 'bank_transfer';
-        this.save();
-      }
-      return existing;
-    }
+    if (existing) return existing;
 
     const newPersonal: PersonalAjo = {
       id: `pajo_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1560,10 +1617,6 @@ class Database {
       total_deposited: 0,
       total_withdrawn: 0,
       status: 'pending_fee',
-      virtual_account_number: vaNumber,
-      virtual_account_name: vaName,
-      credit_balance: 0,
-      payment_type: 'bank_transfer',
       created_at: new Date().toISOString()
     };
     this.data.personal_ajo.push(newPersonal);
@@ -1720,240 +1773,6 @@ class Database {
     }
     this.save();
     return true;
-  }
-
-  // ------------------------------------------------------------------------
-  // TASK 2 & 3: DEDICATED TRANSACTION BUILDERS & PERSISTENCE
-  // ------------------------------------------------------------------------
-
-  /**
-   * 1. Create personal deposit transaction (direction='CREDIT', status='PENDING' -> 'SUCCESS')
-   * Saves in personal_transactions table.
-   */
-  createPersonalDepositTransaction(
-    userId: string,
-    amount: number,
-    reference: string,
-    status: 'PENDING' | 'SUCCESS' = 'PENDING'
-  ): PersonalTransaction {
-    if (!this.data.personal_transactions) {
-      this.data.personal_transactions = [];
-    }
-    const cleanRef = reference || `pdep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const existing = this.data.personal_transactions.find(
-      t => t.reference === cleanRef && t.user_id === userId && t.type === 'DEPOSIT'
-    );
-    if (existing) {
-      if (status === 'SUCCESS' && existing.status !== 'SUCCESS') {
-        existing.status = 'SUCCESS';
-        existing.paid_at = new Date().toISOString();
-        this.save();
-      }
-      return existing;
-    }
-
-    const numAmount = Math.abs(Number(amount));
-    const tx: PersonalTransaction = {
-      id: `ptx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      user_id: userId,
-      type: 'DEPOSIT',
-      category: 'PERSONAL_SAVINGS',
-      amount: numAmount,
-      direction: 'CREDIT',
-      reference: cleanRef,
-      status: status,
-      display_title: `DEPOSIT - PERSONAL AJO SAVINGS +₦${numAmount.toLocaleString()}`,
-      created_at: new Date().toISOString(),
-      paid_at: status === 'SUCCESS' ? new Date().toISOString() : undefined
-    };
-    this.data.personal_transactions.push(tx);
-
-    if (status === 'SUCCESS') {
-      this.depositPersonalAjo(userId, numAmount);
-    }
-    this.save();
-    return tx;
-  }
-
-  /**
-   * 2. Create platform fee transaction (₦600 registration fee)
-   * Inserts into personal_transactions (type='PLATFORM_FEE', amount=-600, direction='DEBIT')
-   * AND inserts into super_admin_transactions (type='FEE_INCOME', amount=+600, direction='CREDIT') ONCE.
-   */
-  createPlatformFeeTransaction(
-    userId: string,
-    amount: number = 600,
-    product: string = 'PERSONAL_AJO'
-  ): { personalTx: PersonalTransaction; superAdminTx: SuperAdminTransaction } {
-    if (!this.data.personal_transactions) this.data.personal_transactions = [];
-    if (!this.data.super_admin_transactions) this.data.super_admin_transactions = [];
-
-    const numAmount = Math.abs(Number(amount)) || 600;
-    const feeRef = `fee_reg_${userId}_${numAmount}`;
-
-    // Personal transaction (Debit -600)
-    let pTx = this.data.personal_transactions.find(
-      t => t.reference === feeRef && t.user_id === userId && t.type === 'PLATFORM_FEE'
-    );
-    if (!pTx) {
-      pTx = {
-        id: `ptx_fee_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        user_id: userId,
-        type: 'PLATFORM_FEE',
-        category: 'ACTIVATION_FEE',
-        amount: -numAmount,
-        direction: 'DEBIT',
-        reference: feeRef,
-        status: 'SUCCESS',
-        display_title: `ACTIVATION FEE - PERSONAL AJO - Paid -₦${numAmount.toLocaleString()}`,
-        created_at: new Date().toISOString(),
-        paid_at: new Date().toISOString()
-      };
-      this.data.personal_transactions.push(pTx);
-    }
-
-    // Super Admin transaction (Fee Income +600) ONCE
-    let saTx = this.data.super_admin_transactions.find(
-      t => t.reference === feeRef && t.type === 'FEE_INCOME'
-    );
-    if (!saTx) {
-      saTx = {
-        id: `satx_fee_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        type: 'FEE_INCOME',
-        category: 'ACTIVATION_FEE',
-        amount: numAmount,
-        direction: 'CREDIT',
-        reference: feeRef,
-        paystack_reference: feeRef,
-        status: 'SUCCESS',
-        display_title: `PLATFORM FEE INCOME - PERSONAL AJO (+₦${numAmount.toLocaleString()})`,
-        created_at: new Date().toISOString()
-      };
-      this.data.super_admin_transactions.push(saTx);
-      this.recordAdminRevenue({
-        type: 'registration_600',
-        amount: numAmount,
-        reference: feeRef,
-        user_id: userId,
-        gross_amount: numAmount,
-        description: `Personal Ajo Platform Registration Fee (₦${numAmount})`
-      });
-    }
-
-    this.save();
-    return { personalTx: pTx, superAdminTx: saTx };
-  }
-
-  /**
-   * 3. Create Super Admin withdrawal transaction (ONLY for Super Admin payout)
-   * This is the ONLY place where "WITHDRAWAL - EARNINGS - PACK AJO" should appear.
-   */
-  createSuperAdminWithdrawalTransaction(
-    amount: number,
-    reference?: string
-  ): SuperAdminTransaction {
-    if (!this.data.super_admin_transactions) this.data.super_admin_transactions = [];
-
-    const numAmount = Math.abs(Number(amount));
-    const cleanRef = reference || `wth_sa_${Date.now()}_${Math.round(numAmount * 100)}`;
-
-    const existing = this.data.super_admin_transactions.find(
-      t => (t.reference === cleanRef || t.paystack_reference === cleanRef) && t.type === 'WITHDRAWAL'
-    );
-    if (existing) return existing;
-
-    const tx: SuperAdminTransaction = {
-      id: `satx_wth_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      type: 'WITHDRAWAL',
-      category: 'EARNINGS',
-      amount: -numAmount,
-      direction: 'DEBIT',
-      reference: cleanRef,
-      paystack_reference: cleanRef,
-      status: 'SUCCESS',
-      display_title: 'WITHDRAWAL - EARNINGS - PACK AJO',
-      created_at: new Date().toISOString()
-    };
-    this.data.super_admin_transactions.push(tx);
-    this.save();
-    return tx;
-  }
-
-  /**
-   * 4. Single Source of Truth for Super Admin Balance:
-   * SUM(fee income SUCCESS) - SUM(withdrawals SUCCESS).
-   * Used for BOTH frontend Super Admin display AND backend validation.
-   */
-  getRealSuperAdminBalance(): number {
-    const audit = this.auditSuperAdminRealBalance();
-    return audit.real_balance;
-  }
-
-  /**
-   * 5. Get Personal Transactions:
-   * Query SELECT * FROM personal_transactions WHERE user_id = auth_user ORDER BY created_at DESC.
-   * Merges existing local deposits & withdrawals safely so history never disappears.
-   */
-  getPersonalTransactions(userId: string): PersonalTransaction[] {
-    const pTxs: PersonalTransaction[] = [
-      ...(this.data.personal_transactions || []).filter(t => t.user_id === userId)
-    ];
-
-    // Merge from local payments table
-    const payments = this.getPaymentsByUserId(userId);
-    for (const p of payments) {
-      const isDeposit = p.purpose === 'personal_deposit' || p.type === 'personal_deposit';
-      const isFee = p.purpose === 'personal_registration' || p.amount === 600;
-      if (isDeposit && !pTxs.some(t => t.reference === p.reference)) {
-        pTxs.push({
-          id: p.id || `ptx_${p.reference}`,
-          user_id: userId,
-          type: 'DEPOSIT',
-          category: 'PERSONAL_SAVINGS',
-          amount: Math.abs(p.amount),
-          direction: 'CREDIT',
-          reference: p.reference || p.id,
-          status: (p.status === 'success' || (p.status as any) === 'successful') ? 'SUCCESS' : 'PENDING',
-          display_title: `DEPOSIT - PERSONAL AJO SAVINGS +₦${Math.abs(p.amount).toLocaleString()}`,
-          created_at: p.created_at || new Date().toISOString()
-        });
-      } else if (isFee && !pTxs.some(t => t.reference === p.reference || t.type === 'PLATFORM_FEE')) {
-        pTxs.push({
-          id: p.id || `ptx_fee_${p.reference}`,
-          user_id: userId,
-          type: 'PLATFORM_FEE',
-          category: 'ACTIVATION_FEE',
-          amount: -600,
-          direction: 'DEBIT',
-          reference: p.reference || p.id,
-          status: 'SUCCESS',
-          display_title: 'ACTIVATION FEE - PERSONAL AJO - Paid -₦600',
-          created_at: p.created_at || new Date().toISOString()
-        });
-      }
-    }
-
-    // Merge from local personal withdrawals table
-    const withdrawals = this.getAllWithdrawals().filter(w => w.user_id === userId && w.withdrawal_type === 'personal');
-    for (const w of withdrawals) {
-      if (!pTxs.some(t => t.reference === w.id || t.reference === w.reference)) {
-        pTxs.push({
-          id: `ptx_${w.id}`,
-          user_id: userId,
-          type: 'WITHDRAWAL',
-          category: 'PERSONAL_SAVINGS',
-          amount: -Math.abs(w.amount),
-          direction: 'DEBIT',
-          reference: w.reference || w.id,
-          status: w.status === 'completed' || w.status === 'successful' ? 'SUCCESS' : 'PENDING',
-          display_title: `WITHDRAWAL - PERSONAL AJO -₦${Math.abs(w.amount).toLocaleString()}`,
-          created_at: w.created_at || new Date().toISOString()
-        });
-      }
-    }
-
-    pTxs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return pTxs;
   }
 
   // Groups
@@ -2149,8 +1968,6 @@ class Database {
     }
 
     const waNumber = userProfile.whatsapp_number || userProfile.whatsappNumber || userProfile.phone;
-    const vaName = formatGroupMemberAccountName(userProfile.full_name);
-    const vaNumber = generateMoniepointAccountNumber(`group_${group.id}_${nextPosition}_${userProfile.full_name}_${userProfile.phone}`);
 
     const member: GroupMember = {
       id: `mem_${Date.now()}_${nextPosition}`,
@@ -2165,10 +1982,6 @@ class Database {
       position: nextPosition,
       status: 'active',
       current_round_status: 'pending_contribution',
-      virtual_account_name: vaName,
-      virtual_account_number: vaNumber,
-      credit_balance: 0,
-      payment_type: 'bank_transfer',
       joined_at: new Date().toISOString()
     };
     this.data.group_members.push(member);
@@ -2186,10 +1999,6 @@ class Database {
       user_id: userProfile.id,
       round_number: group.current_round,
       amount: group.contribution_amount,
-      virtual_account_name: vaName,
-      virtual_account_number: vaNumber,
-      credit_balance: 0,
-      payment_type: 'bank_transfer',
       status: 'Pending'
     });
 
@@ -2199,47 +2008,6 @@ class Database {
     syncGroupToSupabase(group).catch(err => console.warn('[Supabase Group Sync Warn]:', err?.message || err));
     fsUpsertGroup(group).catch(err => console.warn('[Firestore Group Sync Warn]:', err?.message || err));
     return member;
-  }
-
-  addMemberByGroupAdmin(groupId: string, data: {
-    full_name: string;
-    phone: string;
-    account_number: string;
-    bank_name?: string;
-  }): GroupMember {
-    const group = this.getGroupById(groupId);
-    if (!group) throw new Error('Group not found');
-
-    const cleanPhone = normalizeNigerianPhone(data.phone);
-    if (!cleanPhone || cleanPhone.length !== 11) {
-      throw new Error('Valid 11-digit Nigerian phone number is required (e.g. 08012345678).');
-    }
-    if (!data.full_name || data.full_name.trim().length < 2) {
-      throw new Error('Member full name is required.');
-    }
-    if (!data.account_number || data.account_number.trim().length !== 10) {
-      throw new Error('10-digit Nigerian bank account number is required.');
-    }
-
-    let profile = this.getProfileByPhone(cleanPhone);
-    if (!profile) {
-      profile = this.upsertProfile({
-        full_name: data.full_name.trim(),
-        phone: cleanPhone,
-        bank_name: data.bank_name?.trim() || 'Moniepoint MFB',
-        account_number: data.account_number.trim(),
-        verification_type: 'BVN',
-        verification_number: '12345678901',
-        role: 'MEMBER'
-      });
-    } else {
-      // Update bank details if provided
-      if (data.bank_name) profile.bank_name = data.bank_name.trim();
-      if (data.account_number) profile.account_number = data.account_number.trim();
-      this.save();
-    }
-
-    return this.joinGroup(groupId, profile);
   }
 
   // Completed packs and cycle helpers
@@ -2370,18 +2138,22 @@ class Database {
 
     if (paidContributions.length === 0) return false;
 
-    // Early Payment Allowed:
-    // Members can pay ANYTIME before due date (Day 1, 2, 3... of a 7-day cycle).
-    // System accepts early payment and recognizes it as paid ahead for this cycle!
+    // If cycle is not open yet (interval has not elapsed since last pack),
+    // no contribution is open or paid for this upcoming cycle.
+    if (!cycleInfo.isCycleOpen) {
+      return false;
+    }
+
+    // When the cycle is open, check if the member has paid specifically for this cycleNumber
     const hasCyclePayment = paidContributions.some(c => {
       if (typeof c.cycle_number === 'number') {
         return c.cycle_number === cycleInfo.cycleNumber;
       }
-      if (c.paid_at && cycleInfo.lastPackDate) {
+      if (c.paid_at && cycleInfo.cycleOpenDate) {
         const paidCalDate = getNigeriaCalendarDate(c.paid_at);
-        return paidCalDate >= cycleInfo.lastPackDate;
+        return paidCalDate >= cycleInfo.cycleOpenDate;
       }
-      return true;
+      return false;
     });
 
     return hasCyclePayment;
@@ -2392,13 +2164,21 @@ class Database {
     paidCount: number;
     allPaid: boolean;
     unpaidMemberIds: string[];
-    isEarlyWaiting: boolean;
-    isPaused: boolean;
   } {
     const group = this.getGroupById(groupId);
     const activeMembers = this.getGroupMembers(groupId);
     const totalRequired = group ? group.member_limit : activeMembers.length;
     const cycleInfo = this.getGroupCycleInfo(groupId, roundNumber, simulatedDate);
+
+    // If cycle is not open yet, packing cannot proceed today and contributions for this cycle are not collected yet
+    if (!cycleInfo.isCycleOpen) {
+      return {
+        totalRequired,
+        paidCount: 0,
+        allPaid: false,
+        unpaidMemberIds: activeMembers.map(m => m.id)
+      };
+    }
 
     const unpaidMemberIds: string[] = [];
     let paidCount = 0;
@@ -2413,176 +2193,12 @@ class Database {
 
     const allPaid = totalRequired > 0 && activeMembers.length >= totalRequired && paidCount >= totalRequired && unpaidMemberIds.length === 0;
 
-    // Scheduled disbursement scenarios:
-    // 1. If all 10 pay early on Day 2, system must WAIT till Day 7 before auto-disbursing (isEarlyWaiting = true).
-    // 2. If on Day 7, only 9 members have paid, system must PAUSE (isPaused = true).
-    const isEarlyWaiting = allPaid && !cycleInfo.isCycleOpen;
-    const isPaused = cycleInfo.isCycleOpen && !allPaid && activeMembers.length > 0;
-
     return {
       totalRequired,
       paidCount,
       allPaid,
-      unpaidMemberIds,
-      isEarlyWaiting,
-      isPaused
+      unpaidMemberIds
     };
-  }
-
-  processContributionPayment(
-    groupId: string,
-    memberId: string,
-    amountPaid: number,
-    paymentType: string = 'bank_transfer',
-    customReference?: string,
-    simulatedDate?: string,
-    authenticatedUserId?: string
-  ): {
-    success: boolean;
-    isPaid: boolean;
-    isPaidAhead: boolean;
-    baseContribution: number;
-    fee: number;
-    expectedCycleTotal: number;
-    amountPaid: number;
-    creditUsed: number;
-    newCreditBalance: number;
-    remainingRequired: number;
-    reference: string;
-    autoDisbursed?: boolean;
-    disbursedMemberName?: string;
-  } {
-    const group = this.getGroupById(groupId);
-    if (!group) throw new Error('Group not found');
-
-    const member = this.data.group_members.find(m => m.id === memberId && m.group_id === groupId);
-    if (!member) throw new Error('Member not found');
-
-    const cycleInfo = this.getGroupCycleInfo(groupId, group.current_round, simulatedDate);
-    const baseContribution = group.contribution_amount;
-    const fee = 60; // ₦60 fee added to every contribution
-    const expectedCycleTotal = baseContribution + fee;
-    const currentCredit = Number(member.credit_balance || 0);
-
-    const reference = customReference || `CONTRIB_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const alreadyPaid = this.hasMemberPaidCurrentCycle(groupId, memberId, group.current_round, simulatedDate);
-
-    // If member has already completed payment for this cycle, entire amount goes into credit wallet
-    if (alreadyPaid) {
-      const newCreditBalance = currentCredit + amountPaid;
-      member.credit_balance = newCreditBalance;
-      member.payment_type = paymentType;
-      this.save();
-      syncGroupMemberToSupabase(member).catch(() => {});
-      fsUpsertGroupMember(member).catch(() => {});
-
-      return {
-        success: true,
-        isPaid: true,
-        isPaidAhead: true,
-        baseContribution,
-        fee,
-        expectedCycleTotal,
-        amountPaid,
-        creditUsed: 0,
-        newCreditBalance,
-        remainingRequired: 0,
-        reference
-      };
-    }
-
-    // Member has NOT paid current cycle yet
-    const totalAvailable = amountPaid + currentCredit;
-
-    if (totalAvailable >= expectedCycleTotal) {
-      // FULL OR OVER-PAYMENT: Mark cycle as Paid!
-      const surplus = totalAvailable - expectedCycleTotal;
-      const creditUsed = Math.min(currentCredit, expectedCycleTotal);
-      member.credit_balance = surplus;
-      member.payment_type = paymentType;
-
-      this.markContributionPaid(groupId, memberId, group.current_round, reference, simulatedDate, authenticatedUserId || member.user_id);
-      syncGroupMemberToSupabase(member).catch(() => {});
-      fsUpsertGroupMember(member).catch(() => {});
-
-      const isPaidAhead = !cycleInfo.isCycleOpen;
-
-      // Check if this payment completes the cycle for all members AND cycle duration has reached!
-      let autoDisbursed = false;
-      let disbursedMemberName: string | undefined;
-
-      const statusAfterPayment = this.getCycleContributionStatus(groupId, group.current_round, simulatedDate);
-      if (statusAfterPayment.allPaid && (cycleInfo.isCycleOpen || paymentType === 'simulation') && !cycleInfo.hasPackedToday) {
-        const currentPacker = this.getCurrentPacker(groupId, group.current_round);
-        if (currentPacker && !this.isMemberPacked(groupId, currentPacker.id, group.current_round)) {
-          try {
-            this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate, { bypassDateCheck: paymentType === 'simulation' });
-            autoDisbursed = true;
-            disbursedMemberName = currentPacker.full_name;
-          } catch (packErr) {
-            console.warn('[Auto-Disbursement Warn]:', packErr);
-          }
-        }
-      }
-
-      return {
-        success: true,
-        isPaid: true,
-        isPaidAhead,
-        baseContribution,
-        fee,
-        expectedCycleTotal,
-        amountPaid,
-        creditUsed,
-        newCreditBalance: surplus,
-        remainingRequired: 0,
-        reference,
-        autoDisbursed,
-        disbursedMemberName
-      };
-    } else {
-      // PARTIAL PAYMENT: ACCEPT EVERYTHING - DO NOT BOUNCE BACK!
-      // Save partial in member's credit wallet, cycle remains pending
-      member.credit_balance = totalAvailable;
-      member.current_round_status = 'pending_contribution';
-      member.payment_type = paymentType;
-
-      const partialContrib: Contribution = {
-        id: `contrib_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        group_id: groupId,
-        member_id: memberId,
-        user_id: authenticatedUserId || member.user_id,
-        round_number: group.current_round,
-        cycle_number: cycleInfo.cycleNumber,
-        amount: amountPaid,
-        status: 'Partial',
-        reference,
-        paid_at: new Date().toISOString(),
-        payment_type: paymentType,
-        created_at: new Date().toISOString()
-      };
-      this.data.contributions.push(partialContrib);
-
-      this.save();
-      syncGroupMemberToSupabase(member).catch(() => {});
-      fsUpsertGroupMember(member).catch(() => {});
-
-      const remainingRequired = expectedCycleTotal - totalAvailable;
-
-      return {
-        success: true,
-        isPaid: false,
-        isPaidAhead: false,
-        baseContribution,
-        fee,
-        expectedCycleTotal,
-        amountPaid,
-        creditUsed: 0,
-        newCreditBalance: totalAvailable,
-        remainingRequired,
-        reference
-      };
-    }
   }
 
   markContributionPaid(groupId: string, memberId: string, roundNumber: number, reference: string, simulatedDate?: string, authenticatedUserId?: string): Contribution {
@@ -2682,7 +2298,7 @@ class Database {
     return null;
   }
 
-  executePack(groupId: string, memberId: string, roundNumber: number, simulatedDate?: string, options?: { bypassDateCheck?: boolean }): { transaction: PackTransaction; commission: Commission; roundCompleted: boolean } {
+  executePack(groupId: string, memberId: string, roundNumber: number, simulatedDate?: string): { transaction: PackTransaction; commission: Commission; roundCompleted: boolean } {
     const group = this.getGroupById(groupId);
     if (!group) throw new Error('Group not found');
 
@@ -2715,12 +2331,12 @@ class Database {
 
     // 5. Confirm cycle is eligible and open according to group's configured frequency
     const cycleInfo = this.getGroupCycleInfo(groupId, roundNumber, simulatedDate);
-    if (!options?.bypassDateCheck && !cycleInfo.isCycleOpen) {
+    if (!cycleInfo.isCycleOpen) {
       throw new Error(`Packing for this cycle is scheduled for ${cycleInfo.scheduledPackDateDisplay} (${cycleInfo.scheduledPackDate}).`);
     }
 
     // 6. Confirm no other member has already packed for this calendar day
-    if (!options?.bypassDateCheck && cycleInfo.hasPackedToday) {
+    if (cycleInfo.hasPackedToday) {
       throw new Error(`Packing for today has already been completed. The next packing cycle opens on ${cycleInfo.scheduledPackDateDisplay}.`);
     }
 
@@ -2947,10 +2563,9 @@ class Database {
     const totalMembersExpected = group.member_limit;
     const membersJoinedCount = members.length;
 
-    const totalMemberCredits = members.reduce((sum, m) => sum + Number(m.credit_balance || 0), 0);
     const totalContributionsAmount = this.data.contributions
       .filter(c => c.group_id === groupId && c.status === 'Paid')
-      .reduce((sum, c) => sum + c.amount, 0) + totalMemberCredits;
+      .reduce((sum, c) => sum + c.amount, 0);
 
     const totalPackedAmount = this.data.pack_transactions
       .filter(t => t.group_id === groupId && t.status === 'completed')
@@ -2991,30 +2606,16 @@ class Database {
         ? `${userProf.verification_type || 'BVN'}: ••••••${userProf.verification_number.slice(-4)}`
         : 'Verified (NDPR)';
 
-      const vaName = m.virtual_account_name || formatGroupMemberAccountName(m.full_name || userProf?.full_name || 'Member');
-      const vaNumber = m.virtual_account_number || generateMoniepointAccountNumber(`group_${groupId}_${m.id}_${m.full_name}`);
-      if (!m.virtual_account_number) {
-        m.virtual_account_number = vaNumber;
-        m.virtual_account_name = vaName;
-        m.credit_balance = m.credit_balance ?? 0;
-        m.payment_type = m.payment_type || 'bank_transfer';
-      }
-
       return {
         id: m.id,
         user_id: m.user_id,
         full_name: m.full_name || userProf?.full_name || 'Member',
         phone: m.phone || userProf?.phone || '',
         position: m.position,
-        packing_position: m.packing_position || m.position,
         status: m.status,
         current_round_status,
         hasContributed,
         hasPacked,
-        virtual_account_name: vaName,
-        virtual_account_number: vaNumber,
-        credit_balance: Number(m.credit_balance || 0),
-        payment_type: m.payment_type || 'bank_transfer',
         next_round_consent: m.next_round_consent,
         scheduledPackDate: estDate.toISOString().split('T')[0],
         scheduledPackDateDisplay: formatDisplayDate(estDate.toISOString().split('T')[0]),
@@ -3064,20 +2665,18 @@ class Database {
     // Central ledger entries for this group
     const transactions: CentralLedgerEntry[] = [
       ...this.data.contributions
-        .filter(c => c.group_id === groupId && (c.status === 'Paid' || c.status === 'Partial'))
+        .filter(c => c.group_id === groupId && c.status === 'Paid')
         .map(c => ({
           id: c.id,
           reference: c.reference || c.id,
           type: 'GROUP_CONTRIBUTION' as const,
-          description: c.status === 'Partial'
-            ? `Partial Contribution (Credit Wallet) - Round ${c.round_number}`
-            : `Contribution for Round ${c.round_number}`,
+          description: `Contribution for Round ${c.round_number}`,
           user_id: c.user_id,
           user_name: members.find(m => m.id === c.member_id)?.full_name || 'Member',
           group_id: groupId,
           group_name: group.group_name,
           amount: c.amount,
-          status: c.status === 'Paid' ? ('successful' as const) : ('pending' as const),
+          status: 'successful' as const,
           date: c.paid_at || c.id,
           created_at: c.paid_at || c.id
         })),
@@ -3134,9 +2733,7 @@ class Database {
         bank_name: adminProfile?.bank_name || '',
         account_number: adminProfile?.account_number || '',
         account_name: adminProfile?.full_name || group.admin_name
-      },
-      cycleStatus: this.getCycleContributionStatus(groupId, group.current_round),
-      cycleInfo
+      }
     };
   }
 
@@ -3384,10 +2981,9 @@ class Database {
     const groupsCount = this.data.groups.length;
     const groupMembersCount = this.data.group_members.filter(m => m.status === 'active').length;
 
-    const totalMemberCredits = this.data.group_members.reduce((sum, m) => sum + Number(m.credit_balance || 0), 0);
     const totalContributionsAmount = this.data.contributions
       .filter(c => c.status === 'Paid')
-      .reduce((sum, c) => sum + c.amount, 0) + totalMemberCredits;
+      .reduce((sum, c) => sum + c.amount, 0);
 
     const totalPackingAmount = this.data.pack_transactions
       .filter(t => t.status === 'completed')
@@ -3751,15 +3347,13 @@ class Database {
           id: c.id,
           reference: c.reference || c.id,
           type: 'GROUP_CONTRIBUTION' as const,
-          description: c.status === 'Partial'
-            ? `Partial Contribution (${g?.group_name || 'Group'} - Round ${c.round_number})`
-            : `Group contribution for Round ${c.round_number} (${g?.group_name || 'Group'})`,
+          description: `Group contribution for Round ${c.round_number}`,
           user_id: c.user_id,
           user_name: u?.full_name || 'Member',
           group_id: c.group_id,
           group_name: g?.group_name,
           amount: c.amount,
-          status: c.status === 'Paid' ? ('successful' as const) : ('pending' as const),
+          status: 'successful' as const,
           date: c.paid_at || c.id,
           created_at: c.paid_at || c.id
         };
@@ -4160,10 +3754,9 @@ class Database {
     const groupsCount = this.data.groups.length;
     const groupMembersCount = this.data.group_members.filter(m => m.status === 'active').length;
 
-    const totalMemberCredits = this.data.group_members.reduce((sum, m) => sum + Number(m.credit_balance || 0), 0);
     const totalContributionsAmount = this.data.contributions
       .filter(c => c.status === 'Paid')
-      .reduce((sum, c) => sum + c.amount, 0) + totalMemberCredits;
+      .reduce((sum, c) => sum + c.amount, 0);
 
     const totalPackingTransactionsCount = this.data.pack_transactions.length;
     const wallet = this.getSuperAdminWallet();

@@ -21,7 +21,7 @@ interface HomeHeroProps {
   onSignUpChoice: () => void;
   onSelectPersonal: () => void;
   onSelectGroup: () => void;
-  onJoinWithCode?: () => void;
+  onJoinWithCode: () => void;
   onLogin: () => void;
   onOpenLiveChat?: () => void;
 }
@@ -84,13 +84,19 @@ export const HomeHero: React.FC<HomeHeroProps> = ({
               Better Ajo makes personal and group savings simple, organized and easy to manage. Built for the modern Nigerian.
             </p>
 
-            {/* Two Main Actions Grouped Together (Mobile-First & Clean) */}
+            {/* Three Main Actions Grouped Together (Mobile-First & Clean) */}
             <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-3.5 max-w-xl">
               <button
                 onClick={onSignUpChoice}
                 className="px-7 py-4 bg-[#008751] text-white font-black rounded-2xl shadow-lg shadow-[#008751]/25 hover:scale-[1.02] hover:bg-[#007345] active:scale-[0.98] transition-all text-base cursor-pointer text-center"
               >
                 CREATE / SIGN UP
+              </button>
+              <button
+                onClick={onJoinWithCode}
+                className="px-6 py-4 bg-white border-2 border-slate-200 hover:border-[#008751] text-slate-800 font-bold rounded-2xl hover:bg-slate-50 active:scale-[0.98] transition-all text-base cursor-pointer text-center"
+              >
+                JOIN AJO WITH CODE
               </button>
               <button
                 onClick={onLogin}
@@ -283,10 +289,16 @@ export const HomeHero: React.FC<HomeHeroProps> = ({
               <div className="flex gap-3">
                 <button
                   onClick={onSelectGroup}
-                  className="w-full flex items-center justify-center space-x-1.5 rounded-xl bg-[#008751] py-3.5 text-xs font-bold text-white hover:bg-[#007345] shadow-sm shadow-[#008751]/20 transition cursor-pointer"
+                  className="flex-1 flex items-center justify-center space-x-1.5 rounded-xl bg-[#008751] py-3.5 text-xs font-bold text-white hover:bg-[#007345] shadow-sm shadow-[#008751]/20 transition cursor-pointer"
                 >
-                  <span>Create Group Ajo (Become Agent)</span>
+                  <span>Create Group Ajo</span>
                   <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={onJoinWithCode}
+                  className="px-4 rounded-xl border-2 border-slate-200 text-slate-800 hover:bg-slate-50 text-xs font-bold transition cursor-pointer"
+                >
+                  Join Code
                 </button>
               </div>
             </div>
@@ -321,9 +333,9 @@ export const HomeHero: React.FC<HomeHeroProps> = ({
               <div className="h-9 w-9 rounded-lg bg-[#E6F3ED] text-[#008751] font-black flex items-center justify-center text-sm mb-4">
                 2
               </div>
-              <h4 className="text-sm font-bold text-slate-900 mb-2">Create Group</h4>
+              <h4 className="text-sm font-bold text-slate-900 mb-2">Join or Create</h4>
               <p className="text-xs text-slate-500 leading-relaxed">
-                Create and manage your savings group with automated Moniepoint virtual accounts for each member.
+                Create your savings group or join an existing group using an invitation code or link.
               </p>
             </div>
 
