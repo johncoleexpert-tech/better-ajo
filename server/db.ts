@@ -104,7 +104,7 @@ interface DatabaseSchema {
   admin_revenue_ledger?: Array<{
     id: string;
     date: string;
-    type: 'registration_600' | 'contribution_60' | 'packing_33' | 'withdrawal_1_6' | 'super_admin_withdrawal';
+    type: 'registration_600' | 'group_creation_1000' | 'contribution_60' | 'packing_33' | 'withdrawal_1_6' | 'super_admin_withdrawal';
     group_or_user: string;
     user_id?: string;
     group_id?: string;
@@ -727,7 +727,7 @@ class Database {
    * Enforces idempotency via transaction reference.
    */
   public recordAdminRevenue(entry: {
-    type: 'registration_600' | 'contribution_60' | 'packing_33' | 'withdrawal_1_6';
+    type: 'registration_600' | 'group_creation_1000' | 'contribution_60' | 'packing_33' | 'withdrawal_1_6';
     amount: number;
     reference: string;
     group_or_user?: string;
@@ -761,7 +761,7 @@ class Database {
     wallet.available_balance += numAmount;
     wallet.total_gross_earnings += numAmount;
 
-    if (entry.type === 'registration_600') {
+    if (entry.type === 'registration_600' || entry.type === 'group_creation_1000') {
       wallet.breakdown.reg_600_total += numAmount;
     } else if (entry.type === 'contribution_60') {
       wallet.breakdown.contrib_60_total += numAmount;
@@ -1321,7 +1321,7 @@ class Database {
     return this.data.profiles;
   }
 
-  upsertProfile(profile: Omit<UserProfile, 'id' | 'created_at'> & { id?: string }): UserProfile {
+  upsertProfile(profile: Omit<UserProfile, 'id' | 'created_at'> & { id?: string; created_at?: string }): UserProfile {
     const cleanPhone = profile.phone ? normalizeNigerianPhone(profile.phone) : '';
     const cleanEmail = profile.email ? profile.email.trim().toLowerCase() : '';
     const existingIndex = this.data.profiles.findIndex(
@@ -1377,7 +1377,7 @@ class Database {
       virtual_account_number: vaNumber,
       credit_balance: typeof profile.credit_balance === 'number' ? profile.credit_balance : 0,
       payment_type: profile.payment_type || 'bank_transfer',
-      created_at: new Date().toISOString()
+      created_at: profile.created_at || new Date().toISOString()
     };
     this.data.profiles.push(newProfile);
     this.save();
@@ -2763,6 +2763,16 @@ class Database {
     this.data.groupAdminRevenue = (this.data.groupAdminRevenue || 0) + groupAdminShare;
     (group as any).superAdminRevenue = ((group as any).superAdminRevenue || 0) + superAdminShare;
     (group as any).groupAdminRevenue = ((group as any).groupAdminRevenue || 0) + groupAdminShare;
+    (group as any).group_admin_revenue = ((group as any).group_admin_revenue || 0) + groupAdminShare;
+    (group as any).availableBalance = ((group as any).availableBalance || 0) + groupAdminShare;
+    (group as any).available_balance = ((group as any).available_balance || 0) + groupAdminShare;
+    (group as any).commissionBalance = ((group as any).commissionBalance || 0) + groupAdminShare;
+    (group as any).commission_balance = ((group as any).commission_balance || 0) + groupAdminShare;
+    (group as any).withdrawableBalance = ((group as any).withdrawableBalance || 0) + groupAdminShare;
+    (group as any).withdrawable_balance = ((group as any).withdrawable_balance || 0) + groupAdminShare;
+    (group as any).admin_commission_balance = ((group as any).admin_commission_balance || 0) + groupAdminShare;
+    (group as any).totalEarnings = ((group as any).totalEarnings || 0) + groupAdminShare;
+    (group as any).total_earnings = ((group as any).total_earnings || 0) + groupAdminShare;
 
     const isProd = process.env.NODE_ENV === 'production';
     const effectiveSimulatedDate = isProd ? undefined : simulatedDate;
@@ -2898,29 +2908,92 @@ class Database {
     const group = this.getGroupById(groupId);
     if (!group) return { total: 0, available: 0, withdrawn: 0 };
 
-    // BUG 3 FIX: Live Calculation without reading old 50/50 or decimals from database
-    // const totalRounded = Math.round(totalAmount)
-    // const packerShare = Math.round(totalRounded * 0.6667)
-    // const adminShare = totalRounded - packerShare
     const totalFeeAmount = typeof (group as any).withdrawalFee === 'number'
       ? (group as any).withdrawalFee
       : (typeof group.packing_fee === 'number' ? group.packing_fee : 3000);
     const totalRounded = Math.round(totalFeeAmount);
-    const packerShare = Math.round(totalRounded * 0.6667); // Whole Naira: 2000 for 3000 fee, 3333 for 5000 fee
+    const packerShare = Math.round(totalRounded * 0.6667); // Whole Naira: 2000 for 3000 fee, 1333 for 2000 fee, 3333 for 5000 fee
 
-    const packTxs = this.data.pack_transactions.filter(
-      t => t.group_id === groupId && t.status === 'completed'
+    // 1. Commission documents for this group
+    const groupCommissions = (this.data.commissions || []).filter(
+      c => c.group_id === groupId || (c as any).groupId === groupId
     );
-    const total = packTxs.length * packerShare;
+    const commissionEarned = groupCommissions.reduce(
+      (sum, c) => sum + Math.round(Number(c.admin_amount || (c as any).groupAdminShare || (c as any).group_admin_share || (c as any).commission || (c as any).amount || 0)),
+      0
+    );
 
-    const adminId = group.admin_id;
-    const withdrawals = this.data.withdrawals.filter(
-      w => w.user_id === adminId &&
-        (w.group_id === groupId || w.withdrawal_type === 'admin_commission') &&
-        w.status !== 'failed'
+    // 2. Pack transactions for this group
+    const packTxs = (this.data.pack_transactions || []).filter(
+      t => (t.group_id === groupId || (t as any).groupId === groupId) && (t.status === 'completed' || (t as any).status === 'successful')
     );
-    const withdrawn = withdrawals.reduce((sum, w) => sum + Math.round(w.amount), 0);
-    const available = Math.max(0, total - withdrawn);
+    const packTxsEarned = packTxs.reduce((sum, t) => {
+      const pFee = typeof (t as any).packing_fee === 'number' ? (t as any).packing_fee : totalRounded;
+      const share = Math.round(pFee * 0.6667);
+      return sum + Math.round(Number((t as any).admin_commission || (t as any).groupAdminShare || (t as any).group_admin_share || share));
+    }, 0);
+
+    // 3. Stored fields on group
+    const storedTotal = Math.max(
+      Number((group as any).totalEarnings || 0),
+      Number((group as any).total_earnings || 0),
+      Number((group as any).groupAdminRevenue || 0),
+      Number((group as any).group_admin_revenue || 0)
+    );
+
+    // 4. Stored explicit positive available balance on group
+    const explicitAvailable = Math.max(
+      Number((group as any).availableBalance || 0),
+      Number((group as any).available_balance || 0),
+      Number((group as any).commissionBalance || 0),
+      Number((group as any).commission_balance || 0),
+      Number((group as any).withdrawableBalance || 0),
+      Number((group as any).withdrawable_balance || 0),
+      Number((group as any).admin_commission_balance || 0)
+    );
+
+    // 5. Total gross earned
+    let total = Math.max(commissionEarned, packTxsEarned, storedTotal, explicitAvailable);
+
+    // 6. Calculate withdrawals strictly for this group
+    const withdrawals = (this.data.withdrawals || []).filter(
+      w => (w.group_id === groupId || (w as any).groupId === groupId) &&
+        (w.status === 'completed' || w.status === 'successful' || w.status === 'processing')
+    );
+    const calculatedWithdrawn = withdrawals.reduce((sum, w) => sum + Math.round(Number(w.amount || 0)), 0);
+    const storedWithdrawn = Math.max(
+      Number((group as any).groupAdminWithdrawn || 0),
+      Number((group as any).group_admin_withdrawn || 0)
+    );
+    const withdrawn = Math.max(calculatedWithdrawn, storedWithdrawn);
+
+    // 7. Unified available balance: single source of truth
+    let available: number;
+    if (explicitAvailable > 0 && calculatedWithdrawn === 0 && storedWithdrawn === 0) {
+      available = explicitAvailable;
+    } else if (explicitAvailable > 0) {
+      available = Math.max(0, explicitAvailable - calculatedWithdrawn);
+      available = Math.max(available, Math.max(0, total - withdrawn));
+    } else {
+      available = Math.max(0, total - withdrawn);
+    }
+
+    total = Math.max(total, available + withdrawn);
+
+    // Keep all fields unified on group
+    (group as any).availableBalance = Math.round(available);
+    (group as any).available_balance = Math.round(available);
+    (group as any).commissionBalance = Math.round(available);
+    (group as any).commission_balance = Math.round(available);
+    (group as any).withdrawableBalance = Math.round(available);
+    (group as any).withdrawable_balance = Math.round(available);
+    (group as any).admin_commission_balance = Math.round(available);
+    (group as any).totalEarnings = Math.round(total);
+    (group as any).total_earnings = Math.round(total);
+    (group as any).groupAdminRevenue = Math.round(total);
+    (group as any).group_admin_revenue = Math.round(total);
+    (group as any).groupAdminWithdrawn = Math.round(withdrawn);
+    (group as any).group_admin_withdrawn = Math.round(withdrawn);
 
     return {
       total: Math.round(total),
@@ -3156,7 +3229,7 @@ class Database {
 
     const roundedAmount = Math.round(amount);
     const balance = this.getAdminCommissionBalance(groupId);
-    if (roundedAmount <= 0 || roundedAmount > balance.available) {
+    if (roundedAmount <= 0 || roundedAmount > (balance.available + 0.001)) {
       throw new Error(`Insufficient available earnings. Available: ₦${balance.available.toLocaleString()}`);
     }
 
@@ -3218,7 +3291,7 @@ class Database {
 
     const roundedAmount = Math.round(amount);
     const balance = this.getAdminCommissionBalance(groupId);
-    if (roundedAmount <= 0 || roundedAmount > balance.available) {
+    if (roundedAmount <= 0 || roundedAmount > (balance.available + 0.001)) {
       throw new Error(`Insufficient available earnings. Available: ₦${balance.available.toLocaleString()}`);
     }
 
@@ -3247,6 +3320,19 @@ class Database {
     };
 
     this.data.withdrawals.push(withdrawal);
+
+    // Deduct withdrawn commission from group balances
+    const newAvailable = Math.max(0, balance.available - roundedAmount);
+    const newWithdrawn = balance.withdrawn + roundedAmount;
+    (group as any).availableBalance = newAvailable;
+    (group as any).available_balance = newAvailable;
+    (group as any).commissionBalance = newAvailable;
+    (group as any).commission_balance = newAvailable;
+    (group as any).withdrawableBalance = newAvailable;
+    (group as any).withdrawable_balance = newAvailable;
+    (group as any).admin_commission_balance = newAvailable;
+    (group as any).groupAdminWithdrawn = newWithdrawn;
+    (group as any).group_admin_withdrawn = newWithdrawn;
 
     // Record payment record in system
     if (!this.data.payments) this.data.payments = [];
@@ -4011,6 +4097,26 @@ class Database {
       this.data.payments[pIdx] = payment;
     } else {
       this.data.payments.push(payment);
+    }
+
+    if (withdrawal.withdrawal_type === 'admin_commission' && withdrawal.group_id) {
+      const grp = this.getGroupById(withdrawal.group_id);
+      if (grp) {
+        const amt = Math.round(Number(withdrawal.amount || 0));
+        const currentBal = this.getAdminCommissionBalance(withdrawal.group_id);
+        const newAvail = Math.max(0, currentBal.available - amt);
+        const newWithdrawn = currentBal.withdrawn + amt;
+
+        (grp as any).availableBalance = newAvail;
+        (grp as any).available_balance = newAvail;
+        (grp as any).commissionBalance = newAvail;
+        (grp as any).commission_balance = newAvail;
+        (grp as any).withdrawableBalance = newAvail;
+        (grp as any).withdrawable_balance = newAvail;
+        (grp as any).admin_commission_balance = newAvail;
+        (grp as any).groupAdminWithdrawn = newWithdrawn;
+        (grp as any).group_admin_withdrawn = newWithdrawn;
+      }
     }
 
     this.recordAudit({

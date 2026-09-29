@@ -564,10 +564,116 @@ export async function fsUpsertProfile(profile: UserProfile): Promise<boolean> {
   const db = getFirestoreDb();
   if (!db || !profile || !profile.id) return false;
   try {
-    await db.collection(FIRESTORE_COLLECTIONS.PROFILES).doc(profile.id).set(cleanUndefinedFields(profile), { merge: true });
+    const cleanData = cleanUndefinedFields(profile);
+    await db.collection(FIRESTORE_COLLECTIONS.PROFILES).doc(profile.id).set(cleanData, { merge: true });
+    await db.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id).set(cleanData, { merge: true });
     return true;
   } catch (err) {
     console.error(`Firestore upsertProfile error (${profile.id}):`, err);
+    return false;
+  }
+}
+
+export async function fsGetProfileByEmail(email: string): Promise<UserProfile | null> {
+  const db = getFirestoreDb();
+  if (!db || !email) return null;
+  const cleanEmail = email.trim().toLowerCase();
+  try {
+    const snap = await db.collection(FIRESTORE_COLLECTIONS.PROFILES)
+      .where('email', '==', cleanEmail)
+      .limit(1)
+      .get();
+    if (!snap.empty && snap.docs[0]) {
+      return snap.docs[0].data() as UserProfile;
+    }
+    const userSnap = await db.collection(FIRESTORE_COLLECTIONS.USERS)
+      .where('email', '==', cleanEmail)
+      .limit(1)
+      .get();
+    if (!userSnap.empty && userSnap.docs[0]) {
+      return userSnap.docs[0].data() as UserProfile;
+    }
+  } catch (err) {
+    console.warn(`Firestore getProfileByEmail error (${cleanEmail}):`, err);
+  }
+  return null;
+}
+
+export async function fsUpsertUserAndProfile(profile: UserProfile): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db || !profile || !profile.id) return false;
+  try {
+    const cleanData = cleanUndefinedFields(profile);
+    const batch = db.batch();
+    batch.set(db.collection(FIRESTORE_COLLECTIONS.PROFILES).doc(profile.id), cleanData, { merge: true });
+    batch.set(db.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id), cleanData, { merge: true });
+    await batch.commit();
+    return true;
+  } catch (err) {
+    console.error(`Firestore upsertUserAndProfile error (${profile.id}):`, err);
+    try {
+      await db.collection(FIRESTORE_COLLECTIONS.PROFILES).doc(profile.id).set(cleanUndefinedFields(profile), { merge: true });
+      await db.collection(FIRESTORE_COLLECTIONS.USERS).doc(profile.id).set(cleanUndefinedFields(profile), { merge: true });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+export async function fsRecordGroupCreationFee(
+  groupId: string,
+  groupName: string,
+  adminId: string,
+  adminName: string,
+  totalFee: number = 3000,
+  superAdminShare: number = 1000,
+  platformShare: number = 2000
+): Promise<boolean> {
+  const db = getFirestoreDb();
+  if (!db) return false;
+  try {
+    const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+    await mainRef.set({
+      stream1: FieldValue.increment(superAdminShare),
+      platformReserve: FieldValue.increment(platformShare),
+      totalGross: FieldValue.increment(totalFee),
+      unifiedAvailable: FieldValue.increment(superAdminShare),
+      lastUpdated: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    await db.collection(FIRESTORE_COLLECTIONS.SUPER_ADMIN_EARNINGS).doc('main').set({
+      totalEarnings: FieldValue.increment(superAdminShare),
+      availableBalance: FieldValue.increment(superAdminShare),
+      available_balance: FieldValue.increment(superAdminShare),
+      lastUpdated: new Date().toISOString()
+    }, { merge: true });
+
+    const txDocData = cleanUndefinedFields({
+      id: `tx_grp_fee_${groupId}`,
+      userId: adminId,
+      userName: adminName,
+      userRole: 'group_admin',
+      role: 'group_admin',
+      ajoId: groupId,
+      ajoName: groupName,
+      type: 'group_creation_fee',
+      category: 'REGISTRATION_FEE',
+      gross_amount: totalFee,
+      super_admin_share: superAdminShare,
+      platform_share: platformShare,
+      fee: totalFee,
+      amount: totalFee,
+      status: 'completed',
+      description: `Group Creation Platform Fee for ${groupName} (₦${superAdminShare.toLocaleString()} Super Admin + ₦${platformShare.toLocaleString()} Platform)`,
+      timestamp: FieldValue.serverTimestamp(),
+      created_at: new Date().toISOString()
+    });
+
+    await db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_grp_fee_${groupId}`).set(txDocData, { merge: true });
+    return true;
+  } catch (err: any) {
+    console.error(`[Firestore Group Creation Fee Error]:`, err?.message || err);
     return false;
   }
 }

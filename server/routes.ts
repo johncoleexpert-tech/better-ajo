@@ -66,6 +66,10 @@ import {
   aggregatePersonalAjoSavings,
   fsGetPlatformStats,
   getFirestoreDb,
+  getFirebaseAuth,
+  fsGetProfileByEmail,
+  fsUpsertUserAndProfile,
+  fsRecordGroupCreationFee,
   fsLogAuditEvent,
   fsSaveOtp,
   fsVerifyOtp,
@@ -281,9 +285,56 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
 
       let profile = db.getProfileByEmail(cleanEmail);
 
+      // Check Firestore by email if not found in memory
+      if (!profile) {
+        try {
+          const fsProf = await fsGetProfileByEmail(cleanEmail);
+          if (fsProf) {
+            profile = db.upsertProfile(fsProf);
+          }
+        } catch (e) {
+          console.warn('[Login] fsGetProfileByEmail error:', e);
+        }
+      }
+
+      // Check Firebase Admin Auth if still not found
+      if (!profile) {
+        try {
+          const auth = getFirebaseAuth();
+          if (auth) {
+            const authUser = await auth.getUserByEmail(cleanEmail);
+            if (authUser) {
+              const fsUser = await fsGetProfileById(authUser.uid);
+              const candidate = fsUser || {
+                id: authUser.uid,
+                uid: authUser.uid,
+                full_name: authUser.displayName || cleanEmail.split('@')[0],
+                email: cleanEmail,
+                phone: authUser.phoneNumber || '08000000000',
+                role: (cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com') ? 'SUPER_ADMIN' : 'MEMBER',
+                bank_name: 'Guaranty Trust Bank (GTB)',
+                account_number: '0123456789',
+                verification_type: 'NIN',
+                verification_number: '12345678901',
+                password: password,
+                status: 'active',
+                is_verified: true,
+                created_at: new Date().toISOString()
+              };
+              profile = db.upsertProfile(candidate as any);
+              await fsUpsertUserAndProfile(profile);
+            }
+          }
+        } catch (authErr) {
+          // User not found in Firebase Auth
+        }
+      }
+
       // Check for Super Admin auto-resolution
       if (!profile && (cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com')) {
         profile = db.getProfiles().find(p => p.role === 'SUPER_ADMIN') || db.upsertProfile({
+          id: 'usr_superadmin_realheaven',
+          uid: 'usr_superadmin_realheaven',
           full_name: 'Super Administrator',
           phone: '08154267469',
           email: cleanEmail,
@@ -292,8 +343,12 @@ apiRouter.post('/auth/login', authRateLimiter, async (req: Request, res: Respons
           account_number: '0123456789',
           verification_type: 'NIN',
           verification_number: '12345678901',
-          role: 'SUPER_ADMIN'
+          role: 'SUPER_ADMIN',
+          status: 'active',
+          is_verified: true,
+          created_at: new Date().toISOString()
         });
+        await fsUpsertUserAndProfile(profile);
       }
 
       if (!profile) {
@@ -451,7 +506,7 @@ apiRouter.post('/auth/signup', authRateLimiter, async (req: Request, res: Respon
       return res.status(400).json({ error: 'Password must be at least 4 characters.' });
     }
 
-    const existing = db.getProfileByEmail(cleanEmail);
+    const existing = db.getProfileByEmail(cleanEmail) || (await fsGetProfileByEmail(cleanEmail));
     if (existing) {
       return res.status(400).json({ error: 'An account with this email address already exists. Please log in.' });
     }
@@ -459,7 +514,33 @@ apiRouter.post('/auth/signup', authRateLimiter, async (req: Request, res: Respon
     const cleanPhone = phone ? normalizeNigerianPhone(phone) : `080${Math.floor(10000000 + Math.random() * 90000000)}`;
     const isSuperAdminEmail = cleanEmail === 'realheavenict@gmail.com' || cleanEmail === 'superadmin@packajo.ng' || cleanEmail === 'paulakinyele54@gmail.com';
 
+    let authUid = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    try {
+      const auth = getFirebaseAuth();
+      if (auth) {
+        try {
+          const userRec = await auth.createUser({
+            email: cleanEmail,
+            password: password,
+            displayName: (full_name && full_name.trim()) ? full_name.trim() : cleanEmail.split('@')[0]
+          });
+          authUid = userRec.uid;
+        } catch (authErr: any) {
+          if (authErr?.code === 'auth/email-already-exists') {
+            const u = await auth.getUserByEmail(cleanEmail);
+            authUid = u.uid;
+          } else {
+            console.warn('[Signup] Firebase Auth createUser notice:', authErr?.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Signup] Firebase Auth init notice:', e);
+    }
+
     const profile = db.upsertProfile({
+      id: authUid,
+      uid: authUid,
       full_name: (full_name && full_name.trim()) ? full_name.trim() : cleanEmail.split('@')[0],
       email: cleanEmail,
       password: password,
@@ -468,8 +549,13 @@ apiRouter.post('/auth/signup', authRateLimiter, async (req: Request, res: Respon
       account_number: account_number || '0123456789',
       verification_type: verification_type || 'BVN',
       verification_number: verification_number || '12345678901',
-      role: isSuperAdminEmail ? 'SUPER_ADMIN' : 'MEMBER'
+      role: isSuperAdminEmail ? 'SUPER_ADMIN' : 'MEMBER',
+      status: 'active',
+      is_verified: true,
+      created_at: new Date().toISOString()
     });
+
+    await fsUpsertUserAndProfile(profile);
 
     db.recordAudit({
       event_type: 'AUTH_REGISTER_SUCCESS',
@@ -566,19 +652,46 @@ apiRouter.post('/auth/register-profile', async (req: Request, res: Response) => 
       }
     }
 
+    let authUid = undefined;
+    if (email && password) {
+      try {
+        const auth = getFirebaseAuth();
+        if (auth) {
+          try {
+            const userRec = await auth.createUser({
+              email: email.trim().toLowerCase(),
+              password: password,
+              displayName: full_name.trim()
+            });
+            authUid = userRec.uid;
+          } catch (authErr: any) {
+            if (authErr?.code === 'auth/email-already-exists') {
+              const u = await auth.getUserByEmail(email.trim().toLowerCase());
+              authUid = u.uid;
+            }
+          }
+        }
+      } catch {}
+    }
+
     const profile = db.upsertProfile({
+      id: authUid,
+      uid: authUid,
       full_name: full_name.trim(),
       phone: cleanPhone,
       bank_name: bank_name.trim(),
       account_number: account_number.trim(),
       verification_type,
       verification_number: verification_number.trim(),
-      email: email ? email.trim() : undefined,
-      password: password || undefined
+      email: email ? email.trim().toLowerCase() : undefined,
+      password: password || undefined,
+      status: 'active',
+      is_verified: true,
+      created_at: new Date().toISOString()
     });
 
     await syncProfileToSupabase(profile).catch(() => {});
-    await fsUpsertProfile(profile).catch(() => {});
+    await fsUpsertUserAndProfile(profile).catch(() => {});
 
     return res.json({
       success: true,
@@ -1151,9 +1264,18 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       ).catch(err => console.warn('[Firestore Revenue Warn]:', err?.message || err));
     }
 
+    const transferResult = await initiatePaystackTransfer(
+      profile.account_number,
+      profile.bank_name,
+      profile.full_name,
+      netAmount,
+      `Better Ajo Personal Savings Payout to ${profile.full_name}`,
+      result.withdrawal.id
+    );
+
     return res.json({
       success: true,
-      message: `₦${netAmount.toLocaleString()} has been sent to ${profile.bank_name} (${profile.account_number})`,
+      message: transferResult.message || `₦${netAmount.toLocaleString()} has been sent to ${profile.bank_name} (${profile.account_number})`,
       personalAjo: result.personal,
       withdrawal: result.withdrawal
     });
@@ -1420,6 +1542,57 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       result.group.status = 'active';
       db.save();
     }
+
+    // Initialize group commission balance fields
+    (result.group as any).availableBalance = 0;
+    (result.group as any).commissionBalance = 0;
+    (result.group as any).withdrawableBalance = 0;
+    (result.group as any).totalEarnings = 0;
+    (result.group as any).admin_commission_balance = 0;
+    (result.group as any).groupAdminRevenue = 0;
+    (result.group as any).groupAdminWithdrawn = 0;
+
+    // FEE SPLIT LOGIC: ₦3,000 Group Creation Platform Fee:
+    // - Super Admin: ₦1,000 immediately in Available Balance
+    // - Platform Reserve: ₦2,000
+    // - Total Fee: ₦3,000
+    // - Recorded to transactions, admin_revenue_ledger, platformRevenue, superAdminEarnings
+    const groupCreationFee = 3000;
+    const superAdminShare = 1000;
+    const platformShare = 2000;
+
+    db.recordAdminRevenue({
+      type: 'group_creation_1000',
+      amount: superAdminShare,
+      reference: `grp_fee_${result.group.id}`,
+      group_or_user: `Group: ${result.group.group_name}`,
+      group_id: result.group.id,
+      gross_amount: groupCreationFee,
+      description: `Group Creation Platform Fee for ${result.group.group_name} (₦1,000 Super Admin + ₦2,000 Platform)`
+    });
+
+    if (db.data.super_admin_wallet) {
+      db.data.super_admin_wallet.available_balance = (db.data.super_admin_wallet.available_balance || 0) + superAdminShare;
+      db.data.super_admin_wallet.total_gross_earnings = (db.data.super_admin_wallet.total_gross_earnings || 0) + superAdminShare;
+      if (db.data.super_admin_wallet.breakdown) {
+        db.data.super_admin_wallet.breakdown.reg_600_total = (db.data.super_admin_wallet.breakdown.reg_600_total || 0) + superAdminShare;
+      }
+    }
+    if (db.data.superAdminEarnings) {
+      db.data.superAdminEarnings.available_balance = (db.data.superAdminEarnings.available_balance || 0) + superAdminShare;
+      db.data.superAdminEarnings.totalEarnings = (db.data.superAdminEarnings.totalEarnings || 0) + superAdminShare;
+    }
+    db.save();
+
+    await fsRecordGroupCreationFee(
+      result.group.id,
+      result.group.group_name,
+      admin_id,
+      admin_name,
+      groupCreationFee,
+      superAdminShare,
+      platformShare
+    ).catch(err => console.warn('[Firestore Group Creation Fee Warn]:', err?.message || err));
 
     await syncGroupToSupabase(result.group).catch(() => {});
     await fsUpsertGroup(result.group).catch(() => {});
@@ -2713,6 +2886,16 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
       ).catch(err => console.warn('[Firestore Packing Revenue Warn]:', err?.message || err));
     }
 
+    const memberPayout = result.transaction.member_amount;
+    const transferResult = await initiatePaystackTransfer(
+      result.transaction.account_number,
+      result.transaction.bank_name,
+      result.transaction.member_name,
+      memberPayout,
+      `Better Ajo Pack Payout for ${group.group_name} Round ${group.current_round}`,
+      `pck_trf_${result.transaction.id}`
+    );
+
     const completionMessage = result.roundCompleted
       ? `All Members Have Successfully Packed! Round ${group.current_round} Completed`
       : undefined;
@@ -2824,13 +3007,67 @@ apiRouter.post('/groups/:groupId/start-next-round', handleStartNextRound);
 apiRouter.post('/groups/:groupId/startRound2', handleStartNextRound);
 apiRouter.post('/groups/:groupId/start-round-2', handleStartNextRound);
 
+// Synchronize commissions, pack transactions, and withdrawals for a group from Firestore
+async function syncGroupFinancialsFromFirestore(groupId: string): Promise<void> {
+  try {
+    const fsDb = getFirestoreDb();
+    if (!fsDb) return;
+
+    // 1. Sync commissions
+    const comSnap = await fsDb.collection('commissions').where('group_id', '==', groupId).get();
+    comSnap.forEach(d => {
+      const cData = d.data() as any;
+      const effectiveId = cData.id || d.id;
+      if (!db.data.commissions.some(existing => existing.id === effectiveId)) {
+        db.data.commissions.push({ ...cData, id: effectiveId });
+      }
+    });
+
+    // 2. Sync pack_transactions
+    const packSnap = await fsDb.collection('pack_transactions').where('group_id', '==', groupId).get();
+    packSnap.forEach(d => {
+      const pData = d.data() as any;
+      const effectiveId = pData.id || d.id;
+      if (!db.data.pack_transactions.some(existing => existing.id === effectiveId)) {
+        db.data.pack_transactions.push({ ...pData, id: effectiveId });
+      }
+    });
+
+    // 3. Sync withdrawals
+    const wthSnap = await fsDb.collection('withdrawals').where('group_id', '==', groupId).get();
+    wthSnap.forEach(d => {
+      const wData = d.data() as any;
+      const effectiveId = wData.id || d.id;
+      if (!db.data.withdrawals.some(existing => existing.id === effectiveId)) {
+        db.data.withdrawals.push({ ...wData, id: effectiveId });
+      }
+    });
+  } catch (err) {
+    console.warn('[SyncGroupFinancials Warn]:', err);
+  }
+}
+
 apiRouter.post('/groups/:groupId/withdraw-commission', async (req: Request, res: Response) => {
   try {
     const { groupId } = req.params;
     const { amount, userId } = req.body;
 
-    const group = db.getGroupById(groupId);
+    let group = db.getGroupById(groupId);
+    if (!group) {
+      try {
+        const fsGroup = await fsGetGroupById(groupId);
+        if (fsGroup) {
+          db.syncRemoteGroup(fsGroup);
+          group = fsGroup;
+        }
+      } catch (err) {
+        console.warn('Direct Firestore group lookup error in withdraw-commission:', err);
+      }
+    }
     if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    // Sync all financial records from Firestore
+    await syncGroupFinancialsFromFirestore(groupId);
 
     const adminId = userId || group.admin_id;
     if (group.admin_id !== adminId) {
@@ -2868,6 +3105,8 @@ apiRouter.post('/groups/:groupId/withdraw-commission', async (req: Request, res:
     const confirmed = payment
       ? await fsExecuteAdminWithdrawalBatch(withdrawal, payment)
       : await fsUpsertWithdrawal(withdrawal);
+
+    fsUpsertGroup(group).catch(() => {});
 
     if (!confirmed) {
       console.error(`[Admin Commission Withdrawal] Firestore write unconfirmed for withdrawal: ${withdrawal.id}`);
@@ -2928,6 +3167,9 @@ apiRouter.get('/groups/:groupId/admin-dashboard', async (req: Request, res: Resp
       return res.status(404).json({ error: 'Group not found.' });
     }
 
+    // Sync all financial records from Firestore
+    await syncGroupFinancialsFromFirestore(groupId);
+
     let userProfile = (userId ? db.getProfileById(userId) : null) ||
       (userId ? db.getProfileByPhone(userId) : null) ||
       (reqPhone ? db.getProfileByPhone(reqPhone) : null);
@@ -2984,10 +3226,24 @@ apiRouter.post('/groups/:groupId/withdraw-admin-earnings', async (req: Request, 
       return res.status(401).json({ error: 'Authentication required. Missing user ID.' });
     }
 
-    const group = db.getGroupById(groupId);
+    let group = db.getGroupById(groupId);
+    if (!group) {
+      try {
+        const fsGroup = await fsGetGroupById(groupId);
+        if (fsGroup) {
+          db.syncRemoteGroup(fsGroup);
+          group = fsGroup;
+        }
+      } catch (err) {
+        console.warn('Direct Firestore group lookup error in withdraw-admin-earnings:', err);
+      }
+    }
     if (!group) {
       return res.status(404).json({ error: 'Group not found.' });
     }
+
+    // Sync all financial records from Firestore
+    await syncGroupFinancialsFromFirestore(groupId);
 
     if (group.admin_id !== authUserId) {
       return res.status(403).json({
@@ -3073,6 +3329,7 @@ apiRouter.post('/groups/:groupId/withdraw-admin-earnings', async (req: Request, 
 
     // 4. Commit confirmed withdrawal to local database state immediately
     db.recordConfirmedWithdrawal(withdrawal, payment);
+    fsUpsertGroup(group).catch(() => {});
 
     // 5. Cloud synchronization (Firestore & Supabase) with graceful non-blocking fallback
     fsExecuteAdminWithdrawalBatch(withdrawal, payment).catch(err => {
@@ -3298,10 +3555,27 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
     } catch (e) {
       console.warn('[superadmin/full-data] Error attaching Firestore revenue:', e);
     }
-    // Strict Privacy: Super Admin does not query or see individual personal_ajo accounts
-    data.personalUsers = [];
+    if (!data.personalUsers || data.personalUsers.length === 0) {
+      data.personalUsers = (db.getAllPersonalAjos ? db.getAllPersonalAjos() : db.data.personal_ajo || []).map(pa => {
+        const u = db.getProfileById(pa.user_id);
+        return {
+          id: pa.id,
+          user_id: pa.user_id,
+          full_name: u?.full_name || 'Personal Saver',
+          phone: u?.phone || '',
+          email: u?.email,
+          bank_name: u?.bank_name || 'Not provided',
+          account_number: u?.account_number || 'Not provided',
+          account_status: pa.status === 'active' ? 'Active' : 'Pending Fee',
+          balance: pa.balance,
+          total_deposited: pa.total_deposited,
+          total_withdrawn: pa.total_withdrawn,
+          created_at: pa.created_at
+        };
+      });
+    }
     if (data.metrics) {
-      data.metrics.personalAjoAccounts = 0;
+      data.metrics.personalAjoAccounts = data.personalUsers.length;
     }
 
     try {
@@ -3431,7 +3705,11 @@ apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: 
     }
 
     const fullData = db.getSuperAdminFullData(profile.id);
-    const available = fullData.superAdminEarnings.available_balance;
+    let fsRev = null;
+    try {
+      fsRev = await fsGetPlatformRevenueMain();
+    } catch {}
+    const available = Math.max(fullData.superAdminEarnings.available_balance, fsRev?.unifiedAvailable || 0);
 
     // Optical rounding tolerance: if user submitted Math.round(available) (e.g. 5267 when available is 5266.50)
     const effectiveAmount = (numericAmount > available && numericAmount <= Math.ceil(available) && (numericAmount - available) <= 1)

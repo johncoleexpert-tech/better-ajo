@@ -12,6 +12,7 @@ export type PackingCycle =
 
 export interface UserProfile {
   id: string;
+  uid?: string;
   full_name: string;
   phone: string;
   email?: string;
@@ -21,6 +22,8 @@ export interface UserProfile {
   account_number: string;
   verification_type: VerificationType;
   verification_number: string;
+  status?: string;
+  is_verified?: boolean;
   whatsapp_number?: string;
   whatsappNumber?: string;
   virtual_account_number?: string;
@@ -540,7 +543,7 @@ export interface SuperAdminWallet {
 export interface AdminRevenueLedgerEntry {
   id: string;
   date: string;
-  type: 'registration_600' | 'contribution_60' | 'packing_33' | 'withdrawal_1_6' | 'super_admin_withdrawal';
+  type: 'registration_600' | 'group_creation_1000' | 'contribution_60' | 'packing_33' | 'withdrawal_1_6' | 'super_admin_withdrawal';
   group_or_user: string;
   user_id?: string;
   group_id?: string;

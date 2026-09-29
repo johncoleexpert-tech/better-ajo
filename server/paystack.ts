@@ -342,6 +342,37 @@ export interface PaystackTransferResult {
   account_name?: string;
 }
 
+export function getPaystackBankCode(bankName?: string): string {
+  if (!bankName) return '058';
+  const norm = bankName.toLowerCase().trim();
+  if (norm.includes('opay') || norm.includes('paycom')) return '999992';
+  if (norm.includes('palmpay')) return '999991';
+  if (norm.includes('moniepoint')) return '50515';
+  if (norm.includes('kuda')) return '50211';
+  if (norm.includes('gtb') || norm.includes('guaranty')) return '058';
+  if (norm.includes('zenith')) return '057';
+  if (norm.includes('access')) return '044';
+  if (norm.includes('first bank') || norm.includes('firstbank')) return '011';
+  if (norm.includes('uba') || norm.includes('united bank for africa')) return '033';
+  if (norm.includes('fidelity')) return '070';
+  if (norm.includes('fcmb') || norm.includes('city monument')) return '214';
+  if (norm.includes('union')) return '032';
+  if (norm.includes('stanbic')) return '221';
+  if (norm.includes('sterling')) return '232';
+  if (norm.includes('wema')) return '035';
+  if (norm.includes('polaris')) return '076';
+  if (norm.includes('ecobank')) return '050';
+  if (norm.includes('jaiz')) return '301';
+  if (norm.includes('taj')) return '302';
+  if (norm.includes('keystone')) return '082';
+  if (norm.includes('providus')) return '101';
+  if (norm.includes('heritage')) return '030';
+  if (norm.includes('unity')) return '215';
+  if (norm.includes('vfd')) return '566';
+  if (norm.includes('rubies')) return '125';
+  return '058';
+}
+
 export async function initiatePaystackTransfer(
   accountNumber: string,
   bankName: string,
@@ -390,7 +421,8 @@ export async function initiatePaystackTransfer(
         }
       }
 
-      // 1. Create Transfer Recipient
+      // 1. Create Transfer Recipient with accurate bank code
+      const bankCode = getPaystackBankCode(bankName);
       const recipientRes = await fetch('https://api.paystack.co/transferrecipient', {
         method: 'POST',
         headers: {
@@ -402,7 +434,7 @@ export async function initiatePaystackTransfer(
           type: 'nuban',
           name: accountName || 'Verified Recipient',
           account_number: accountNumber,
-          bank_code: '058', // Standard default bank code for lookup
+          bank_code: bankCode,
           currency: 'NGN'
         })
       });
