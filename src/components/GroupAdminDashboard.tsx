@@ -877,9 +877,35 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                     </div>
                     <div className="mt-1 flex items-center justify-between text-xs">
                       <span className="text-slate-500 font-medium">Status:</span>
-                      <span className="font-extrabold text-emerald-700 capitalize">
-                        {currentPacker.current_round_status === 'packed' ? 'Packed ✓' : 'Awaiting Pack Now'}
-                      </span>
+                      {(() => {
+                        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+                        const currentMemberItem = members.find(m => m.id === currentPacker.id || m.position === currentPacker.position);
+                        const scheduledDate = currentMemberItem?.scheduledPackDate || (currentPacker as any).scheduledPackDate || '';
+                        const scheduledDisplay = currentMemberItem?.scheduledPackDateDisplay || (currentPacker as any).scheduledPackDateDisplay || scheduledDate;
+                        const isPacked = currentPacker.current_round_status === 'packed' || currentMemberItem?.hasPacked;
+
+                        if (isPacked) {
+                          return <span className="font-extrabold text-emerald-700">Packed ✓</span>;
+                        }
+
+                        if (scheduledDate > today) {
+                          return <span className="font-extrabold text-blue-700">Scheduled ({scheduledDisplay})</span>;
+                        }
+
+                        if (scheduledDate === today) {
+                          const canPack = (data as any)?.canPackNow || (currentMemberItem?.hasContributed && data?.cycleStatus?.allPaid);
+                          if (canPack) {
+                            return <span className="font-extrabold text-emerald-600">Next to Pack Today</span>;
+                          }
+                          return <span className="font-extrabold text-amber-700">Scheduled Today (Waiting for Contributions)</span>;
+                        }
+
+                        if (scheduledDate < today && scheduledDate !== '') {
+                          return <span className="font-extrabold text-rose-600">Overdue</span>;
+                        }
+
+                        return <span className="font-extrabold text-slate-700">Scheduled</span>;
+                      })()}
                     </div>
                   </div>
                 ) : (

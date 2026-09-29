@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/routes.js';
+import { runFinancialStreamsMigration } from './server/migrateFinancialStreams.js';
 
 async function startServer() {
   const app = express();
@@ -36,6 +37,10 @@ async function startServer() {
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Pack Ajo server running on http://0.0.0.0:${PORT}`);
+    // Run financial migration asynchronously on startup
+    runFinancialStreamsMigration().catch(err => {
+      console.warn('[Financial Migration Startup Warn]:', err?.message || err);
+    });
   });
 }
 

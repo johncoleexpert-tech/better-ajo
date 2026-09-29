@@ -10,6 +10,15 @@ export type PackingCycle =
   | 'Every 14 Days'
   | 'Every Month';
 
+export const STREAM_REGISTRATION = 'personal_ajo_fee' as const;
+export const STREAM_CONTRIBUTION = 'contribution_fee' as const;
+export const STREAM_PACKING = 'packing_commission' as const;
+
+export type RevenueStreamType = 
+  | typeof STREAM_REGISTRATION 
+  | typeof STREAM_CONTRIBUTION 
+  | typeof STREAM_PACKING;
+
 export interface UserProfile {
   id: string;
   uid?: string;
@@ -31,6 +40,27 @@ export interface UserProfile {
   credit_balance?: number;
   payment_type?: string;
   created_at: string;
+  updated_at: string;
+  personal_ajo_active?: boolean;
+  personal_ajo_activated_at?: string;
+  personal_ajo_fee_paid?: number;
+}
+
+export type Profile = UserProfile;
+
+export interface PackingScheduleItem {
+  user_id: string;
+  member_id: string;
+  user_name: string;
+  position: number; // 1..n
+  scheduled_date: string; // ISO date 'YYYY-MM-DD'
+  status: 'scheduled' | 'credited' | 'packed' | 'overdue';
+  cycle: number;
+  is_packed: boolean;
+  packed_at?: string;
+  credited_at?: string;
+  is_pay_ahead?: boolean;
+  credited_for_date?: string;
 }
 
 export interface PersonalAjo {
@@ -105,6 +135,11 @@ export interface GroupAjo {
   roundStartedAt?: string;
   nextPackDate?: string;
   next_packing_date?: string;
+  packingSchedule?: PackingScheduleItem[];
+  packedRounds?: string[];
+  current_packer_index?: number;
+  next_scheduled_date?: string;
+  next_packer_id?: string;
 }
 
 export interface GroupMember {
@@ -147,6 +182,8 @@ export interface Contribution {
   payment_type?: string;
   paid_at?: string;
   created_at?: string;
+  is_pay_ahead?: boolean;
+  credited_for_date?: string;
 }
 
 export interface GroupCycleInfo {
@@ -178,9 +215,10 @@ export interface PackTransaction {
   withdrawalFee?: number;
   member_amount: number; // ₦97,000
   memberPayout?: number;
-  status: 'completed';
+  status: 'completed' | 'success';
   bank_name: string;
   account_number: string;
+  reference?: string;
   created_at: string;
 }
 
@@ -196,6 +234,9 @@ export interface Commission {
   groupAdminShare?: number;
   super_admin_amount: number; // Super Admin share (e.g. ₦1,000 for ₦3,000 fee)
   superAdminShare?: number;
+  stream?: string;
+  type?: string;
+  recipient_role?: string;
   created_at: string;
 }
 
@@ -345,6 +386,8 @@ export interface GroupAdminDashboardData {
     isPaused?: boolean;
   };
   cycleInfo?: GroupCycleInfo;
+  packingSchedule?: PackingScheduleItem[];
+  upcomingPackers?: PackingScheduleItem[];
 }
 
 export interface SuperAdminFullData {

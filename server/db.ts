@@ -22,8 +22,35 @@ import {
   SuperAdminWallet,
   AdminRevenueLedgerEntry,
   PersonalTransaction,
-  SuperAdminTransaction
+  SuperAdminTransaction,
+  STREAM_REGISTRATION,
+  STREAM_CONTRIBUTION,
+  STREAM_PACKING,
+  PackingScheduleItem
 } from '../src/types/index.js';
+
+export {
+  STREAM_REGISTRATION,
+  STREAM_CONTRIBUTION,
+  STREAM_PACKING
+};
+
+/**
+ * Pure function: calculates Whole Naira packing fee split between Group Admin (66.67%)
+ * and Super Admin (33.33%) with strict equality assertion to guarantee math integrity.
+ */
+export function calculatePackingSplit(packingFee: number): { superAdmin: number; groupAdmin: number } {
+  const fee = Math.round(Number(packingFee));
+  if (isNaN(fee) || fee <= 0) {
+    throw new Error(`Invalid packing fee for split calculation: ${packingFee}`);
+  }
+  const superAdmin = Math.round(fee * 0.3333);
+  const groupAdmin = fee - superAdmin;
+  if (superAdmin + groupAdmin !== fee) {
+    throw new Error(`Math assertion failed in calculatePackingSplit: superAdmin (${superAdmin}) + groupAdmin (${groupAdmin}) !== total fee (${fee})`);
+  }
+  return { superAdmin, groupAdmin };
+}
 import { PaystackTransferResult } from './paystack.js';
 import {
   formatPersonalAccountName,
@@ -480,13 +507,13 @@ class Database {
     const contrib_60_count = paidContribs.length;
     const contrib_60_total = contrib_60_count * 60;
 
-    // 3. Group Packing Share = 33.33% of packing fee
+    // 3. Group Packing Share = 33.33% of packing fee (STREAM_PACKING)
     const commissions = this.data.commissions || [];
     let packing_33_total = 0;
     for (const c of commissions) {
       const share = typeof c.super_admin_amount === 'number'
         ? c.super_admin_amount
-        : Math.round((c.packing_fee || 3000) * 0.3333);
+        : calculatePackingSplit(c.packing_fee || 3000).superAdmin;
       packing_33_total += share;
     }
 
@@ -520,6 +547,8 @@ class Database {
 
     // c) Real Available Balance:
     const real_balance = Math.max(0, total_gross - total_withdrawn);
+
+    console.log(`[FINANCIAL AUDIT]: Stream 1 (Registration): ₦${reg_600_total}, Stream 2 (Contribution): ₦${contrib_60_total}, Stream 3 (Packing): ₦${packing_33_total}, Stream 4 (Personal Fee): ₦${withdrawal_1_6_total} | Total Gross: ₦${total_gross}, Withdrawn: ₦${total_withdrawn}, Real Balance: ₦${real_balance}`);
 
     // Build historical ledger entries chronologically
     const rawLedgerItems: Array<{
@@ -1252,7 +1281,8 @@ class Database {
         verification_type: 'NIN',
         verification_number: '12345678901',
         role: 'SUPER_ADMIN',
-        created_at: '2026-08-01T00:00:00.000Z'
+        created_at: '2026-08-01T00:00:00.000Z',
+        updated_at: '2026-08-01T00:00:00.000Z'
       };
       this.data.profiles.push(superAdmin);
     } else {
@@ -1321,7 +1351,8 @@ class Database {
     return this.data.profiles;
   }
 
-  upsertProfile(profile: Omit<UserProfile, 'id' | 'created_at'> & { id?: string; created_at?: string }): UserProfile {
+  upsertProfile(profile: Partial<UserProfile> & { phone?: string; full_name?: string }): UserProfile {
+    const now = new Date().toISOString();
     const cleanPhone = profile.phone ? normalizeNigerianPhone(profile.phone) : '';
     const cleanEmail = profile.email ? profile.email.trim().toLowerCase() : '';
     const existingIndex = this.data.profiles.findIndex(
@@ -1354,7 +1385,11 @@ class Database {
         credit_balance: typeof profile.credit_balance === 'number' ? profile.credit_balance : (existing.credit_balance ?? 0),
         payment_type: profile.payment_type || existing.payment_type || 'bank_transfer',
         id: existing.id,
-        created_at: existing.created_at
+        created_at: existing.created_at || profile.created_at || now,
+        updated_at: now,
+        personal_ajo_active: profile.personal_ajo_active !== undefined ? profile.personal_ajo_active : (existing.personal_ajo_active ?? false),
+        personal_ajo_activated_at: profile.personal_ajo_activated_at || existing.personal_ajo_activated_at,
+        personal_ajo_fee_paid: typeof profile.personal_ajo_fee_paid === 'number' ? profile.personal_ajo_fee_paid : (existing.personal_ajo_fee_paid ?? 0)
       };
       this.data.profiles[existingIndex] = updated;
       this.save();
@@ -1371,19 +1406,41 @@ class Database {
       ...profile,
       role: (cleanPhone === superAdminPhone || isSuperAdminEmail) ? 'SUPER_ADMIN' : (profile.role || 'MEMBER'),
       id: newId,
+      full_name: profile.full_name || 'Member',
       phone: cleanPhone || `080${Math.floor(10000000 + Math.random() * 90000000)}`,
+      bank_name: profile.bank_name || 'Guaranty Trust Bank (GTB)',
+      account_number: profile.account_number || '0123456789',
+      verification_type: profile.verification_type || 'NIN',
+      verification_number: profile.verification_number || '12345678901',
       email: cleanEmail || undefined,
       virtual_account_name: vaName,
       virtual_account_number: vaNumber,
       credit_balance: typeof profile.credit_balance === 'number' ? profile.credit_balance : 0,
       payment_type: profile.payment_type || 'bank_transfer',
-      created_at: profile.created_at || new Date().toISOString()
+      created_at: profile.created_at || now,
+      updated_at: now,
+      personal_ajo_active: profile.personal_ajo_active !== undefined ? profile.personal_ajo_active : false,
+      personal_ajo_activated_at: profile.personal_ajo_activated_at,
+      personal_ajo_fee_paid: typeof profile.personal_ajo_fee_paid === 'number' ? profile.personal_ajo_fee_paid : 0
     };
     this.data.profiles.push(newProfile);
     this.save();
     syncProfileToSupabase(newProfile).catch(err => console.warn('[Supabase Profile Sync Warn]:', err?.message || err));
     fsUpsertProfile(newProfile).catch(err => console.warn('[Firestore Profile Sync Warn]:', err?.message || err));
     return newProfile;
+  }
+
+  // Strict TypeScript Type Guard for UserProfile
+  isProfile(obj: any): obj is UserProfile {
+    return (
+      typeof obj === 'object' &&
+      obj !== null &&
+      typeof obj.id === 'string' &&
+      typeof obj.full_name === 'string' &&
+      typeof obj.phone === 'string' &&
+      typeof obj.created_at === 'string' &&
+      typeof obj.updated_at === 'string'
+    );
   }
 
   // OTP Management & Hardening
@@ -2255,6 +2312,191 @@ class Database {
     );
   }
 
+  /**
+   * Generates or retrieves the immutable packing schedule for a group.
+   * Single source of truth for rotation order and scheduled pack dates.
+   */
+  generateOrEnsurePackingSchedule(group: GroupAjo, members?: GroupMember[]): PackingScheduleItem[] {
+    const activeMembers = members || this.getGroupMembers(group.id);
+    const intervalDays = getCycleIntervalDays(group.cycle_type);
+    const startDate = getNigeriaCalendarDate(group.round_started_at || group.created_at);
+    const cycle = group.current_round || 1;
+    const completedPacks = this.getCompletedPacks(group.id, cycle);
+
+    if (group.packingSchedule && group.packingSchedule.length === group.member_limit) {
+      // Keep completed pack flags strictly in sync
+      for (const item of group.packingSchedule) {
+        const pack = completedPacks.find(p => p.member_id === item.member_id || p.user_id === item.user_id);
+        if (pack) {
+          item.is_packed = true;
+          item.status = 'packed';
+          item.packed_at = pack.created_at;
+        }
+      }
+      return group.packingSchedule;
+    }
+
+    const schedule: PackingScheduleItem[] = [];
+    const membersByPosition = new Map(activeMembers.map(m => [m.position, m]));
+
+    for (let pos = 1; pos <= group.member_limit; pos++) {
+      const scheduledDate = addDaysToCalendarDate(startDate, (pos - 1) * intervalDays);
+      const member = membersByPosition.get(pos);
+      const userId = member?.user_id || `pending_pos_${pos}`;
+      const memberId = member?.id || `pending_mem_${pos}`;
+      const userName = member?.full_name || `Member (Position ${pos})`;
+
+      const pack = member ? completedPacks.find(p => p.member_id === member.id || p.user_id === member.user_id) : undefined;
+      const isPacked = Boolean(pack);
+
+      let status: 'scheduled' | 'credited' | 'packed' | 'overdue' = 'scheduled';
+      let packedAt: string | undefined = undefined;
+
+      if (isPacked) {
+        status = 'packed';
+        packedAt = pack?.created_at;
+      } else if (member && member.credit_balance && member.credit_balance >= group.contribution_amount) {
+        status = 'credited';
+      }
+
+      schedule.push({
+        user_id: userId,
+        member_id: memberId,
+        user_name: userName,
+        position: pos,
+        scheduled_date: scheduledDate,
+        status,
+        cycle,
+        is_packed: isPacked,
+        packed_at: packedAt
+      });
+    }
+
+    group.packingSchedule = schedule;
+    this.save();
+    return schedule;
+  }
+
+  /**
+   * canPackNow:
+   * Returns true ONLY if ALL conditions are satisfied:
+   * 1. Today >= scheduled_date (never pack in advance of calendar date)
+   * 2. All previous positions in the current cycle are already packed
+   * 3. Current member has completed contribution for this round
+   * 4. Current member has not already packed in this cycle
+   */
+  canPackNow(
+    scheduleItem: PackingScheduleItem,
+    allSchedules: PackingScheduleItem[],
+    contributionsComplete: boolean,
+    todayStr: string
+  ): boolean {
+    if (scheduleItem.is_packed) return false;
+    if (todayStr < scheduleItem.scheduled_date) return false;
+
+    const previousInCycle = allSchedules.filter(
+      s => s.cycle === scheduleItem.cycle && s.position < scheduleItem.position
+    );
+    const allPreviousPacked = previousInCycle.every(s => s.is_packed);
+    if (!allPreviousPacked) return false;
+
+    if (!contributionsComplete) return false;
+
+    return true;
+  }
+
+  /**
+   * getUpcomingPackers:
+   * Returns upcoming unpacked members ordered strictly by position.
+   * After Ade packs, upcoming excludes Ade, shows Kayode Sept 30 Scheduled, Dauda Oct 1 Waiting.
+   * Dates are never duplicated.
+   */
+  getUpcomingPackers(group: GroupAjo, cycle?: number): PackingScheduleItem[] {
+    const currentCycle = cycle || group.current_round || 1;
+    const schedule = this.generateOrEnsurePackingSchedule(group);
+    return schedule
+      .filter(s => !s.is_packed && s.cycle === currentCycle)
+      .sort((a, b) => a.position - b.position);
+  }
+
+  /**
+   * Auto-repair rotation integrity:
+   * Ensures packedRounds and packingSchedule match pack_transactions exactly.
+   */
+  autoRepairRotationIntegrity(groupId: string): { repaired: boolean; issuesFixed: string[] } {
+    const group = this.getGroupById(groupId);
+    if (!group) return { repaired: false, issuesFixed: [] };
+
+    const members = this.getGroupMembers(groupId);
+    const schedule = this.generateOrEnsurePackingSchedule(group, members);
+    const packTxs = this.getCompletedPacks(groupId, group.current_round);
+    const issuesFixed: string[] = [];
+
+    for (const item of schedule) {
+      const matchingTx = packTxs.find(t => t.member_id === item.member_id || t.user_id === item.user_id);
+      if (matchingTx && !item.is_packed) {
+        item.is_packed = true;
+        item.status = 'packed';
+        item.packed_at = matchingTx.created_at;
+        issuesFixed.push(`Synchronized packed status for ${item.user_name} (position ${item.position})`);
+      }
+    }
+
+    if (!group.packedRounds) group.packedRounds = [];
+    for (const pt of packTxs) {
+      if (!group.packedRounds.includes(pt.id)) {
+        group.packedRounds.push(pt.id);
+        issuesFixed.push(`Added missing packedRound reference ${pt.id}`);
+      }
+    }
+
+    group.packingSchedule = schedule;
+    this.save();
+    return { repaired: issuesFixed.length > 0, issuesFixed };
+  }
+
+  /**
+   * Cron safeguard on dashboard load:
+   * Checks if scheduled_date <= today and contributions complete and not packed,
+   * then auto-executes pack (e.g. for pay-ahead contributors whose scheduled date has arrived).
+   */
+  checkAndAutoExecutePayAheadPack(groupId: string, simulatedDate?: string): boolean {
+    const group = this.getGroupById(groupId);
+    if (!group || group.status === 'round_completed') return false;
+
+    // Run rotation repair first to guarantee integrity
+    this.autoRepairRotationIntegrity(groupId);
+
+    const cycleInfo = this.getGroupCycleInfo(groupId, group.current_round, simulatedDate);
+    if (cycleInfo.hasPackedToday) return false;
+
+    const currentPacker = this.getCurrentPacker(groupId, group.current_round);
+    if (!currentPacker) return false;
+
+    const schedule = this.generateOrEnsurePackingSchedule(group);
+    const packerSchedule = schedule.find(s => s.member_id === currentPacker.id && s.cycle === group.current_round);
+    if (!packerSchedule || packerSchedule.is_packed) return false;
+
+    const todayStr = cycleInfo.todayDate;
+    const cycleStatus = this.getCycleContributionStatus(groupId, group.current_round, simulatedDate);
+
+    if (
+      packerSchedule.scheduled_date <= todayStr &&
+      cycleStatus.allPaid &&
+      this.canPackNow(packerSchedule, schedule, cycleStatus.allPaid, todayStr) &&
+      !this.isMemberPacked(groupId, currentPacker.id, group.current_round)
+    ) {
+      try {
+        console.log(`[Auto-Disbursement Safeguard]: Auto-executing pack for ${currentPacker.full_name} in group ${group.group_name} (scheduled: ${packerSchedule.scheduled_date}, today: ${todayStr})`);
+        this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate);
+        return true;
+      } catch (err: any) {
+        console.warn('[Auto-Disbursement Safeguard Error]:', err?.message || err);
+      }
+    }
+    return false;
+  }
+
   getGroupCycleInfo(groupId: string, roundNumber: number, simulatedDate?: string): GroupCycleInfo {
     const group = this.getGroupById(groupId);
     const intervalDays = group ? getCycleIntervalDays(group.cycle_type) : 1;
@@ -2505,23 +2747,39 @@ class Database {
       syncGroupMemberToSupabase(member).catch(() => {});
       fsUpsertGroupMember(member).catch(() => {});
 
-      const isPaidAhead = !cycleInfo.isCycleOpen;
+      const schedule = this.generateOrEnsurePackingSchedule(group);
+      const memberSchedule = schedule.find(s => s.member_id === memberId && s.cycle === group.current_round);
+      const isPaidAhead = memberSchedule ? (cycleInfo.todayDate < memberSchedule.scheduled_date) : !cycleInfo.isCycleOpen;
 
-      // Check if this payment completes the cycle for all members AND cycle duration has reached!
+      if (memberSchedule && isPaidAhead) {
+        memberSchedule.status = 'credited';
+        memberSchedule.is_pay_ahead = true;
+        memberSchedule.credited_at = new Date().toISOString();
+        memberSchedule.credited_for_date = memberSchedule.scheduled_date;
+      }
+
+      // Check if this payment completes the cycle for all members AND canPackNow is satisfied
       let autoDisbursed = false;
       let disbursedMemberName: string | undefined;
 
       const statusAfterPayment = this.getCycleContributionStatus(groupId, group.current_round, simulatedDate);
-      if (statusAfterPayment.allPaid && (cycleInfo.isCycleOpen || paymentType === 'simulation') && !cycleInfo.hasPackedToday) {
-        const currentPacker = this.getCurrentPacker(groupId, group.current_round);
-        if (currentPacker && !this.isMemberPacked(groupId, currentPacker.id, group.current_round)) {
-          try {
-            this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate, { bypassDateCheck: paymentType === 'simulation' });
-            autoDisbursed = true;
-            disbursedMemberName = currentPacker.full_name;
-          } catch (packErr) {
-            console.warn('[Auto-Disbursement Warn]:', packErr);
-          }
+      const currentPacker = this.getCurrentPacker(groupId, group.current_round);
+      const currentPackerSchedule = currentPacker ? schedule.find(s => s.member_id === currentPacker.id && s.cycle === group.current_round) : undefined;
+
+      if (
+        statusAfterPayment.allPaid &&
+        currentPacker &&
+        currentPackerSchedule &&
+        this.canPackNow(currentPackerSchedule, schedule, statusAfterPayment.allPaid, cycleInfo.todayDate) &&
+        !cycleInfo.hasPackedToday &&
+        !this.isMemberPacked(groupId, currentPacker.id, group.current_round)
+      ) {
+        try {
+          this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate, { bypassDateCheck: paymentType === 'simulation' });
+          autoDisbursed = true;
+          disbursedMemberName = currentPacker.full_name;
+        } catch (packErr) {
+          console.warn('[Auto-Disbursement Warn]:', packErr);
         }
       }
 
@@ -2709,8 +2967,11 @@ class Database {
     const existingPack = this.data.pack_transactions.find(
       t => t.group_id === groupId && t.member_id === member.id && t.round_number === roundNumber && t.status === 'completed'
     );
-    if (existingPack || member.current_round_status === 'packed') {
-      throw new Error('Member has already packed in this round.');
+    const schedule = this.generateOrEnsurePackingSchedule(group);
+    const memberScheduleItem = schedule.find(s => s.member_id === member.id && s.cycle === roundNumber);
+
+    if (existingPack || memberScheduleItem?.is_packed || member.hasPackedThisRound || member.current_round_status === 'packed') {
+      throw new Error(`Cannot pack same user twice in cycle ${roundNumber}: ${member.full_name} has already packed.`);
     }
 
     // 5. Confirm cycle is eligible and open according to group's configured frequency
@@ -2738,21 +2999,15 @@ class Database {
 
     // 8. Calculate amounts based on group's dynamic withdrawal fee / packing fee
     const amount = group.packing_amount;
-    const fee = typeof (group as any).withdrawalFee === 'number'
-      ? (group as any).withdrawalFee
-      : (typeof group.packing_fee === 'number' ? group.packing_fee : 3000);
-
-    // BUG 3 FIX: Whole Naira 66.67% / 33.33% split without decimals
-    // const totalRounded = Math.round(totalAmount)
-    // const packerShare = Math.round(totalRounded * 0.6667)
-    // const adminShare = totalRounded - packerShare
-    // Example: If total is 3000: Packer = 2000, Admin = 1000. If total is 5000: Packer = 3333, Admin = 1667.
     const rawFee = typeof (group as any).withdrawalFee === 'number'
       ? (group as any).withdrawalFee
       : (typeof group.packing_fee === 'number' ? group.packing_fee : 3000);
     const totalRounded = Math.round(rawFee);
-    const packerShare = Math.round(totalRounded * 0.6667);
-    const adminShare = totalRounded - packerShare;
+
+    // Whole Naira 66.67% / 33.33% split without decimals via pure function
+    const split = calculatePackingSplit(totalRounded);
+    const packerShare = split.groupAdmin;
+    const adminShare = split.superAdmin;
     const groupAdminShare = packerShare;
     const superAdminShare = adminShare;
     const memberPayout = Math.round(amount) - totalRounded;
@@ -2798,7 +3053,7 @@ class Database {
     };
     this.data.pack_transactions.push(transaction);
 
-    // 10. Record commission
+    // 10. Record commission with explicit stream & type
     const commission: Commission = {
       id: `com_${Date.now()}_${transaction.id}`,
       group_id: groupId,
@@ -2809,9 +3064,39 @@ class Database {
       groupAdminShare: groupAdminShare,
       super_admin_amount: superAdminShare,
       superAdminShare: superAdminShare,
+      stream: STREAM_PACKING,
+      type: STREAM_PACKING,
+      recipient_role: 'GROUP_ADMIN',
       created_at: packTimestamp
     };
+
+    if (commission.admin_amount + commission.super_admin_amount !== totalRounded) {
+      throw new Error(`Math assertion failed on commission split: ${commission.admin_amount} + ${commission.super_admin_amount} !== ${totalRounded}`);
+    }
     this.data.commissions.push(commission);
+
+    // Update schedule item and group rotation indicators
+    if (memberScheduleItem) {
+      memberScheduleItem.is_packed = true;
+      memberScheduleItem.status = 'packed';
+      memberScheduleItem.packed_at = packTimestamp;
+    }
+    if (!group.packedRounds) group.packedRounds = [];
+    if (!group.packedRounds.includes(transaction.id)) {
+      group.packedRounds.push(transaction.id);
+    }
+
+    const nextUnpacked = schedule.find(s => !s.is_packed && s.cycle === roundNumber);
+    if (nextUnpacked) {
+      group.current_packer_index = nextUnpacked.position;
+      group.next_scheduled_date = nextUnpacked.scheduled_date;
+      group.next_packer_id = nextUnpacked.user_id;
+    } else {
+      group.current_packer_index = group.member_limit;
+      group.next_scheduled_date = undefined;
+      group.next_packer_id = undefined;
+    }
+    group.packingSchedule = schedule;
 
     // STEP 2 - Record 33.33% packing share into admin revenue ledger
     if (superAdminShare > 0) {
@@ -2846,7 +3131,7 @@ class Database {
         round_number: roundNumber,
         member_name: member.full_name,
         packing_amount: amount,
-        packing_fee: fee,
+        packing_fee: totalRounded,
         member_amount: memberPayout,
         admin_commission: groupAdminShare,
         super_admin_commission: superAdminShare,
@@ -3038,6 +3323,10 @@ class Database {
         (w.group_id === groupId || w.withdrawal_type === 'admin_commission')
     );
 
+    // Generate or ensure immutable packing schedule as single source of truth
+    const schedule = this.generateOrEnsurePackingSchedule(group, members);
+    const scheduleMap = new Map(schedule.map(s => [s.position, s]));
+
     // Members list for this group only
     const memberItems: GroupAdminMemberItem[] = members.map(m => {
       const hasContributed = this.hasMemberPaidCurrentCycle(groupId, m.id, group.current_round);
@@ -3047,17 +3336,9 @@ class Database {
         .filter(c => c.group_id === groupId && c.member_id === m.id && c.status === 'Paid')
         .reduce((sum, c) => sum + c.amount, 0);
 
-      // Estimated pack date based on position
-      const posDiff = m.position - (currentPacker?.position || 1);
-      const estDate = new Date();
-      if (posDiff > 0) {
-        let intervalDays = 30;
-        if (group.cycle_type === 'Every 3 Days') intervalDays = 3;
-        else if (group.cycle_type === 'Every 5 Days') intervalDays = 5;
-        else if (group.cycle_type === 'Every 7 Days') intervalDays = 7;
-        else if (group.cycle_type === 'Every 14 Days') intervalDays = 14;
-        estDate.setDate(estDate.getDate() + posDiff * intervalDays);
-      }
+      const sched = scheduleMap.get(m.position);
+      const scheduledPackDate = sched ? sched.scheduled_date : getNigeriaCalendarDate();
+      const scheduledPackDateDisplay = formatCalendarDateDisplay(scheduledPackDate);
 
       const userProf = this.getProfileById(m.user_id);
       const maskedV = userProf?.verification_number
@@ -3089,8 +3370,8 @@ class Database {
         credit_balance: Number(m.credit_balance || 0),
         payment_type: m.payment_type || 'bank_transfer',
         next_round_consent: m.next_round_consent,
-        scheduledPackDate: estDate.toISOString().split('T')[0],
-        scheduledPackDateDisplay: formatDisplayDate(estDate.toISOString().split('T')[0]),
+        scheduledPackDate,
+        scheduledPackDateDisplay,
         totalContributed,
         bank_name: m.bank_name || userProf?.bank_name || 'Not provided',
         account_number: m.account_number || userProf?.account_number || 'Not provided',
@@ -3110,13 +3391,14 @@ class Database {
       const com = this.data.commissions.find(c => c.pack_transaction_id === p.id);
       const member = members.find(m => m.id === p.member_id);
 
-      // BUG 3 FIX: Live whole number calculation without decimals or old 50/50 from db
+      // Whole Naira calculation via pure function
       const rawFee = typeof (group as any)?.withdrawalFee === 'number'
         ? (group as any).withdrawalFee
         : (typeof p.packing_fee === 'number' ? p.packing_fee : (typeof group.packing_fee === 'number' ? group.packing_fee : 3000));
       const totalRounded = Math.round(rawFee);
-      const packerShare = Math.round(totalRounded * 0.6667);
-      const adminShare = totalRounded - packerShare;
+      const split = calculatePackingSplit(totalRounded);
+      const packerShare = split.groupAdmin;
+      const adminShare = split.superAdmin;
 
       return {
         id: com?.id || `com_${p.id}`,
@@ -3209,7 +3491,9 @@ class Database {
         account_name: adminProfile?.full_name || group.admin_name
       },
       cycleStatus: this.getCycleContributionStatus(groupId, group.current_round),
-      cycleInfo
+      cycleInfo,
+      packingSchedule: schedule,
+      upcomingPackers: this.getUpcomingPackers(group)
     };
   }
 

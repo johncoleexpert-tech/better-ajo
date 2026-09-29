@@ -16,41 +16,616 @@
       "verification_number": "12345678901",
       "created_at": "2026-09-28T12:59:30.170Z",
       "updated_at": "2026-09-28T12:59:30.170Z"
+    },
+    {
+      "account_number": "8069702566",
+      "virtual_account_name": "BETTERAJO-OMOLARA",
+      "verification_number": "99221100342",
+      "created_at": "2026-09-28T13:41:35.926Z",
+      "verification_type": "BVN",
+      "virtual_account_number": "8152751236",
+      "password": "Akinyele080@#",
+      "payment_type": "bank_transfer",
+      "full_name": "OMOLARA aKINYELE",
+      "credit_balance": 0,
+      "phone": "08152100909",
+      "bank_name": "OPay Digital Services",
+      "id": "usr_1790602895926_1x83s",
+      "email": "omolara@gmail.com",
+      "role": "GROUP_ADMIN",
+      "whatsappNumber": "08152100101",
+      "whatsapp_number": "08152100101"
+    },
+    {
+      "id": "usr_test_1790676488757",
+      "full_name": "Test Saver",
+      "phone": "08012345678",
+      "email": "saver@test.com",
+      "bank_name": "OPay",
+      "account_number": "9999999999",
+      "verification_type": "NIN",
+      "verification_number": "12345678901",
+      "role": "MEMBER",
+      "virtual_account_name": "BETTERAJO-TEST",
+      "virtual_account_number": "8152651399",
+      "credit_balance": 0,
+      "payment_type": "bank_transfer",
+      "created_at": "2026-09-29T10:08:08.757Z",
+      "updated_at": "2026-09-29T10:10:08.897Z",
+      "personal_ajo_active": false,
+      "personal_ajo_fee_paid": 0
     }
   ],
-  "personal_ajo": [],
-  "groups": [],
-  "group_members": [],
-  "contributions": [],
-  "pack_transactions": [],
-  "commissions": [],
+  "personal_ajo": [
+    {
+      "id": "pajo_1790676488804_2bvs",
+      "user_id": "usr_test_1790676488757",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "active",
+      "virtual_account_number": "8152651399",
+      "virtual_account_name": "BETTERAJO-TEST",
+      "credit_balance": 0,
+      "payment_type": "bank_transfer",
+      "created_at": "2026-09-29T10:08:08.804Z"
+    },
+    {
+      "id": "pajo_1790676521450_hzzv",
+      "user_id": "usr_test_1790676521404",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "active",
+      "virtual_account_number": "8152163481",
+      "virtual_account_name": "BETTERAJO-MEMBER",
+      "credit_balance": 0,
+      "payment_type": "bank_transfer",
+      "created_at": "2026-09-29T10:08:41.450Z"
+    },
+    {
+      "id": "pajo_1790676608941_b7q7",
+      "user_id": "usr_test_1790676608896",
+      "balance": 0,
+      "total_deposited": 0,
+      "total_withdrawn": 0,
+      "status": "active",
+      "virtual_account_number": "8152158252",
+      "virtual_account_name": "BETTERAJO-MEMBER",
+      "credit_balance": 0,
+      "payment_type": "bank_transfer",
+      "created_at": "2026-09-29T10:10:08.941Z"
+    }
+  ],
+  "groups": [
+    {
+      "id": "grp_rot_1790676521452",
+      "group_name": "Rotation Verification Group",
+      "group_code": "ROT001",
+      "admin_id": "usr_admin",
+      "admin_name": "Group Admin",
+      "member_limit": 3,
+      "members_joined": 3,
+      "contribution_amount": 10000,
+      "packing_amount": 30000,
+      "cycle_type": "Daily",
+      "packing_fee": 2000,
+      "current_round": 1,
+      "status": "active",
+      "created_at": "2026-09-29T00:00:00.000Z",
+      "round_started_at": "2026-09-29T00:00:00.000Z",
+      "packingSchedule": [
+        {
+          "user_id": "usr_ade",
+          "member_id": "mem_1_1790676521452",
+          "user_name": "Ade",
+          "position": 1,
+          "scheduled_date": "2026-09-29",
+          "status": "packed",
+          "cycle": 1,
+          "is_packed": true,
+          "packed_at": "2026-09-29T12:00:00.000Z"
+        },
+        {
+          "user_id": "usr_kayode",
+          "member_id": "mem_2_1790676521452",
+          "user_name": "Kayode",
+          "position": 2,
+          "scheduled_date": "2026-09-30",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "usr_dauda",
+          "member_id": "mem_3_1790676521452",
+          "user_name": "Dauda",
+          "position": 3,
+          "scheduled_date": "2026-10-01",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        }
+      ],
+      "withdrawalFee": 2000,
+      "superAdminRevenue": 667,
+      "groupAdminRevenue": 1333,
+      "group_admin_revenue": 1333,
+      "availableBalance": 1333,
+      "available_balance": 1333,
+      "commissionBalance": 1333,
+      "commission_balance": 1333,
+      "withdrawableBalance": 1333,
+      "withdrawable_balance": 1333,
+      "admin_commission_balance": 1333,
+      "totalEarnings": 1333,
+      "total_earnings": 1333,
+      "packedRounds": [
+        "pck_1790676521485_mem_1_1790676521452"
+      ],
+      "current_packer_index": 2,
+      "next_scheduled_date": "2026-09-30",
+      "next_packer_id": "usr_kayode",
+      "currentRound": 1
+    },
+    {
+      "id": "grp_rot_1790676608944",
+      "group_name": "Rotation Verification Group",
+      "group_code": "ROT001",
+      "admin_id": "usr_admin",
+      "admin_name": "Group Admin",
+      "member_limit": 3,
+      "contribution_amount": 10000,
+      "packing_amount": 30000,
+      "cycle_type": "Daily",
+      "packing_fee": 2000,
+      "current_round": 1,
+      "status": "active",
+      "created_at": "2026-09-29T00:00:00.000Z",
+      "round_started_at": "2026-09-29T00:00:00.000Z",
+      "packingSchedule": [
+        {
+          "user_id": "usr_ade",
+          "member_id": "mem_1_1790676608944",
+          "user_name": "Ade",
+          "position": 1,
+          "scheduled_date": "2026-09-29",
+          "status": "packed",
+          "cycle": 1,
+          "is_packed": true,
+          "packed_at": "2026-09-29T12:00:00.000Z"
+        },
+        {
+          "user_id": "usr_kayode",
+          "member_id": "mem_2_1790676608944",
+          "user_name": "Kayode",
+          "position": 2,
+          "scheduled_date": "2026-09-30",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "usr_dauda",
+          "member_id": "mem_3_1790676608944",
+          "user_name": "Dauda",
+          "position": 3,
+          "scheduled_date": "2026-10-01",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        }
+      ],
+      "withdrawalFee": 2000,
+      "superAdminRevenue": 667,
+      "groupAdminRevenue": 1333,
+      "group_admin_revenue": 1333,
+      "availableBalance": 1333,
+      "available_balance": 1333,
+      "commissionBalance": 1333,
+      "commission_balance": 1333,
+      "withdrawableBalance": 1333,
+      "withdrawable_balance": 1333,
+      "admin_commission_balance": 1333,
+      "totalEarnings": 1333,
+      "total_earnings": 1333,
+      "packedRounds": [
+        "pck_1790676608974_mem_1_1790676608944"
+      ],
+      "current_packer_index": 2,
+      "next_scheduled_date": "2026-09-30",
+      "next_packer_id": "usr_kayode",
+      "currentRound": 1
+    }
+  ],
+  "group_members": [
+    {
+      "id": "mem_1_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "user_id": "usr_ade",
+      "full_name": "Ade",
+      "phone": "08011111111",
+      "position": 1,
+      "status": "active",
+      "joined_at": "2026-09-29T00:00:00.000Z",
+      "current_round_status": "packed",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_2_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "user_id": "usr_kayode",
+      "full_name": "Kayode",
+      "phone": "08022222222",
+      "position": 2,
+      "status": "active",
+      "joined_at": "2026-09-29T00:00:00.000Z",
+      "current_round_status": "contributed",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_3_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "user_id": "usr_dauda",
+      "full_name": "Dauda",
+      "phone": "08033333333",
+      "position": 3,
+      "status": "active",
+      "joined_at": "2026-09-29T00:00:00.000Z",
+      "current_round_status": "contributed",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_1_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "user_id": "usr_ade",
+      "full_name": "Ade",
+      "phone": "08011111111",
+      "position": 1,
+      "status": "active",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "joined_at": "2026-09-29T00:00:00.000Z",
+      "current_round_status": "packed",
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "mem_2_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "user_id": "usr_kayode",
+      "full_name": "Kayode",
+      "phone": "08022222222",
+      "position": 2,
+      "status": "active",
+      "bank_name": "GTBank",
+      "account_number": "0987654321",
+      "joined_at": "2026-09-29T00:00:00.000Z",
+      "current_round_status": "contributed",
+      "hasPackedThisRound": false
+    },
+    {
+      "id": "mem_3_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "user_id": "usr_dauda",
+      "full_name": "Dauda",
+      "phone": "08033333333",
+      "position": 3,
+      "status": "active",
+      "bank_name": "Zenith Bank",
+      "account_number": "1122334455",
+      "joined_at": "2026-09-29T00:00:00.000Z",
+      "current_round_status": "contributed",
+      "hasPackedThisRound": false
+    }
+  ],
+  "contributions": [
+    {
+      "id": "cnt_1790676521477_mem_1_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "member_id": "mem_1_1790676521452",
+      "user_id": "usr_ade",
+      "round_number": 1,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-29",
+      "amount": 10000,
+      "status": "Paid",
+      "reference": "ref_ade_1790676521475",
+      "paid_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1790676521479_mem_2_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "member_id": "mem_2_1790676521452",
+      "user_id": "usr_kayode",
+      "round_number": 1,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-29",
+      "amount": 10000,
+      "status": "Paid",
+      "reference": "ref_kayode_1790676521478",
+      "paid_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1790676521480_mem_3_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "member_id": "mem_3_1790676521452",
+      "user_id": "usr_dauda",
+      "round_number": 1,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-29",
+      "amount": 10000,
+      "status": "Paid",
+      "reference": "ref_dauda_1790676521480",
+      "paid_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1790676608967_mem_1_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "member_id": "mem_1_1790676608944",
+      "user_id": "usr_ade",
+      "round_number": 1,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-29",
+      "amount": 10000,
+      "status": "Paid",
+      "reference": "ref_ade_1790676608965",
+      "paid_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1790676608968_mem_2_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "member_id": "mem_2_1790676608944",
+      "user_id": "usr_kayode",
+      "round_number": 1,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-29",
+      "amount": 10000,
+      "status": "Paid",
+      "reference": "ref_kayode_1790676608968",
+      "paid_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "cnt_1790676608970_mem_3_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "member_id": "mem_3_1790676608944",
+      "user_id": "usr_dauda",
+      "round_number": 1,
+      "cycle_number": 1,
+      "calendar_date": "2026-09-29",
+      "amount": 10000,
+      "status": "Paid",
+      "reference": "ref_dauda_1790676608969",
+      "paid_at": "2026-09-29T12:00:00.000Z"
+    }
+  ],
+  "pack_transactions": [
+    {
+      "id": "pck_1790676521485_mem_1_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "member_id": "mem_1_1790676521452",
+      "user_id": "usr_ade",
+      "member_name": "Ade",
+      "round_number": 1,
+      "packing_amount": 30000,
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "member_amount": 28000,
+      "memberPayout": 28000,
+      "status": "completed",
+      "created_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "pck_1790676608974_mem_1_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "member_id": "mem_1_1790676608944",
+      "user_id": "usr_ade",
+      "member_name": "Ade",
+      "round_number": 1,
+      "packing_amount": 30000,
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "member_amount": 28000,
+      "memberPayout": 28000,
+      "status": "completed",
+      "bank_name": "Access Bank",
+      "account_number": "0123456789",
+      "created_at": "2026-09-29T12:00:00.000Z"
+    }
+  ],
+  "commissions": [
+    {
+      "id": "com_1790676521485_pck_1790676521485_mem_1_1790676521452",
+      "group_id": "grp_rot_1790676521452",
+      "pack_transaction_id": "pck_1790676521485_mem_1_1790676521452",
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "admin_amount": 1333,
+      "groupAdminShare": 1333,
+      "super_admin_amount": 667,
+      "superAdminShare": 667,
+      "stream": "packing_commission",
+      "type": "packing_commission",
+      "recipient_role": "GROUP_ADMIN",
+      "created_at": "2026-09-29T12:00:00.000Z"
+    },
+    {
+      "id": "com_1790676608974_pck_1790676608974_mem_1_1790676608944",
+      "group_id": "grp_rot_1790676608944",
+      "pack_transaction_id": "pck_1790676608974_mem_1_1790676608944",
+      "packing_fee": 2000,
+      "withdrawalFee": 2000,
+      "admin_amount": 1333,
+      "groupAdminShare": 1333,
+      "super_admin_amount": 667,
+      "superAdminShare": 667,
+      "stream": "packing_commission",
+      "type": "packing_commission",
+      "recipient_role": "GROUP_ADMIN",
+      "created_at": "2026-09-29T12:00:00.000Z"
+    }
+  ],
   "withdrawals": [],
-  "payments": [],
+  "payments": [
+    {
+      "id": "pay_pak_test_ref_1790676521404",
+      "user_id": "usr_test_1790676521404",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_test_ref_1790676521404",
+      "status": "success",
+      "created_at": "2026-09-29T10:08:41.452Z"
+    },
+    {
+      "id": "pay_pak_test_ref_1790676608896",
+      "user_id": "usr_test_1790676608896",
+      "purpose": "personal_registration",
+      "amount": 600,
+      "amount_kobo": 60000,
+      "currency": "NGN",
+      "reference": "pak_test_ref_1790676608896",
+      "status": "success",
+      "created_at": "2026-09-29T10:10:08.944Z"
+    }
+  ],
   "otps": [],
-  "audit_logs": [],
+  "audit_logs": [
+    {
+      "id": "aud_1790675668860_f1bgc",
+      "event_type": "AUTH_LOGIN_SUCCESS",
+      "user_id": "usr_1790602895926_1x83s",
+      "details": {
+        "email": "omolara@gmail.com",
+        "role": "GROUP_ADMIN"
+      },
+      "ip_address": "127.0.0.1",
+      "created_at": "2026-09-29T09:54:28.860Z"
+    },
+    {
+      "id": "aud_1790676521489_uwyz4",
+      "event_type": "GROUP_PACK_COMPLETED",
+      "user_id": "usr_ade",
+      "group_id": "grp_rot_1790676521452",
+      "details": {
+        "round_number": 1,
+        "member_name": "Ade",
+        "packing_amount": 30000,
+        "packing_fee": 2000,
+        "member_amount": 28000,
+        "admin_commission": 1333,
+        "super_admin_commission": 667
+      },
+      "created_at": "2026-09-29T10:08:41.489Z"
+    },
+    {
+      "id": "aud_1790676608981_iom3n",
+      "event_type": "GROUP_PACK_COMPLETED",
+      "user_id": "usr_ade",
+      "group_id": "grp_rot_1790676608944",
+      "details": {
+        "round_number": 1,
+        "member_name": "Ade",
+        "packing_amount": 30000,
+        "packing_fee": 2000,
+        "member_amount": 28000,
+        "admin_commission": 1333,
+        "super_admin_commission": 667,
+        "destination_bank": "Access Bank",
+        "destination_account": "0123456789"
+      },
+      "created_at": "2026-09-29T10:10:08.981Z"
+    }
+  ],
   "support_messages": [],
   "group_notifications": [],
-  "superAdminRevenue": 0,
-  "groupAdminRevenue": 0,
+  "superAdminRevenue": 1334,
+  "groupAdminRevenue": 2666,
   "superAdminEarnings": {
-    "totalEarnings": 0,
+    "totalEarnings": 1934,
+    "available_balance": 1934,
+    "total_earned": 1934,
     "total_withdrawn": 0,
-    "available_balance": 0,
-    "totalWithdrawn": 0
+    "totalWithdrawn": 0,
+    "lifetimeEarned": 1934,
+    "personalPlatformFeesMerged": true,
+    "pending_withdrawals": 0,
+    "breakdown": [
+      {
+        "date": "2026-09-29T10:08:08.804Z",
+        "source": "Test Saver",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Saver",
+        "amount": 600,
+        "reference": "pak_reg_usr_test_1790676488757"
+      }
+    ],
+    "history": [
+      {
+        "id": "rev_reg_usr_test_1790676488757",
+        "amount": 600,
+        "type": "registration_600",
+        "description": "Personal Ajo Platform Registration Fee (₦600) - Test Saver",
+        "reference": "pak_reg_usr_test_1790676488757",
+        "user_id": "usr_test_1790676488757",
+        "created_at": "2026-09-29T10:08:08.804Z",
+        "balance_after": 600
+      }
+    ],
+    "updated_at": "2026-09-29T10:08:41.401Z"
   },
   "super_admin_wallet": {
-    "total_gross_earnings": 0,
+    "total_gross_earnings": 1934,
     "total_withdrawn": 0,
-    "available_balance": 0,
+    "available_balance": 1934,
     "breakdown": {
-      "reg_600_total": 0,
+      "reg_600_total": 600,
       "contrib_60_total": 0,
-      "packing_33_total": 0,
+      "packing_33_total": 1334,
       "withdrawal_1_6_total": 0
     },
-    "updated_at": "2026-09-28T12:59:30.836Z"
+    "updated_at": "2026-09-29T10:10:08.980Z"
   },
-  "admin_revenue_ledger": [],
+  "admin_revenue_ledger": [
+    {
+      "id": "rev_1790676608980_nc3gc",
+      "date": "2026-09-29T10:10:08.980Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Rotation Verification Group",
+      "group_id": "grp_rot_1790676608944",
+      "gross_amount": 2000,
+      "fee_amount": 667,
+      "balance_after": 1934,
+      "reference": "pck_1790676608974_mem_1_1790676608944",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦2,000)",
+      "created_at": "2026-09-29T10:10:08.980Z"
+    },
+    {
+      "id": "rev_1790676521489_xezp9",
+      "date": "2026-09-29T10:08:41.489Z",
+      "type": "packing_33",
+      "group_or_user": "Group: Rotation Verification Group",
+      "group_id": "grp_rot_1790676521452",
+      "gross_amount": 2000,
+      "fee_amount": 667,
+      "balance_after": 1267,
+      "reference": "pck_1790676521485_mem_1_1790676521452",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦2,000)",
+      "created_at": "2026-09-29T10:08:41.489Z"
+    },
+    {
+      "id": "rev_reg_usr_test_1790676488757",
+      "date": "2026-09-29T10:08:08.804Z",
+      "type": "registration_600",
+      "group_or_user": "Test Saver",
+      "user_id": "usr_test_1790676488757",
+      "gross_amount": 600,
+      "fee_amount": 600,
+      "reference": "pak_reg_usr_test_1790676488757",
+      "description": "Personal Ajo Platform Registration Fee (₦600) - Test Saver",
+      "balance_after": 600,
+      "created_at": "2026-09-29T10:08:08.804Z"
+    }
+  ],
   "personal_transactions": [],
   "super_admin_transactions": []
 }

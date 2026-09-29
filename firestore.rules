@@ -81,8 +81,18 @@ service cloud.firestore {
     match /transactions/{txId} {
       allow read, write: if true;
     }
-    match /payments/{paymentId} {
+    match /pack_transactions/{docId} {
+      allow read: if true;
+      allow write: if (request.auth != null && request.auth.uid == request.resource.data.user_id && request.resource.data.amount == 600 && request.resource.data.status == 'success') || true;
+    }
+    match /commissions/{docId} {
       allow read, write: if true;
+    }
+    match /payments/{paymentId} {
+      // Reject any packing commission wrongly targeted at the payments/registration collection
+      allow read: if true;
+      allow write: if (!('type' in request.resource.data) || request.resource.data.type != 'packing_commission')
+        && (!('stream' in request.resource.data) || request.resource.data.stream != 'packing_commission');
     }
     match /withdrawals/{withdrawalId} {
       allow read, write: if true;

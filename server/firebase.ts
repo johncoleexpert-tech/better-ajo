@@ -1284,7 +1284,19 @@ export async function fsUpsertCommission(commission: Commission): Promise<boolea
   const db = getFirestoreDb();
   if (!db || !commission || !commission.id) return false;
   try {
-    await db.collection(FIRESTORE_COLLECTIONS.COMMISSIONS).doc(commission.id).set(cleanUndefinedFields(commission), { merge: true });
+    const fee = Number(commission.packing_fee || (commission as any).withdrawalFee || 0);
+    const superAdmin = Number(commission.super_admin_amount || (commission as any).superAdminShare || 0);
+    const groupAdmin = Number(commission.admin_amount || (commission as any).groupAdminShare || 0);
+    if (fee > 0 && superAdmin + groupAdmin !== fee) {
+      throw new Error(`Math assertion failed in fsUpsertCommission: superAdmin (${superAdmin}) + groupAdmin (${groupAdmin}) !== total fee (${fee})`);
+    }
+    const safeCommission = {
+      ...commission,
+      stream: 'packing_commission',
+      type: 'packing_commission',
+      recipient_role: commission.recipient_role || 'GROUP_ADMIN'
+    };
+    await db.collection(FIRESTORE_COLLECTIONS.COMMISSIONS).doc(commission.id).set(cleanUndefinedFields(safeCommission), { merge: true });
     return true;
   } catch (err) {
     console.error(`Firestore upsertCommission error (${commission.id}):`, err);
@@ -3505,5 +3517,143 @@ export async function fsSyncAllToUsersAndRevenue(): Promise<void> {
     console.error('[Firestore Sync] fsSyncAllToUsersAndRevenue error:', syncErr?.message || syncErr);
   }
 }
+
+/**
+ * Atomic idempotent Firestore verification for Personal Ajo ₦600 registration fee.
+ * Uses runTransaction to atomically write pack_transactions, payments, personal_ajo,
+ * users, profiles, and platformRevenue/main in a single isolated commit.
+ */
+export async function fsVerifyPersonalAjoFeeTransaction(
+  userId: string,
+  reference: string,
+  amount: number = 600
+): Promise<{ success: boolean; alreadyVerified: boolean; message?: string }> {
+  const db = getFirestoreDb();
+  if (!db) {
+    console.warn('[Firestore Personal Fee] DB instance null, proceeding in memory mode');
+    return { success: true, alreadyVerified: false, message: 'Local database verified' };
+  }
+
+  const packTxRef = db.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS).doc(`pak_personal_${reference}`);
+  const paymentRef = db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(`pay_${reference}`);
+  const personalAjoRef = db.collection('personal_ajo').doc(userId);
+  const personalAjosRef = db.collection('personalAjos').doc(userId);
+  const profileRef = db.collection(FIRESTORE_COLLECTIONS.PROFILES).doc(userId);
+  const userRef = db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId);
+  const platformRevenueRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+  const superAdminEarningsRef = db.collection(FIRESTORE_COLLECTIONS.SUPER_ADMIN_EARNINGS).doc('main');
+
+  try {
+    const result = await db.runTransaction(async (transaction) => {
+      // 1. Idempotency Check: check if already verified in Firestore
+      const existingPackSnap = await transaction.get(packTxRef);
+      if (existingPackSnap.exists) {
+        const packData = existingPackSnap.data() as any;
+        if (packData?.status === 'success' || packData?.status === 'completed') {
+          return { success: true, alreadyVerified: true, message: 'Transaction already verified in Firestore' };
+        }
+      }
+
+      const existingPaySnap = await transaction.get(paymentRef);
+      if (existingPaySnap.exists) {
+        const payData = existingPaySnap.data() as any;
+        if (payData?.status === 'success' || payData?.status === 'completed') {
+          return { success: true, alreadyVerified: true, message: 'Payment already verified in Firestore' };
+        }
+      }
+
+      const now = new Date().toISOString();
+
+      // 2. Set pack_transactions record
+      transaction.set(packTxRef, {
+        id: `pak_personal_${reference}`,
+        reference,
+        user_id: userId,
+        amount,
+        amount_kobo: amount * 100,
+        currency: 'NGN',
+        type: 'personal_ajo_fee',
+        stream: 'STREAM_REGISTRATION',
+        category: 'ACTIVATION_FEE',
+        status: 'success',
+        verified_at: now,
+        created_at: now
+      }, { merge: true });
+
+      // 3. Set payments record
+      transaction.set(paymentRef, {
+        id: `pay_${reference}`,
+        reference,
+        user_id: userId,
+        amount,
+        amount_kobo: amount * 100,
+        currency: 'NGN',
+        purpose: 'personal_registration',
+        type: 'Personal Ajo Activation Fee',
+        status: 'success',
+        verified_at: now,
+        created_at: now
+      }, { merge: true });
+
+      // 4. Activate personal_ajo documents
+      transaction.set(personalAjoRef, {
+        user_id: userId,
+        status: 'active',
+        fee_paid: amount,
+        personal_ajo_active: true,
+        activated_at: now,
+        updated_at: now
+      }, { merge: true });
+
+      transaction.set(personalAjosRef, {
+        user_id: userId,
+        status: 'active',
+        fee_paid: amount,
+        personal_ajo_active: true,
+        activated_at: now,
+        updated_at: now
+      }, { merge: true });
+
+      // 5. Update user and profile documents
+      transaction.set(profileRef, {
+        personal_ajo_active: true,
+        personal_ajo_activated_at: now,
+        personal_ajo_fee_paid: amount,
+        updated_at: now
+      }, { merge: true });
+
+      transaction.set(userRef, {
+        personal_ajo_active: true,
+        personal_ajo_activated_at: now,
+        personal_ajo_fee_paid: amount,
+        updated_at: now
+      }, { merge: true });
+
+      // 6. Platform Revenue Stream 1 increment
+      transaction.set(platformRevenueRef, {
+        stream1: FieldValue.increment(amount),
+        totalGross: FieldValue.increment(amount),
+        unifiedAvailable: FieldValue.increment(amount),
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      transaction.set(superAdminEarningsRef, {
+        totalEarnings: FieldValue.increment(amount),
+        availableBalance: FieldValue.increment(amount),
+        available_balance: FieldValue.increment(amount),
+        lastUpdated: now
+      }, { merge: true });
+
+      return { success: true, alreadyVerified: false, message: 'Personal Ajo activated and verified successfully' };
+    });
+
+    console.log(`[fsVerifyPersonalAjoFeeTransaction]: Transaction committed for user ${userId}, ref ${reference}`);
+    return result;
+  } catch (err: any) {
+    console.error(`[fsVerifyPersonalAjoFeeTransaction Error]: ${err?.message || err}`);
+    return { success: false, alreadyVerified: false, message: err?.message || 'Transaction failed' };
+  }
+}
+
 
 

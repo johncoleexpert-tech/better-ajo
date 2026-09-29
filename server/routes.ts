@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
-import { Contribution, PaymentRecord, GroupMember, Withdrawal } from '../src/types/index.js';
+import { Contribution, PaymentRecord, GroupMember, Withdrawal, STREAM_REGISTRATION, STREAM_CONTRIBUTION, STREAM_PACKING } from '../src/types/index.js';
 import { db, getNigeriaCalendarDate, addCycleIntervalToCalendarDate, formatCalendarDateDisplay, normalizeNigerianPhone } from './db.js';
 import { initializePaystackPayment, verifyPaystackPayment, setTestPaymentCharge, initiatePaystackTransfer } from './paystack.js';
 import { formatPersonalAccountName, formatGroupMemberAccountName, generateMoniepointAccountNumber, generateGroupMemberVirtualAccount } from './moniepoint.js';
@@ -52,6 +52,7 @@ import {
   fsExecutePackBatch,
   fsExecuteStartNextRoundBatch,
   fsExecuteDepositBatch,
+  fsVerifyPersonalAjoFeeTransaction,
   fsExecuteContributionBatch,
   fsExecuteWithdrawalBatch,
   fsExecuteWithdrawalTransaction,
@@ -892,23 +893,20 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
     }
 
     // 5. PREVENT DUPLICATE PROCESSING (Requirement 5):
-    // The same Paystack reference must never activate the Personal Better Ajo twice.
-    // If the reference has already been successfully processed, confirm cloud persistence and return existing.
+    // The same Paystack reference must never activate Personal Better Ajo twice or charge twice.
+    // Check if reference exists in payments or pack_transactions with success status
     const existingPayment = db.getPaymentByReference(reference);
-    if (existingPayment && existingPayment.status === 'success') {
+    const existingPackTx = (db.data.pack_transactions || []).find(
+      t => (t.reference === reference || t.id === `pak_personal_${reference}`) && (t.status === 'success' || t.status === 'completed')
+    );
+
+    if ((existingPayment && existingPayment.status === 'success') || existingPackTx) {
       const personalAjo = db.activatePersonalAjo(userId);
-      const confirmed = await fsExecuteDepositBatch(existingPayment, personalAjo);
-      if (!confirmed) {
-        console.error(`[Personal Fee Retry] Cloud persistence unconfirmed for ref: ${reference}`);
-        return res.status(503).json({
-          error: 'Payment was verified, but cloud record persistence could not be confirmed. Please retry in a few moments.',
-          retryable: true,
-          reference
-        });
-      }
+      await fsVerifyPersonalAjoFeeTransaction(userId, reference, 600).catch(() => {});
       return res.json({
         success: true,
         message: 'Payment already verified and Personal Better Ajo is active.',
+        alreadyVerified: true,
         alreadyProcessed: true,
         personalAjo,
         payment: existingPayment
@@ -933,7 +931,6 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
       if (updatedPayment) {
         fsUpsertPayment(updatedPayment).catch(() => {});
       }
-      // Return clear, actionable error for failed/abandoned/pending/reversed transactions
       return res.status(400).json({
         error: verification.message || 'Payment verification failed',
         status: verification.status,
@@ -942,35 +939,12 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
       });
     }
 
-    // Payment verified successfully! Activate the Personal Better Ajo
+    // Payment verified successfully! Activate Personal Better Ajo locally
     const personalAjo = db.activatePersonalAjo(userId);
     syncPersonalAjoToSupabase(personalAjo).catch(() => {});
 
-    // TASK 2: Record dedicated Platform Fee Transaction (-₦600 for user, +₦600 for super admin)
+    // Record platform fee transaction
     db.createPlatformFeeTransaction(userId, 600, 'PERSONAL_AJO');
-
-    // CRITICAL WRITE CONFIRMATION:
-    // Both payment record and activated personalAjo MUST be confirmed in Firestore before reporting success
-    const confirmed = updatedPayment
-      ? await fsExecuteDepositBatch(updatedPayment, personalAjo)
-      : await fsUpsertPersonalAjo(personalAjo);
-
-    if (!confirmed) {
-      console.error(`[Personal Fee] Firestore write failed for ref: ${reference}, userId: ${userId}`);
-      return res.status(503).json({
-        error: 'Payment was verified successfully with Paystack, but cloud record persistence could not be confirmed safely. Please click retry to finalize activation.',
-        retryable: true,
-        reference
-      });
-    }
-
-    // Record audit
-    db.recordAudit({
-      event_type: 'PERSONAL_AJO_ACTIVATED',
-      user_id: userId,
-      ip_address: req.ip,
-      details: { reference, fee: 600 }
-    });
 
     // STEP 2 - Record Personal Ajo Registration (₦600) in Super Admin Revenue Ledger
     const registeredUser = db.getProfileById(userId);
@@ -984,17 +958,33 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
       description: `Personal Ajo Platform Registration Fee (₦600) - ${registeredUser?.full_name || 'Saver'}`
     });
 
-    // Write to Firestore platformRevenue collection (STREAM_1_REGISTRATION)
-    fsRecordRegistrationRevenue(
-      userId,
-      600,
-      reference,
-      registeredUser?.full_name || 'Personal Saver'
-    ).catch(err => console.warn('[Firestore Revenue Warn]:', err?.message || err));
+    // CRITICAL ATOMIC TRANSACTION:
+    // Execute atomic Firestore transaction writing pack_transactions, payments, personal_ajo,
+    // users, profiles, and platformRevenue/main
+    const fsResult = await fsVerifyPersonalAjoFeeTransaction(userId, reference, 600);
+
+    if (!fsResult.success && isFirebaseConfigured()) {
+      console.warn(`[Personal Fee] Firestore write returned retryable status for ref: ${reference}`);
+      return res.status(503).json({
+        error: fsResult.message || 'Payment verified with Paystack, but cloud record persistence is finalizing. Please retry.',
+        retryable: true,
+        reference
+      });
+    }
+
+    // Record audit
+    db.recordAudit({
+      event_type: 'PERSONAL_AJO_ACTIVATED',
+      user_id: userId,
+      ip_address: req.ip,
+      details: { reference, fee: 600, verified_at: new Date().toISOString() }
+    });
 
     return res.json({
       success: true,
       message: 'Personal Better Ajo activated successfully!',
+      verified_at: new Date().toISOString(),
+      alreadyVerified: false,
       personalAjo,
       payment: updatedPayment
     });
@@ -2136,6 +2126,9 @@ apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
     const group = db.getGroupById(groupId);
     if (!group) return res.status(404).json({ error: 'Group not found' });
 
+    // Cron safeguard on dashboard load: check if scheduled_date <= today and contributions complete, auto-execute pack
+    db.checkAndAutoExecutePayAheadPack(groupId, simulatedDate);
+
     const members = db.getGroupMembers(groupId);
     const contributions = db.getGroupContributions(groupId, group.current_round);
     const currentPacker = db.getCurrentPacker(groupId, group.current_round);
@@ -2645,6 +2638,19 @@ apiRouter.post('/groups/:groupId/contribute/verify', paymentRateLimiter, async (
            (c.cycle_number === currentCycle || (!c.cycle_number && currentCycle === 1))
     );
     const contribId = existingContrib?.id || `cnt_${Date.now()}_${member.id}`;
+
+    const schedule = db.generateOrEnsurePackingSchedule(group);
+    const memberSchedule = schedule.find(s => s.member_id === member.id && s.cycle === group.current_round);
+    const isPayAhead = memberSchedule ? (todayStr < memberSchedule.scheduled_date) : false;
+
+    if (memberSchedule && isPayAhead) {
+      memberSchedule.status = 'credited';
+      memberSchedule.is_pay_ahead = true;
+      memberSchedule.credited_at = new Date().toISOString();
+      memberSchedule.credited_for_date = memberSchedule.scheduled_date;
+      group.packingSchedule = schedule;
+    }
+
     const candidateContribution: Contribution = {
       ...(existingContrib || {}),
       id: contribId,
@@ -2657,7 +2663,9 @@ apiRouter.post('/groups/:groupId/contribute/verify', paymentRateLimiter, async (
       amount: contributionAmount,
       status: 'Paid',
       reference,
-      paid_at: paidTimestamp
+      paid_at: paidTimestamp,
+      is_pay_ahead: isPayAhead,
+      credited_for_date: memberSchedule?.scheduled_date
     };
 
     const candidateMember: GroupMember = {
@@ -3013,18 +3021,45 @@ async function syncGroupFinancialsFromFirestore(groupId: string): Promise<void> 
     const fsDb = getFirestoreDb();
     if (!fsDb) return;
 
-    // 1. Sync commissions
-    const comSnap = await fsDb.collection('commissions').where('group_id', '==', groupId).get();
+    // 1. Stream 3: Query packing commissions explicitly by STREAM_PACKING type
+    const comSnap = await fsDb.collection('commissions')
+      .where('group_id', '==', groupId)
+      .where('type', '==', STREAM_PACKING)
+      .get();
     comSnap.forEach(d => {
       const cData = d.data() as any;
       const effectiveId = cData.id || d.id;
       if (!db.data.commissions.some(existing => existing.id === effectiveId)) {
-        db.data.commissions.push({ ...cData, id: effectiveId });
+        db.data.commissions.push({
+          ...cData,
+          id: effectiveId,
+          type: STREAM_PACKING,
+          stream: STREAM_PACKING
+        });
       }
     });
 
-    // 2. Sync pack_transactions
-    const packSnap = await fsDb.collection('pack_transactions').where('group_id', '==', groupId).get();
+    // Also fetch any legacy commissions without type field for backward compatibility
+    const legacyComSnap = await fsDb.collection('commissions')
+      .where('group_id', '==', groupId)
+      .get();
+    legacyComSnap.forEach(d => {
+      const cData = d.data() as any;
+      const effectiveId = cData.id || d.id;
+      if (!db.data.commissions.some(existing => existing.id === effectiveId)) {
+        db.data.commissions.push({
+          ...cData,
+          id: effectiveId,
+          type: STREAM_PACKING,
+          stream: STREAM_PACKING
+        });
+      }
+    });
+
+    // 2. Sync pack_transactions explicitly for this group
+    const packSnap = await fsDb.collection('pack_transactions')
+      .where('group_id', '==', groupId)
+      .get();
     packSnap.forEach(d => {
       const pData = d.data() as any;
       const effectiveId = pData.id || d.id;
@@ -3033,8 +3068,10 @@ async function syncGroupFinancialsFromFirestore(groupId: string): Promise<void> 
       }
     });
 
-    // 3. Sync withdrawals
-    const wthSnap = await fsDb.collection('withdrawals').where('group_id', '==', groupId).get();
+    // 3. Sync withdrawals explicitly for this group
+    const wthSnap = await fsDb.collection('withdrawals')
+      .where('group_id', '==', groupId)
+      .get();
     wthSnap.forEach(d => {
       const wData = d.data() as any;
       const effectiveId = wData.id || d.id;
@@ -3169,6 +3206,9 @@ apiRouter.get('/groups/:groupId/admin-dashboard', async (req: Request, res: Resp
 
     // Sync all financial records from Firestore
     await syncGroupFinancialsFromFirestore(groupId);
+
+    // Cron safeguard on dashboard load: check if scheduled_date <= today and contributions complete, auto-execute pack
+    db.checkAndAutoExecutePayAheadPack(groupId);
 
     let userProfile = (userId ? db.getProfileById(userId) : null) ||
       (userId ? db.getProfileByPhone(userId) : null) ||

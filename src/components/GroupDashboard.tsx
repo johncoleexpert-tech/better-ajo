@@ -773,7 +773,18 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
                 <div className="flex flex-col items-end gap-1">
                   <div className="flex items-center space-x-1.5 text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100/90 px-2.5 py-0.5 rounded-md border border-amber-200">
                     <Lock className="h-3 w-3 text-amber-700" />
-                    <span>YOUR TURN TO PACK • WAITING FOR ALL CONTRIBUTIONS</span>
+                    <span>
+                      {(() => {
+                        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+                        const targetDate = cycleInfo?.scheduledPackDate || (userMember as any)?.scheduledPackDate || '';
+                        if (targetDate > today) {
+                          return `SCHEDULED • ${cycleInfo?.scheduledPackDateDisplay || targetDate}`;
+                        } else if (targetDate < today && targetDate !== '') {
+                          return 'OVERDUE • WAITING FOR CONTRIBUTIONS';
+                        }
+                        return 'NEXT TO PACK TODAY • WAITING FOR ALL CONTRIBUTIONS';
+                      })()}
+                    </span>
                   </div>
                   <button
                     disabled
@@ -784,12 +795,23 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
                         : !cycleStatus.allPaid
                         ? `Waiting for all members to contribute (${cycleStatus.paidCount}/${cycleStatus.totalRequired} paid)`
                         : !isCycleOpen
-                        ? `Packing opens on ${cycleInfo?.scheduledPackDateDisplay}`
+                        ? `Scheduled for ${cycleInfo?.scheduledPackDateDisplay}`
                         : "Packing is locked"
                     }
                   >
                     <Lock className="h-4 w-4 text-slate-400" />
-                    <span>PACK NOW (INACTIVE)</span>
+                    <span>
+                      {(() => {
+                        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
+                        const targetDate = cycleInfo?.scheduledPackDate || '';
+                        if (targetDate > today) {
+                          return `SCHEDULED (${cycleInfo?.scheduledPackDateDisplay || targetDate})`;
+                        } else if (targetDate < today && targetDate !== '') {
+                          return 'OVERDUE (DISABLED)';
+                        }
+                        return 'PACK NOW (DISABLED)';
+                      })()}
+                    </span>
                   </button>
                 </div>
               )
