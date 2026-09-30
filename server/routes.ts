@@ -39,6 +39,7 @@ import {
   fsUpsertGroup,
   fsGetGroupById,
   fsGetGroupByCode,
+  fsGetGroupsForUser,
   fsUpsertGroupMember,
   fsUpsertContribution,
   fsUpsertPackTransaction,
@@ -78,6 +79,7 @@ import {
   verifyFirestorePersistenceReady,
   FIRESTORE_COLLECTIONS
 } from './firebase.js';
+import { wipeTestData } from './wipeTestData.js';
 
 export const apiRouter = Router();
 
@@ -880,7 +882,7 @@ apiRouter.post('/user/contact-info', async (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, res: Response) => {
+apiRouter.post(['/personal/verify-fee', '/personal/verify-personal-ajo', '/verify-personal-ajo'], paymentRateLimiter, async (req: Request, res: Response) => {
   try {
     const { userId, reference } = req.body;
     if (!userId || !reference) {
@@ -892,13 +894,43 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
       return res.status(403).json({ error: 'Security violation: Cannot verify payment for another user account.' });
     }
 
-    // 5. PREVENT DUPLICATE PROCESSING (Requirement 5):
+    // 5. PREVENT DUPLICATE PROCESSING (Requirement 3 & 5):
     // The same Paystack reference must never activate Personal Better Ajo twice or charge twice.
-    // Check if reference exists in payments or pack_transactions with success status
+    // Check if reference exists in payments or pack_transactions with success status locally or in Firestore
     const existingPayment = db.getPaymentByReference(reference);
     const existingPackTx = (db.data.pack_transactions || []).find(
       t => (t.reference === reference || t.id === `pak_personal_${reference}`) && (t.status === 'success' || t.status === 'completed')
     );
+
+    const fsDb = getFirestoreDb();
+    if (fsDb) {
+      try {
+        const existingFsPay = await fsDb.collection('payments').doc(`pay_${reference}`).get();
+        if (existingFsPay.exists && (existingFsPay.data()?.status === 'success' || existingFsPay.data()?.status === 'completed')) {
+          const personalAjo = db.activatePersonalAjo(userId);
+          return res.json({
+            success: true,
+            message: 'Payment already verified and Personal Better Ajo is active.',
+            alreadyVerified: true,
+            alreadyProcessed: true,
+            personalAjo,
+            payment: existingFsPay.data()
+          });
+        }
+        const existingFsPack = await fsDb.collection('pack_transactions').doc(`pak_personal_${reference}`).get();
+        if (existingFsPack.exists && (existingFsPack.data()?.status === 'success' || existingFsPack.data()?.status === 'completed')) {
+          const personalAjo = db.activatePersonalAjo(userId);
+          return res.json({
+            success: true,
+            message: 'Payment already verified and Personal Better Ajo is active.',
+            alreadyVerified: true,
+            alreadyProcessed: true,
+            personalAjo,
+            payment: existingFsPack.data()
+          });
+        }
+      } catch (err) {}
+    }
 
     if ((existingPayment && existingPayment.status === 'success') || existingPackTx) {
       const personalAjo = db.activatePersonalAjo(userId);
@@ -944,7 +976,7 @@ apiRouter.post('/personal/verify-fee', paymentRateLimiter, async (req: Request, 
     syncPersonalAjoToSupabase(personalAjo).catch(() => {});
 
     // Record platform fee transaction
-    db.createPlatformFeeTransaction(userId, 600, 'PERSONAL_AJO');
+    db.createPlatformFeeTransaction(userId, 600, 'PERSONAL_AJO', reference);
 
     // STEP 2 - Record Personal Ajo Registration (₦600) in Super Admin Revenue Ledger
     const registeredUser = db.getProfileById(userId);
@@ -1151,6 +1183,8 @@ apiRouter.post(['/paystack/webhook', '/webhook'], async (req: Request, res: Resp
   }
 });
 
+const recentPersonalWithdrawalAttempts = new Map<string, number>();
+
 apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, res: Response) => {
   try {
     const { userId, amount, password, otp_code } = req.body;
@@ -1163,6 +1197,18 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
     if (authUserId && authUserId !== userId) {
       return res.status(403).json({ error: 'Security violation: Cannot withdraw from another user account.' });
     }
+
+    // Idempotency safeguard: userId + amount + current date hour. If same key exists in last 5 minutes reject.
+    const nowMs = Date.now();
+    const dateHour = new Date().toISOString().substring(0, 13);
+    const idempotencyKey = `${userId}_${numAmount}_${dateHour}`;
+    const lastAttempt = recentPersonalWithdrawalAttempts.get(idempotencyKey);
+    if (lastAttempt && (nowMs - lastAttempt < 5 * 60 * 1000)) {
+      return res.status(429).json({
+        error: 'A withdrawal request for this amount is already processing or was submitted in the last 5 minutes. Please wait before trying again.'
+      });
+    }
+    recentPersonalWithdrawalAttempts.set(idempotencyKey, nowMs);
 
     const profile = db.getProfileById(userId);
     if (!profile) return res.status(404).json({ error: 'User profile not found.' });
@@ -1181,8 +1227,9 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       return res.status(400).json({ error: 'Your login password is required to authorize this withdrawal.' });
     }
 
-    // 1.6% withdrawal fee
+    // 1.6% withdrawal fee calculated ONCE (e.g. 25000 * 0.016 = 400)
     const fee = Math.round(numAmount * 0.016);
+    const totalDebit = numAmount + fee;
     const netAmount = numAmount - fee;
 
     // FIX A - REAL TRANSACTION ATOMIC WITHDRAWAL:
@@ -1327,7 +1374,13 @@ apiRouter.get('/personal/payments/:userId', async (req: Request, res: Response) 
 
     const deduped: any[] = [];
     const seenRefs = new Set<string>();
+    let seenRegistrationFee = false;
     for (const p of payments) {
+      const isReg = p.type === 'PLATFORM_FEE' || p.purpose === 'personal_registration' || (p.amount === 600 && p.category === 'ACTIVATION_FEE');
+      if (isReg) {
+        if (seenRegistrationFee) continue; // Fee must appear ONCE in history!
+        seenRegistrationFee = true;
+      }
       const refKey = p.reference || p.id;
       if (!seenRefs.has(refKey)) {
         seenRefs.add(refKey);
@@ -3446,12 +3499,44 @@ apiRouter.post('/groups/:groupId/notify', (req: Request, res: Response) => {
   }
 });
 
-apiRouter.get('/users/:userId/admin-groups', (req: Request, res: Response) => {
+apiRouter.get('/users/:userId/groups', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const profile = db.getProfileById(userId) || db.getProfileByPhone(userId);
+    const resolvedId = profile ? profile.id : userId;
+
+    // Load from Firestore: query groups where owner_id == currentUserId OR members array-contains currentUserId
+    const fsGroups = await fsGetGroupsForUser(resolvedId);
+    for (const g of fsGroups) {
+      db.syncRemoteGroup(g);
+    }
+
+    const userGroups = db.getUserGroups(resolvedId);
+    return res.json({
+      success: true,
+      adminGroups: userGroups.adminGroups,
+      memberGroups: userGroups.memberGroups,
+      allGroups: userGroups.allGroups
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.get('/users/:userId/admin-groups', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const profile = db.getProfileById(userId) || db.getProfileByPhone(userId);
+    const resolvedId = profile ? profile.id : userId;
+
+    // Load from Firestore
+    const fsGroups = await fsGetGroupsForUser(resolvedId);
+    for (const g of fsGroups) {
+      db.syncRemoteGroup(g);
+    }
+
     const groups = db.getAllGroups().filter(g => 
-      g.admin_id === userId || 
+      g.admin_id === resolvedId || 
       (profile && g.admin_id === profile.id) ||
       (profile && g.whatsapp_number === profile.phone)
     );
@@ -3969,6 +4054,107 @@ apiRouter.get('/superadmin/firestore-revenue', async (req: Request, res: Respons
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// Super Admin Wallet - 4 Streams & Available Revenue calculation (Requirement 5)
+apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet'], async (req: Request, res: Response) => {
+  try {
+    const fsDb = getFirestoreDb();
+    let stream1 = 0;
+    let stream2 = 0;
+    let stream3 = 0;
+    let stream4 = 0;
+    let withdrawn = 0;
+
+    if (fsDb) {
+      // 1. stream1 = sum type personal_ajo_fee success
+      try {
+        const ptxSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS)
+          .where('type', '==', 'personal_ajo_fee')
+          .where('status', '==', 'success')
+          .get();
+        ptxSnap.docs.forEach((d: any) => {
+          stream1 += Number(d.data().amount || 0);
+        });
+      } catch {}
+
+      // 2. stream2 = sum type contribution_fee success
+      try {
+        const contribSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.CONTRIBUTIONS)
+          .where('status', 'in', ['Paid', 'success', 'successful'])
+          .get();
+        stream2 = contribSnap.docs.length * 60;
+      } catch {}
+
+      // 3. stream3 = sum commissions super_admin packing_commission success
+      try {
+        const commSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.COMMISSIONS)
+          .where('role', '==', 'super_admin')
+          .get();
+        commSnap.docs.forEach((d: any) => {
+          const c = d.data();
+          stream3 += Number(c.amount || c.super_admin_amount || 0);
+        });
+      } catch {}
+
+      // 4. stream4 = sum type withdrawal_fee success
+      try {
+        const withSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS)
+          .where('status', 'in', ['completed', 'successful', 'success'])
+          .get();
+        withSnap.docs.forEach((d: any) => {
+          const w = d.data();
+          if (w.withdrawal_type === 'personal') {
+            stream4 += Number(w.fee || Math.round(Number(w.amount || 0) * 0.016));
+          } else if (w.withdrawal_type === 'super_admin_revenue' || w.type === 'super_admin_withdrawal') {
+            withdrawn += Number(w.amount || 0);
+          }
+        });
+      } catch {}
+    }
+
+    // In-memory fallback if Firestore streams are 0
+    if (stream1 === 0 && stream2 === 0 && stream3 === 0) {
+      const audit = db.auditSuperAdminRealBalance();
+      stream1 = audit.breakdown.reg_600_total;
+      stream2 = audit.breakdown.contrib_60_total;
+      stream3 = audit.breakdown.packing_33_total;
+      stream4 = audit.breakdown.withdrawal_1_6_total;
+      withdrawn = audit.total_withdrawn;
+    }
+
+    // Requirement 5:
+    // totalGross = stream1 + stream2 + stream3 = 5394
+    // availableRevenue = totalGross - withdrawn = 5394 - 700 = 4694
+    const totalGross = stream1 + stream2 + stream3;
+    const availableRevenue = Math.max(0, totalGross - withdrawn);
+
+    return res.json({
+      success: true,
+      stream1,
+      stream2,
+      stream3,
+      stream4,
+      totalGross,
+      total_gross: totalGross,
+      withdrawn,
+      total_withdrawn: withdrawn,
+      availableRevenue,
+      available_balance: availableRevenue
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Wipe Test Data API (Requirement 1 & 7)
+apiRouter.post(['/admin/wipe-test-data', '/superadmin/wipe-test-data', '/wipe-test-data'], async (req: Request, res: Response) => {
+  try {
+    const result = await wipeTestData();
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Wipe failed' });
   }
 });
 

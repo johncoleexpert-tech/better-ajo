@@ -71,6 +71,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [contactSuccess, setContactSuccess] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -224,7 +225,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   };
 
   const handleConfirmWithdrawal = async (password: string) => {
+    if (isProcessing || loading) return;
     try {
+      setIsProcessing(true);
       setLoading(true);
       setError(null);
 
@@ -253,6 +256,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       throw err;
     } finally {
       setLoading(false);
+      setIsProcessing(false);
     }
   };
 
@@ -942,10 +946,10 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
               <button
                 type="submit"
-                disabled={loading || withdrawNum <= 0 || withdrawNum > currentTotalSaved}
+                disabled={loading || isProcessing || withdrawNum <= 0 || withdrawNum > currentTotalSaved}
                 className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Authorize Withdrawal</span>}
+                {loading || isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Authorize Withdrawal</span>}
               </button>
             </form>
           </div>

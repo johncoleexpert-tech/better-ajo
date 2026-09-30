@@ -1041,15 +1041,88 @@ export async function fsGetGroupsByAdminId(adminId: string): Promise<GroupAjo[]>
   }
 }
 
-export async function fsUpsertGroup(group: GroupAjo): Promise<boolean> {
+export async function fsUpsertGroup(group: GroupAjo, memberUserIds?: string[]): Promise<boolean> {
   const db = getFirestoreDb();
   if (!db || !group || !group.id) return false;
   try {
-    await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(group.id).set(cleanUndefinedFields(group), { merge: true });
+    const dataToSave: any = {
+      ...group,
+      owner_id: group.admin_id,
+      admin_id: group.admin_id
+    };
+    if (Array.isArray(memberUserIds) && memberUserIds.length > 0) {
+      dataToSave.members = memberUserIds;
+    } else if ((group as any).members && Array.isArray((group as any).members)) {
+      dataToSave.members = (group as any).members;
+    }
+    await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(group.id).set(cleanUndefinedFields(dataToSave), { merge: true });
     return true;
   } catch (err) {
     console.error(`Firestore upsertGroup error (${group.id}):`, err);
     return false;
+  }
+}
+
+export async function fsGetGroupsForUser(userId: string): Promise<GroupAjo[]> {
+  const db = getFirestoreDb();
+  if (!db || !userId) return [];
+  try {
+    const groupMap = new Map<string, GroupAjo>();
+
+    // 1. Query groups where owner_id == currentUserId
+    try {
+      const ownerSnap = await db.collection(FIRESTORE_COLLECTIONS.GROUPS)
+        .where('owner_id', '==', userId)
+        .get();
+      ownerSnap.docs.forEach(d => {
+        const g = d.data() as GroupAjo;
+        groupMap.set(g.id || d.id, { ...g, id: g.id || d.id });
+      });
+    } catch {}
+
+    // 2. Query groups where admin_id == currentUserId
+    try {
+      const adminSnap = await db.collection(FIRESTORE_COLLECTIONS.GROUPS)
+        .where('admin_id', '==', userId)
+        .get();
+      adminSnap.docs.forEach(d => {
+        const g = d.data() as GroupAjo;
+        groupMap.set(g.id || d.id, { ...g, id: g.id || d.id });
+      });
+    } catch {}
+
+    // 3. Query groups where members array-contains currentUserId
+    try {
+      const memberSnap = await db.collection(FIRESTORE_COLLECTIONS.GROUPS)
+        .where('members', 'array-contains', userId)
+        .get();
+      memberSnap.docs.forEach(d => {
+        const g = d.data() as GroupAjo;
+        groupMap.set(g.id || d.id, { ...g, id: g.id || d.id });
+      });
+    } catch {}
+
+    // 4. Query group_members collection to find any group where member user_id == userId
+    try {
+      const gmSnap = await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS)
+        .where('user_id', '==', userId)
+        .get();
+      for (const doc of gmSnap.docs) {
+        const gm = doc.data() as any;
+        if (gm.group_id && !groupMap.has(gm.group_id)) {
+          const gDoc = await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(gm.group_id).get();
+          if (gDoc.exists) {
+            const g = gDoc.data() as GroupAjo;
+            groupMap.set(g.id || gDoc.id, { ...g, id: g.id || gDoc.id });
+          }
+        }
+      }
+    } catch {}
+
+    return Array.from(groupMap.values());
+  } catch (err) {
+    console.warn('[Firestore getGroupsForUser error]:', err);
+    return [];
   }
 }
 

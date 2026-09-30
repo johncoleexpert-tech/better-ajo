@@ -120,12 +120,17 @@ interface DatabaseSchema {
     total_gross_earnings: number;
     total_withdrawn: number;
     available_balance: number;
+    stream1_registration?: number;
+    stream2_contribution?: number;
+    stream3_packing?: number;
+    stream4_withdrawal?: number;
     breakdown: {
       reg_600_total: number;
       contrib_60_total: number;
       packing_33_total: number;
       withdrawal_1_6_total: number;
     };
+    last_updated?: string;
     updated_at: string;
   };
   admin_revenue_ledger?: Array<{
@@ -480,7 +485,7 @@ class Database {
     // 1. Personal Ajo Registration: ₦600 one-time per user
     const regSavers = new Set<string>();
     for (const pa of (this.data.personal_ajo || [])) {
-      if (pa.user_id && (pa.status === 'active' || (pa as any).is_active || pa.created_at)) {
+      if (pa.user_id && pa.status === 'active' && (pa as any).personal_ajo_active && (pa as any).fee_paid) {
         regSavers.add(pa.user_id);
       }
     }
@@ -1840,17 +1845,18 @@ class Database {
   createPlatformFeeTransaction(
     userId: string,
     amount: number = 600,
-    product: string = 'PERSONAL_AJO'
+    product: string = 'PERSONAL_AJO',
+    customRef?: string
   ): { personalTx: PersonalTransaction; superAdminTx: SuperAdminTransaction } {
     if (!this.data.personal_transactions) this.data.personal_transactions = [];
     if (!this.data.super_admin_transactions) this.data.super_admin_transactions = [];
 
     const numAmount = Math.abs(Number(amount)) || 600;
-    const feeRef = `fee_reg_${userId}_${numAmount}`;
+    const feeRef = customRef || `fee_reg_${userId}_${numAmount}`;
 
-    // Personal transaction (Debit -600)
+    // Personal transaction (Debit -600) - Only ONCE per user!
     let pTx = this.data.personal_transactions.find(
-      t => t.reference === feeRef && t.user_id === userId && t.type === 'PLATFORM_FEE'
+      t => (t.user_id === userId && t.type === 'PLATFORM_FEE') || t.reference === feeRef
     );
     if (!pTx) {
       pTx = {
@@ -1871,7 +1877,7 @@ class Database {
 
     // Super Admin transaction (Fee Income +600) ONCE
     let saTx = this.data.super_admin_transactions.find(
-      t => t.reference === feeRef && t.type === 'FEE_INCOME'
+      t => t.reference === feeRef || (t.type === 'FEE_INCOME' && (t as any).user_id === userId)
     );
     if (!saTx) {
       saTx = {

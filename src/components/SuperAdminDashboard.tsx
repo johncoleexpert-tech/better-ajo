@@ -290,14 +290,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setWithdrawError(null);
 
     const amount = Number(withdrawAmount);
-    if (isNaN(amount) || amount <= 0) {
-      setWithdrawError('Please enter a valid amount.');
+    if (isNaN(amount) || amount < 100) {
+      setWithdrawError('Minimum withdrawal amount is ₦100.');
       return;
     }
 
-    const maxAvailable = revenue?.unifiedAvailable ?? data.superAdminWallet?.available_balance ?? data.superAdminEarnings.available_balance ?? data.metrics?.superAdminAvailableBalance ?? 0;
-    if (amount > maxAvailable) {
-      setWithdrawError(`Amount cannot exceed available revenue balance of ${formatNaira(maxAvailable)}.`);
+    if (amount > availableRevenue) {
+      setWithdrawError(`Amount cannot exceed available revenue balance of ${formatNaira(availableRevenue)}.`);
       return;
     }
 
@@ -1884,7 +1883,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-500 font-medium">Available Revenue:</span>
                   <span className="font-black text-slate-900 text-sm">
-                    {formatNaira(superAdminEarnings.available_balance)}
+                    {formatNaira(availableRevenue)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">

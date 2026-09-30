@@ -69,7 +69,7 @@ export default function App() {
         if (parsed.profile) {
           setUser(parsed.profile);
           if (parsed.personalAjo) setPersonalAjo(parsed.personalAjo);
-          if (parsed.groups) setUserGroups(parsed.groups);
+          // Groups are loaded fresh from Firestore, NOT from localStorage
           if (parsed.activeGroupId) {
             setActiveGroupId(parsed.activeGroupId);
             setCurrentView('group_dashboard');
@@ -82,6 +82,23 @@ export default function App() {
       console.error('Failed to restore session', e);
     }
   }, []);
+
+  // Groups MUST load from Firestore: query groups where owner_id == currentUserId OR members array-contains currentUserId.
+  // Do NOT use localStorage for groups. This stops groups disappearing after each deploy.
+  useEffect(() => {
+    if (!user?.id) {
+      setUserGroups([]);
+      return;
+    }
+    fetch(`/api/users/${encodeURIComponent(user.id)}/groups`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && Array.isArray(data.allGroups)) {
+          setUserGroups(data.allGroups);
+        }
+      })
+      .catch(err => console.warn('Failed to fetch groups from Firestore:', err));
+  }, [user?.id]);
 
   // Durable real-time Firestore balance synchronization
   useEffect(() => {
