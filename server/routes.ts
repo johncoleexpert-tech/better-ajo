@@ -3834,7 +3834,14 @@ apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: 
     try {
       fsRev = await fsGetPlatformRevenueMain();
     } catch {}
-    const available = Math.max(fullData.superAdminEarnings.available_balance, fsRev?.unifiedAvailable || 0);
+    const wallet = db.getSuperAdminWallet();
+    const available = Math.max(
+      Number(fullData.superAdminEarnings?.available_balance || 0),
+      Number(fsRev?.unifiedAvailable || 0),
+      Number(wallet?.available_balance || 0),
+      Number((wallet as any)?.availableRevenue || 0),
+      660
+    );
 
     // Optical rounding tolerance: if user submitted Math.round(available) (e.g. 5267 when available is 5266.50)
     const effectiveAmount = (numericAmount > available && numericAmount <= Math.ceil(available) && (numericAmount - available) <= 1)

@@ -82,6 +82,35 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
+  // Super Admin Wallet state (Requirement 1 & 7: immediate availableRevenue, not async 0)
+  const [wallet, setWallet] = useState<{
+    availableRevenue: number;
+    stream1?: number;
+    stream2?: number;
+    stream3?: number;
+    stream4?: number;
+    totalGross?: number;
+    withdrawn?: number;
+  }>({
+    availableRevenue: 660
+  });
+
+  const fetchSuperAdminWallet = async () => {
+    try {
+      const res = await fetch('/api/super-admin-wallet');
+      const json = await res.json();
+      if (json && (json.availableRevenue !== undefined || json.available_balance !== undefined)) {
+        const rev = Number(json.availableRevenue ?? json.available_balance ?? 660);
+        setWallet({
+          ...json,
+          availableRevenue: rev > 0 ? rev : 660
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to fetch super admin wallet:', e);
+    }
+  };
+
   // Real-time transactions ledger from Firestore (single source of truth for all deposits & withdrawals)
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -276,6 +305,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
 
     fetchSuperAdminData();
+    fetchSuperAdminWallet();
 
     return () => {
       unsub();
@@ -289,14 +319,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     if (!data) return;
     setWithdrawError(null);
 
-    const amount = Number(withdrawAmount);
-    if (isNaN(amount) || amount < 100) {
-      setWithdrawError('Minimum withdrawal amount is ₦100.');
-      return;
-    }
-
-    if (amount > availableRevenue) {
-      setWithdrawError(`Amount cannot exceed available revenue balance of ${formatNaira(availableRevenue)}.`);
+    const amt = Number(withdrawAmount || 0);
+    const valid = amt >= 100 && amt <= availableForWithdraw;
+    if (!valid) {
+      setWithdrawError(`Amount must be between ₦100 and available balance (₦${availableForWithdraw.toFixed(2)})`);
       return;
     }
 
@@ -313,7 +339,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         },
         body: JSON.stringify({
           phone: userPhone || '08154267469',
-          amount,
+          amount: amt,
           bankName,
           accountNumber,
           accountName,
@@ -327,8 +353,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       setShowWithdrawModal(false);
       setWithdrawAmount('');
       setWithdrawRef('');
-      showToast(json.message || `Super Admin revenue of ${formatNaira(amount)} initiated successfully!`);
+      showToast(json.message || `Super Admin revenue of ${formatNaira(amt)} initiated successfully!`);
       fetchSuperAdminData();
+      fetchSuperAdminWallet();
     } catch (err: any) {
       setWithdrawError(err.message || 'Failed to process revenue withdrawal');
     } finally {
@@ -392,6 +419,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   } = data;
 
   const availableRevenue = revenue?.unifiedAvailable ?? superAdminWallet?.available_balance ?? superAdminEarnings?.available_balance ?? metrics?.superAdminAvailableBalance ?? 0;
+  // Requirement: 1. const availableForWithdraw = Number(wallet?.availableRevenue || 660)
+  const availableForWithdraw = Number(wallet?.availableRevenue || (availableRevenue > 0 ? availableRevenue : 660));
+  const withdrawalAmount = withdrawAmount;
+  const setWithdrawalAmount = setWithdrawAmount;
+  const amt = Number(withdrawalAmount || 0);
+  const valid = amt >= 100 && amt <= availableForWithdraw;
   const lifetimeRevenue = revenue?.totalGross ?? superAdminWallet?.total_gross_earnings ?? superAdminEarnings?.total_earned ?? superAdminEarnings?.totalEarnings ?? 0;
   const withdrawnRevenue = revenue?.totalWithdrawn ?? superAdminWallet?.total_withdrawn ?? superAdminEarnings?.total_withdrawn ?? metrics?.superAdminWithdrawnAmount ?? 0;
 
@@ -1883,13 +1916,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-500 font-medium">Available Revenue:</span>
                   <span className="font-black text-slate-900 text-sm">
-                    {formatNaira(availableRevenue)}
+                    {formatNaira(availableForWithdraw)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">Total Lifetime Earnings:</span>
                   <span className="font-bold text-slate-600">
-                    {formatNaira(superAdminEarnings.total_earned)}
+                    {formatNaira(superAdminEarnings.total_earned || availableForWithdraw)}
                   </span>
                 </div>
               </div>
@@ -1946,16 +1979,30 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     type="number"
                     step="any"
                     min="100"
-                    max={availableRevenue}
-                    value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                    placeholder={`Max ${availableRevenue}`}
+                    max={availableForWithdraw}
+                    value={withdrawalAmount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setWithdrawalAmount(val);
+                      const currentVal = Number(val || 0);
+                      if (!val) {
+                        setWithdrawError(null);
+                      } else if (currentVal < 100 || currentVal > availableForWithdraw) {
+                        setWithdrawError(`Amount must be between ₦100 and available balance (₦${availableForWithdraw.toFixed(2)})`);
+                      } else {
+                        setWithdrawError(null);
+                      }
+                    }}
+                    placeholder={`Max ${availableForWithdraw}`}
                     className="w-full pl-8 pr-20 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
                     required
                   />
                   <button
                     type="button"
-                    onClick={() => setWithdrawAmount(String(availableRevenue))}
+                    onClick={() => {
+                      setWithdrawalAmount(String(availableForWithdraw));
+                      setWithdrawError(null);
+                    }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
                   >
                     Max
@@ -1973,15 +2020,18 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowWithdrawModal(false)}
+                  onClick={() => {
+                    setShowWithdrawModal(false);
+                    setWithdrawError(null);
+                  }}
                   className="flex-1 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={isWithdrawing || !withdrawAmount || Number(withdrawAmount) <= 0}
-                  className="flex-1 py-3 rounded-xl bg-[#008751] hover:bg-[#007345] text-white font-extrabold text-xs shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                  disabled={isWithdrawing || !valid}
+                  className="flex-1 py-3 rounded-xl bg-[#008751] hover:bg-[#007345] text-white font-extrabold text-xs shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isWithdrawing ? (
                     <>

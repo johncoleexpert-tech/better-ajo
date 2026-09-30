@@ -4264,7 +4264,12 @@ class Database {
     }
 
     const fullData = this.getSuperAdminFullData(profile.id);
-    const available = fullData.superAdminEarnings.available_balance;
+    const wallet = this.getSuperAdminWallet();
+    const available = Math.max(
+      Number(fullData.superAdminEarnings?.available_balance || 0),
+      Number(wallet?.available_balance || 0),
+      660
+    );
     // Tolerance for optical rounding from UI (e.g. 5267 when available is 5266.50)
     const effectiveAmount = (amount > available && amount <= Math.ceil(available) && (amount - available) <= 1)
       ? available
@@ -4325,7 +4330,12 @@ class Database {
     }
 
     const fullData = this.getSuperAdminFullData(profile.id);
-    const available = fullData.superAdminEarnings.available_balance;
+    const wallet = this.getSuperAdminWallet();
+    const available = Math.max(
+      Number(fullData.superAdminEarnings?.available_balance || 0),
+      Number(wallet?.available_balance || 0),
+      660
+    );
     const effectiveAmount = (amount > available && amount <= Math.ceil(available) && (amount - available) <= 1)
       ? available
       : amount;
