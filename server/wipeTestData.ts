@@ -9,6 +9,21 @@
 import { getFirestoreDb, FIRESTORE_COLLECTIONS } from './firebase.js';
 import { db } from './db.js';
 
+function isSuperAdminUser(data: any): boolean {
+  if (!data) return false;
+  const role = (data.role || '').toUpperCase();
+  const email = (data.email || '').trim().toLowerCase();
+  const phone = (data.phone || '').trim();
+  return (
+    role === 'SUPER_ADMIN' ||
+    email === 'superadmin@fundscycle.com' ||
+    email === 'realheavenict@gmail.com' ||
+    email === 'superadmin@packajo.ng' ||
+    email === 'paulakinyele54@gmail.com' ||
+    phone === '08154267469'
+  );
+}
+
 export async function wipeTestData(): Promise<{
   success: boolean;
   deletedCounts: Record<string, number>;
@@ -22,7 +37,10 @@ export async function wipeTestData(): Promise<{
     contributions: 0,
     commissions: 0,
     withdrawals: 0,
-    transactions: 0
+    transactions: 0,
+    payments: 0,
+    users: 0,
+    profiles: 0
   };
 
   const fsDb = getFirestoreDb();
@@ -55,42 +73,64 @@ export async function wipeTestData(): Promise<{
       }
     }
 
-    // Reset all users in users collection to balance 0
+    // Delete users except super admin
     try {
       const userSnaps = await fsDb.collection(FIRESTORE_COLLECTIONS.USERS).get();
       const uBatch = fsDb.batch();
+      let delUsers = 0;
       userSnaps.docs.forEach(doc => {
-        uBatch.set(doc.ref, {
-          personalBalance: 0,
-          balance: 0,
-          total_saved: 0,
-          total_deposited: 0,
-          total_withdrawn: 0,
-          updatedAt: new Date()
-        }, { merge: true });
+        const data = doc.data();
+        if (isSuperAdminUser(data)) {
+          uBatch.set(doc.ref, {
+            personalBalance: 0,
+            balance: 0,
+            total_saved: 0,
+            total_deposited: 0,
+            total_withdrawn: 0,
+            updatedAt: new Date()
+          }, { merge: true });
+        } else {
+          uBatch.delete(doc.ref);
+          delUsers++;
+        }
       });
+      deletedCounts.users = delUsers;
       if (userSnaps.size > 0) {
         await uBatch.commit();
-        console.log(`[WIPE TEST DATA] Reset balances for ${userSnaps.size} users in users collection to 0`);
+        console.log(`[WIPE TEST DATA] Deleted ${delUsers} non-admin users, preserved super admin.`);
       }
     } catch (err: any) {
-      console.warn('[WIPE TEST DATA Warn] Error resetting users balance:', err?.message || err);
+      console.warn('[WIPE TEST DATA Warn] Error deleting users:', err?.message || err);
     }
 
-    // Reset personal_ajo and personalAjos docs
+    // Delete profiles except super admin
+    try {
+      const profSnaps = await fsDb.collection(FIRESTORE_COLLECTIONS.PROFILES).get();
+      const pBatch = fsDb.batch();
+      let delProfs = 0;
+      profSnaps.docs.forEach(doc => {
+        const data = doc.data();
+        if (!isSuperAdminUser(data)) {
+          pBatch.delete(doc.ref);
+          delProfs++;
+        }
+      });
+      deletedCounts.profiles = delProfs;
+      if (profSnaps.size > 0) {
+        await pBatch.commit();
+        console.log(`[WIPE TEST DATA] Deleted ${delProfs} non-admin profiles, preserved super admin.`);
+      }
+    } catch (err: any) {
+      console.warn('[WIPE TEST DATA Warn] Error deleting profiles:', err?.message || err);
+    }
+
+    // Clear personal_ajo and personalAjos docs
     try {
       for (const coll of [FIRESTORE_COLLECTIONS.PERSONAL_AJO, FIRESTORE_COLLECTIONS.PERSONAL_AJOS]) {
         const pSnaps = await fsDb.collection(coll).get();
         const pBatch = fsDb.batch();
         pSnaps.docs.forEach(doc => {
-          pBatch.set(doc.ref, {
-            balance: 0,
-            total_saved: 0,
-            total_deposited: 0,
-            total_withdrawn: 0,
-            credit_balance: 0,
-            updated_at: new Date().toISOString()
-          }, { merge: true });
+          pBatch.delete(doc.ref);
         });
         if (pSnaps.size > 0) {
           await pBatch.commit();
@@ -131,7 +171,7 @@ export async function wipeTestData(): Promise<{
     }
   }
 
-  // Clear in-memory db data (KEEP profiles and users!)
+  // Clear in-memory db data (KEEP super admin profile and user!)
   db.data.groups = [];
   db.data.group_members = [];
   db.data.contributions = [];
@@ -142,26 +182,14 @@ export async function wipeTestData(): Promise<{
   db.data.personal_transactions = [];
   db.data.admin_revenue_ledger = [];
   db.data.super_admin_transactions = [];
+  db.data.personal_ajo = [];
 
-  // Reset in-memory personal ajo savings balances to 0 and pending_fee
-  if (Array.isArray(db.data.personal_ajo)) {
-    for (const pa of db.data.personal_ajo) {
-      pa.balance = 0;
-      pa.total_deposited = 0;
-      pa.total_withdrawn = 0;
-      pa.credit_balance = 0;
-      pa.status = 'pending_fee';
-      (pa as any).personal_ajo_active = false;
-      (pa as any).fee_paid = 0;
-    }
-  }
-
-  // Reset profiles personal_ajo_active
+  // Filter profiles and users to keep ONLY super admin
   if (Array.isArray(db.data.profiles)) {
-    for (const p of db.data.profiles) {
-      (p as any).personal_ajo_active = false;
-      (p as any).personal_ajo_fee_paid = 0;
-    }
+    db.data.profiles = db.data.profiles.filter(p => isSuperAdminUser(p));
+  }
+  if (Array.isArray((db.data as any).users)) {
+    (db.data as any).users = (db.data as any).users.filter((u: any) => isSuperAdminUser(u));
   }
 
   // Reset super admin wallet to 0

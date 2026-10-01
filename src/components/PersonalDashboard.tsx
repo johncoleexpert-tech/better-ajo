@@ -29,7 +29,7 @@ import {
   subscribeToUserPersonalPayments,
   db
 } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
 
 interface PersonalDashboardProps {
   user: UserProfile;
@@ -136,10 +136,66 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       setLoadingTransactions(false);
     });
 
+    // 5. Query listeners on contributions, pack_transactions, and withdrawals for current user
+    let unsubContrib: (() => void) | null = null;
+    let unsubPack: (() => void) | null = null;
+    let unsubWithdr: (() => void) | null = null;
+    try {
+      const qContrib = query(collection(db, 'contributions'), where('user_id', '==', user.id));
+      unsubContrib = onSnapshot(qContrib, () => {
+        apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
+          .then((d) => {
+            if (d && typeof d.personalBalance === 'number') {
+              onUpdatePersonalAjo({
+                ...personalAjo,
+                balance: d.personalBalance,
+                total_saved: d.personalBalance
+              });
+            }
+          })
+          .catch(() => {});
+      });
+
+      const qPack = query(collection(db, 'pack_transactions'), where('user_id', '==', user.id));
+      unsubPack = onSnapshot(qPack, () => {
+        apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
+          .then((d) => {
+            if (d && typeof d.personalBalance === 'number') {
+              onUpdatePersonalAjo({
+                ...personalAjo,
+                balance: d.personalBalance,
+                total_saved: d.personalBalance
+              });
+            }
+          })
+          .catch(() => {});
+      });
+
+      const qWithdr = query(collection(db, 'withdrawals'), where('user_id', '==', user.id));
+      unsubWithdr = onSnapshot(qWithdr, () => {
+        apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
+          .then((d) => {
+            if (d && typeof d.personalBalance === 'number') {
+              onUpdatePersonalAjo({
+                ...personalAjo,
+                balance: d.personalBalance,
+                total_saved: d.personalBalance
+              });
+            }
+          })
+          .catch(() => {});
+      });
+    } catch (e) {
+      console.warn('[PersonalDashboard] Error setting up user collection listeners:', e);
+    }
+
     return () => {
       unsubUser();
       unsubPersonalAjo();
       unsubPayments();
+      if (unsubContrib) unsubContrib();
+      if (unsubPack) unsubPack();
+      if (unsubWithdr) unsubWithdr();
     };
   }, [user?.id]);
 
@@ -246,9 +302,15 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       }
 
       setShowWithdrawOtp(false);
-      if (data.personalAjo) {
-        onUpdatePersonalAjo(data.personalAjo);
-      }
+      const newBal = Number(data.newBalance ?? data.personalAjo?.balance ?? (currentTotalSaved - withdrawNum));
+      const newWithdrawn = Number(data.totalWithdrawn ?? (Number(personalAjo.total_withdrawn || 0) + withdrawNum));
+      onUpdatePersonalAjo({
+        ...personalAjo,
+        ...(data.personalAjo || {}),
+        balance: newBal,
+        total_saved: newBal,
+        total_withdrawn: newWithdrawn
+      });
       setSuccessMessage(data.message || `Withdrawal of ${formatNaira(withdrawNet)} completed!`);
       setTimeout(() => setSuccessMessage(null), 6000);
     } catch (err: any) {

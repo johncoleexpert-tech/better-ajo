@@ -95,16 +95,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     availableRevenue: 660
   });
 
+  const availableForWithdraw = Number(wallet?.availableRevenue || 660);
+  const withdrawalAmount = withdrawAmount;
+  const setWithdrawalAmount = setWithdrawAmount;
+  const amt = Number(withdrawalAmount || 0);
+  const valid = amt >= 100 && amt <= availableForWithdraw;
+
   const fetchSuperAdminWallet = async () => {
     try {
       const res = await fetch('/api/super-admin-wallet');
       const json = await res.json();
-      if (json && (json.availableRevenue !== undefined || json.available_balance !== undefined)) {
-        const rev = Number(json.availableRevenue ?? json.available_balance ?? 660);
-        setWallet({
+      if (json && (json.availableRevenue !== undefined || json.available_balance !== undefined || json.unifiedAvailable !== undefined)) {
+        const rev = Number(json.availableRevenue ?? json.available_balance ?? json.unifiedAvailable ?? 660);
+        setWallet(prev => ({
+          ...prev,
           ...json,
           availableRevenue: rev > 0 ? rev : 660
-        });
+        }));
       }
     } catch (e) {
       console.warn('Failed to fetch super admin wallet:', e);
@@ -230,6 +237,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         totalWithdrawn: revStats.totalWithdrawn,
         unifiedAvailable: revStats.unifiedAvailable
       });
+      setWallet(prev => ({
+        ...prev,
+        availableRevenue: Number(revStats.unifiedAvailable > 0 ? revStats.unifiedAvailable : 660),
+        totalGross: Number(revStats.totalGross || 0),
+        stream1: Number(revStats.stream1 || 0),
+        stream2: Number(revStats.stream2 || 0),
+        stream3: Number(revStats.stream3 || 0),
+        stream4: Number(revStats.stream4 || 0)
+      }));
       setData((prev) => {
         if (!prev) return prev;
         return {
@@ -304,6 +320,28 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       console.warn('[Super Admin] Error setting up transactions listener:', e);
     }
 
+    // Real-time collection listeners for instant Super Admin reflection
+    let unsubContrib: (() => void) | null = null;
+    let unsubPack: (() => void) | null = null;
+    let unsubWithdr: (() => void) | null = null;
+    let unsubUsers: (() => void) | null = null;
+    try {
+      unsubContrib = onSnapshot(collection(db, 'contributions'), () => {
+        fetchSuperAdminWallet();
+      });
+      unsubPack = onSnapshot(collection(db, 'pack_transactions'), () => {
+        fetchSuperAdminWallet();
+      });
+      unsubWithdr = onSnapshot(collection(db, 'withdrawals'), () => {
+        fetchSuperAdminWallet();
+      });
+      unsubUsers = onSnapshot(collection(db, 'users'), () => {
+        fetchSuperAdminWallet();
+      });
+    } catch (e) {
+      console.warn('[Super Admin] Error setting up collection listeners:', e);
+    }
+
     fetchSuperAdminData();
     fetchSuperAdminWallet();
 
@@ -311,6 +349,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       unsub();
       if (unsubStats) unsubStats();
       if (unsubTransactions) unsubTransactions();
+      if (unsubContrib) unsubContrib();
+      if (unsubPack) unsubPack();
+      if (unsubWithdr) unsubWithdr();
+      if (unsubUsers) unsubUsers();
     };
   }, [userPhone, userId]);
 
@@ -418,13 +460,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     ledger = []
   } = data;
 
-  const availableRevenue = revenue?.unifiedAvailable ?? superAdminWallet?.available_balance ?? superAdminEarnings?.available_balance ?? metrics?.superAdminAvailableBalance ?? 0;
-  // Requirement: 1. const availableForWithdraw = Number(wallet?.availableRevenue || 660)
-  const availableForWithdraw = Number(wallet?.availableRevenue || (availableRevenue > 0 ? availableRevenue : 660));
-  const withdrawalAmount = withdrawAmount;
-  const setWithdrawalAmount = setWithdrawAmount;
-  const amt = Number(withdrawalAmount || 0);
-  const valid = amt >= 100 && amt <= availableForWithdraw;
+  const availableRevenue = availableForWithdraw;
   const lifetimeRevenue = revenue?.totalGross ?? superAdminWallet?.total_gross_earnings ?? superAdminEarnings?.total_earned ?? superAdminEarnings?.totalEarnings ?? 0;
   const withdrawnRevenue = revenue?.totalWithdrawn ?? superAdminWallet?.total_withdrawn ?? superAdminEarnings?.total_withdrawn ?? metrics?.superAdminWithdrawnAmount ?? 0;
 

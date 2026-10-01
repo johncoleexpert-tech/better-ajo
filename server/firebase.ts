@@ -1,6 +1,7 @@
 import { createRequire } from 'module';
 import { initializeApp, cert, getApps, App } from 'firebase-admin/app';
 import { getFirestore, initializeFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
+export { FieldValue };
 import type { Auth } from 'firebase-admin/auth';
 
 // Safe module loader for both ESM and CommonJS (esbuild/Vercel serverless bundled) runtimes

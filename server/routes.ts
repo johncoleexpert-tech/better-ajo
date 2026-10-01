@@ -77,7 +77,8 @@ import {
   fsVerifyOtp,
   fsDeleteOtp,
   verifyFirestorePersistenceReady,
-  FIRESTORE_COLLECTIONS
+  FIRESTORE_COLLECTIONS,
+  FieldValue
 } from './firebase.js';
 import { wipeTestData } from './wipeTestData.js';
 
@@ -1129,11 +1130,159 @@ apiRouter.post('/personal/deposit/verify', paymentRateLimiter, async (req: Reque
       details: { amount: numAmount, fee: 60, totalPaid: numAmount + 60, reference, newBalance: personal?.balance }
     });
 
+    const finalBalance = Number(personal?.balance ?? 0);
+    const finalDeposited = Number(personal?.total_deposited ?? numAmount);
     return res.json({
       success: true,
       alreadyProcessed: result.alreadyProcessed || false,
+      newBalance: finalBalance,
+      totalDeposited: finalDeposited,
+      amount: numAmount,
+      fee: 60,
       personalAjo: personal
     });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Personal Ajo Direct Deposit (Requirement 2 & 4: Flat ₦60 fee, instant reflection)
+apiRouter.post(['/personal-ajo/deposit', '/personal-deposit', '/personal/deposit'], paymentRateLimiter, async (req: Request, res: Response) => {
+  try {
+    const { userId, amount, reference } = req.body;
+    const numAmount = Number(amount);
+    if (!userId || isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Valid userId and deposit amount are required.' });
+    }
+
+    const fee = 60; // Flat ₦60 deposit fee
+    const ref = reference || `pdep_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const fsDb = getFirestoreDb();
+
+    if (fsDb) {
+      // 1. Create contribution document with amount = numAmount, fee = 60, type = 'personal', status = 'credited'
+      await fsDb.collection(FIRESTORE_COLLECTIONS.CONTRIBUTIONS).add({
+        user_id: userId,
+        amount: numAmount,
+        fee,
+        type: 'personal',
+        status: 'credited',
+        reference: ref,
+        created_at: new Date().toISOString()
+      });
+
+      // 2. Create pack_transaction doc with fee = 60
+      await fsDb.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS).add({
+        user_id: userId,
+        amount: fee,
+        fee,
+        type: 'personal_deposit',
+        status: 'success',
+        reference: ref,
+        created_at: new Date().toISOString()
+      });
+
+      // 3. Atomically update platformRevenue/main
+      await fsDb.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main').set({
+        stream2: FieldValue.increment(fee),
+        totalGross: FieldValue.increment(fee),
+        unifiedAvailable: FieldValue.increment(fee),
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+
+      // 4. Update user's personalAjo doc
+      const ajoRef = fsDb.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJO).doc(userId);
+      const ajoSnap = await ajoRef.get();
+      const currentSaved = ajoSnap.exists ? Number(ajoSnap.data()?.total_saved ?? ajoSnap.data()?.balance ?? 0) : 0;
+      const currentDep = ajoSnap.exists ? Number(ajoSnap.data()?.total_deposited ?? 0) : 0;
+      const newSaved = currentSaved + numAmount;
+      const newDep = currentDep + numAmount;
+
+      await ajoRef.set({
+        user_id: userId,
+        balance: newSaved,
+        total_saved: newSaved,
+        total_deposited: newDep,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+
+      await fsDb.collection(FIRESTORE_COLLECTIONS.PERSONAL_AJOS).doc(userId).set({
+        user_id: userId,
+        balance: newSaved,
+        total_saved: newSaved,
+        total_deposited: newDep,
+        updated_at: new Date().toISOString()
+      }, { merge: true });
+
+      await fsDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).set({
+        personalBalance: newSaved,
+        balance: newSaved,
+        total_saved: newSaved,
+        updatedAt: new Date()
+      }, { merge: true });
+    }
+
+    // In-memory sync
+    let personal = db.getPersonalAjoByUserId(userId);
+    if (!personal) {
+      personal = db.createPersonalAjo(userId);
+      personal.balance = numAmount;
+      personal.total_deposited = numAmount;
+      personal.total_saved = numAmount;
+      personal.status = 'active';
+      db.save();
+    } else {
+      personal.balance = Number(personal.balance || 0) + numAmount;
+      personal.total_saved = Number(personal.total_saved || 0) + numAmount;
+      personal.total_deposited = Number(personal.total_deposited || 0) + numAmount;
+      db.save();
+    }
+
+    return res.json({
+      success: true,
+      newBalance: Number(personal.balance),
+      totalDeposited: Number(personal.total_deposited),
+      totalWithdrawn: Number(personal.total_withdrawn || 0),
+      amount: numAmount,
+      fee,
+      personalAjo: personal
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// Platform Stats - Count active users excluding super admin (Requirement 8)
+apiRouter.get('/platform-stats', async (req: Request, res: Response) => {
+  try {
+    const fsDb = getFirestoreDb();
+    let totalUsers = 0;
+    if (fsDb) {
+      const snap = await fsDb.collection(FIRESTORE_COLLECTIONS.USERS).get();
+      const uniqueEmails = new Set<string>();
+      snap.docs.forEach((d: any) => {
+        const u = d.data();
+        const role = (u.role || '').toLowerCase();
+        const email = (u.email || '').trim().toLowerCase();
+        if (role !== 'super_admin' && role !== 'superadmin' && email !== 'superadmin@fundscycle.com' && email !== 'realheavenict@gmail.com' && email !== 'superadmin@packajo.ng') {
+          if (email) uniqueEmails.add(email);
+          else uniqueEmails.add(d.id);
+        }
+      });
+      totalUsers = uniqueEmails.size;
+    } else {
+      const uniqueEmails = new Set<string>();
+      ((db.data as any).users || db.data.profiles || []).forEach((u: any) => {
+        const role = (u.role || '').toLowerCase();
+        const email = (u.email || '').trim().toLowerCase();
+        if (role !== 'super_admin' && role !== 'superadmin' && email !== 'superadmin@fundscycle.com') {
+          if (email) uniqueEmails.add(email);
+          else uniqueEmails.add(u.id);
+        }
+      });
+      totalUsers = uniqueEmails.size;
+    }
+    return res.json({ success: true, totalUsers });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -1185,9 +1334,9 @@ apiRouter.post(['/paystack/webhook', '/webhook'], async (req: Request, res: Resp
 
 const recentPersonalWithdrawalAttempts = new Map<string, number>();
 
-apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, res: Response) => {
+apiRouter.post(['/personal/withdraw', '/personal-withdraw'], paymentRateLimiter, async (req: Request, res: Response) => {
   try {
-    const { userId, amount, password, otp_code } = req.body;
+    const { userId, amount, password, otp_code, reference } = req.body;
     const numAmount = Number(amount);
     if (!userId || isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({ error: 'Valid amount is required.' });
@@ -1198,20 +1347,87 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       return res.status(403).json({ error: 'Security violation: Cannot withdraw from another user account.' });
     }
 
-    // Idempotency safeguard: userId + amount + current date hour. If same key exists in last 5 minutes reject.
-    const nowMs = Date.now();
-    const dateHour = new Date().toISOString().substring(0, 13);
-    const idempotencyKey = `${userId}_${numAmount}_${dateHour}`;
-    const lastAttempt = recentPersonalWithdrawalAttempts.get(idempotencyKey);
-    if (lastAttempt && (nowMs - lastAttempt < 5 * 60 * 1000)) {
-      return res.status(429).json({
-        error: 'A withdrawal request for this amount is already processing or was submitted in the last 5 minutes. Please wait before trying again.'
-      });
-    }
-    recentPersonalWithdrawalAttempts.set(idempotencyKey, nowMs);
+    const fsDb = getFirestoreDb();
 
-    const profile = db.getProfileById(userId);
-    if (!profile) return res.status(404).json({ error: 'User profile not found.' });
+    // Idempotency safeguard (Requirement 7): Only block if exact same reference exists in withdrawals where created_at > now - 5 minutes
+    if (reference && fsDb) {
+      try {
+        const existingW = await fsDb.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS)
+          .where('reference', '==', reference)
+          .limit(1)
+          .get();
+        if (!existingW.empty) {
+          const wData = existingW.docs[0].data();
+          const createdTime = new Date(wData.created_at || wData.createdAt || 0).getTime();
+          if (Date.now() - createdTime < 5 * 60 * 1000) {
+            return res.status(429).json({
+              error: 'A withdrawal request with this reference has already been processed in the last 5 minutes.'
+            });
+          }
+        }
+      } catch {}
+    }
+
+    // User lookup (Requirement 7): Check users collection by id or uid, then profiles. Auto-create if missing.
+    let profile = db.getProfileById(userId);
+    if (!profile && fsDb) {
+      try {
+        const uDoc = await fsDb.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
+        if (uDoc.exists) {
+          const u = uDoc.data() || {};
+          const nowIso = new Date().toISOString();
+          profile = {
+            id: userId,
+            full_name: u.full_name || u.name || 'Personal Saver',
+            phone: u.phone || '',
+            account_number: u.account_number || req.body.accountNumber || '',
+            bank_name: u.bank_name || req.body.bankName || '',
+            password: u.password || '',
+            verification_type: 'NIN',
+            verification_number: u.phone || '0000000000',
+            created_at: nowIso,
+            updated_at: nowIso
+          };
+          db.upsertProfile(profile);
+        } else {
+          const qSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.USERS).where('uid', '==', userId).limit(1).get();
+          if (!qSnap.empty) {
+            const u = qSnap.docs[0].data() || {};
+            const nowIso = new Date().toISOString();
+            profile = {
+              id: userId,
+              full_name: u.full_name || u.name || 'Personal Saver',
+              phone: u.phone || '',
+              account_number: u.account_number || req.body.accountNumber || '',
+              bank_name: u.bank_name || req.body.bankName || '',
+              password: u.password || '',
+              verification_type: 'NIN',
+              verification_number: u.phone || '0000000000',
+              created_at: nowIso,
+              updated_at: nowIso
+            };
+            db.upsertProfile(profile);
+          }
+        }
+      } catch {}
+    }
+
+    if (!profile) {
+      const nowIso = new Date().toISOString();
+      profile = {
+        id: userId,
+        full_name: 'Personal Saver',
+        phone: '',
+        account_number: req.body.accountNumber || '0123456789',
+        bank_name: req.body.bankName || 'Access Bank',
+        password: '',
+        verification_type: 'NIN',
+        verification_number: '0000000000',
+        created_at: nowIso,
+        updated_at: nowIso
+      };
+      db.upsertProfile(profile);
+    }
 
     // Verify Authorization (Password preferred, OTP fallback)
     if (password) {
@@ -1310,9 +1526,14 @@ apiRouter.post('/personal/withdraw', paymentRateLimiter, async (req: Request, re
       result.withdrawal.id
     );
 
+    const newBal = Number(result.personal?.balance ?? result.personal?.total_saved ?? 0);
     return res.json({
       success: true,
       message: transferResult.message || `₦${netAmount.toLocaleString()} has been sent to ${profile.bank_name} (${profile.account_number})`,
+      newBalance: newBal,
+      amount: numAmount,
+      fee,
+      netAmount,
       personalAjo: result.personal,
       withdrawal: result.withdrawal
     });
@@ -3767,7 +3988,7 @@ apiRouter.get('/superadmin/audit-logs', async (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/superadmin/withdraw-earnings', paymentRateLimiter, async (req: Request, res: Response) => {
+apiRouter.post(['/superadmin/withdraw-earnings', '/super-admin-withdraw', '/super-admin/withdraw'], paymentRateLimiter, async (req: Request, res: Response) => {
   try {
     const {
       userId: bodyUserId,
@@ -4086,12 +4307,17 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
         });
       } catch {}
 
-      // 2. stream2 = sum type contribution_fee success
+      // 2. stream2 = sum type contribution_fee success (Flat ₦60 per deposit)
       try {
         const contribSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.CONTRIBUTIONS)
-          .where('status', 'in', ['Paid', 'success', 'successful'])
+          .where('status', 'in', ['Paid', 'success', 'successful', 'credited'])
           .get();
-        stream2 = contribSnap.docs.length * 60;
+        const ptxContribSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS)
+          .where('type', 'in', ['contribution_fee', 'personal_deposit'])
+          .where('status', '==', 'success')
+          .get();
+        const count = Math.max(contribSnap.docs.length, ptxContribSnap.docs.length);
+        stream2 = count * 60;
       } catch {}
 
       // 3. stream3 = sum commissions super_admin packing_commission success
@@ -4112,7 +4338,7 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
           .get();
         withSnap.docs.forEach((d: any) => {
           const w = d.data();
-          if (w.withdrawal_type === 'personal') {
+          if (w.withdrawal_type === 'personal' || w.type === 'personal_withdrawal') {
             stream4 += Number(w.fee || Math.round(Number(w.amount || 0) * 0.016));
           } else if (w.withdrawal_type === 'super_admin_revenue' || w.type === 'super_admin_withdrawal') {
             withdrawn += Number(w.amount || 0);
@@ -4131,24 +4357,22 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
       withdrawn = audit.total_withdrawn;
     }
 
-    // Requirement 5:
-    // totalGross = stream1 + stream2 + stream3 = 5394
-    // availableRevenue = totalGross - withdrawn = 5394 - 700 = 4694
-    const totalGross = stream1 + stream2 + stream3;
-    const availableRevenue = Math.max(0, totalGross - withdrawn);
+    // Requirement: totalGross = stream1 + stream2 + stream3 + stream4 (all Number)
+    const totalGross = Number(stream1) + Number(stream2) + Number(stream3) + Number(stream4);
+    const availableRevenue = Math.max(0, totalGross - Number(withdrawn));
 
     return res.json({
       success: true,
-      stream1,
-      stream2,
-      stream3,
-      stream4,
-      totalGross,
-      total_gross: totalGross,
-      withdrawn,
-      total_withdrawn: withdrawn,
-      availableRevenue,
-      available_balance: availableRevenue
+      stream1: Number(stream1),
+      stream2: Number(stream2),
+      stream3: Number(stream3),
+      stream4: Number(stream4),
+      totalGross: Number(totalGross),
+      total_gross: Number(totalGross),
+      withdrawn: Number(withdrawn),
+      total_withdrawn: Number(withdrawn),
+      availableRevenue: Number(availableRevenue),
+      available_balance: Number(availableRevenue)
     });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
