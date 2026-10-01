@@ -29,7 +29,7 @@ import {
   subscribeToUserPersonalPayments,
   db
 } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, writeBatch, increment } from 'firebase/firestore';
 
 interface PersonalDashboardProps {
   user: UserProfile;
@@ -62,6 +62,9 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [showTransactionsModal, setShowTransactionsModal] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState<boolean>(true);
+  const [contributions, setContributions] = useState<any[]>([]);
+  const [packTransactions, setPackTransactions] = useState<any[]>([]);
+  const [userWithdrawals, setUserWithdrawals] = useState<any[]>([]);
 
   // FIX B: Contact Info state
   const [currentWhatsapp, setCurrentWhatsapp] = useState(user.whatsapp_number || user.phone || '');
@@ -107,7 +110,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     });
 
     // 3. Real-time Firestore onSnapshot listener for personal_ajo doc
-    // (Requirement: Personal Ajo dashboard: change get() to onSnapshot() for personal_ajo doc. Balance updates instantly)
     const unsubPersonalAjo = subscribeToPersonalAjoDoc(user.id, (pData) => {
       if (pData) {
         onUpdatePersonalAjo({
@@ -141,49 +143,40 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     let unsubPack: (() => void) | null = null;
     let unsubWithdr: (() => void) | null = null;
     try {
-      const qContrib = query(collection(db, 'contributions'), where('user_id', '==', user.id));
-      unsubContrib = onSnapshot(qContrib, () => {
-        apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
-          .then((d) => {
-            if (d && typeof d.personalBalance === 'number') {
-              onUpdatePersonalAjo({
-                ...personalAjo,
-                balance: d.personalBalance,
-                total_saved: d.personalBalance
-              });
-            }
-          })
-          .catch(() => {});
+      unsubContrib = onSnapshot(collection(db, 'contributions'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => {
+          const val = d.data();
+          const uid = val.user_id || val.userId;
+          if (uid === user.id || uid === (user as any).uid || val.email === user.email) {
+            list.push({ id: d.id, ...val });
+          }
+        });
+        setContributions(list);
       });
 
-      const qPack = query(collection(db, 'pack_transactions'), where('user_id', '==', user.id));
-      unsubPack = onSnapshot(qPack, () => {
-        apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
-          .then((d) => {
-            if (d && typeof d.personalBalance === 'number') {
-              onUpdatePersonalAjo({
-                ...personalAjo,
-                balance: d.personalBalance,
-                total_saved: d.personalBalance
-              });
-            }
-          })
-          .catch(() => {});
+      unsubPack = onSnapshot(collection(db, 'pack_transactions'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => {
+          const val = d.data();
+          const uid = val.user_id || val.userId;
+          if (uid === user.id || uid === (user as any).uid || val.email === user.email) {
+            list.push({ id: d.id, ...val });
+          }
+        });
+        setPackTransactions(list);
       });
 
-      const qWithdr = query(collection(db, 'withdrawals'), where('user_id', '==', user.id));
-      unsubWithdr = onSnapshot(qWithdr, () => {
-        apiRequest(`/api/user/${encodeURIComponent(user.id)}/balance`)
-          .then((d) => {
-            if (d && typeof d.personalBalance === 'number') {
-              onUpdatePersonalAjo({
-                ...personalAjo,
-                balance: d.personalBalance,
-                total_saved: d.personalBalance
-              });
-            }
-          })
-          .catch(() => {});
+      unsubWithdr = onSnapshot(collection(db, 'withdrawals'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => {
+          const val = d.data();
+          const uid = val.user_id || val.userId;
+          if (uid === user.id || uid === (user as any).uid || val.email === user.email) {
+            list.push({ id: d.id, ...val });
+          }
+        });
+        setUserWithdrawals(list);
       });
     } catch (e) {
       console.warn('[PersonalDashboard] Error setting up user collection listeners:', e);
@@ -258,8 +251,36 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     }
   };
 
-  // Withdrawal flow - BUG 2 FIX: total_saved = total_saved - amount. Payout to user = amount - fee.
-  const currentTotalSaved = Number(personalAjo.total_saved ?? personalAjo.balance ?? 0);
+  // STEP 1 - FIX BALANCE CALCULATION (MOST CRITICAL):
+  // DELETE old balance logic. REPLACE WITH:
+  const rawDeposits = [...(contributions || []), ...(packTransactions || [])].filter((doc) => {
+    const s = String(doc.status || '').toLowerCase();
+    const t = String(doc.type || doc.transactionType || '').toLowerCase();
+    const isActivationFee = t.includes('registration') || t.includes('activation') || t.includes('fee_paid') || doc.category === 'ACTIVATION_FEE';
+    if (isActivationFee && Number(doc.amount) === 600) return false;
+    return (s === 'success' || s === 'credited' || s === 'completed') && (t.includes('deposit') || t.includes('savings') || Number(doc.amount) > 0);
+  });
+
+  const seenDepositRefs = new Set<string>();
+  const allDeposits = rawDeposits.filter((doc) => {
+    const ref = doc.reference || doc.ref;
+    if (!ref) return true;
+    if (seenDepositRefs.has(ref)) return false;
+    seenDepositRefs.add(ref);
+    return true;
+  });
+
+  const totalDeposited = allDeposits.reduce((sum, d) => sum + Number(d.amount || d.savingsAmount || 0), 0);
+
+  const allWithdrawals = (userWithdrawals || []).filter((w) => {
+    const s = String(w.status || '').toLowerCase();
+    return s === 'success' || s === 'completed' || s === 'approved' || s === 'disbursed';
+  });
+
+  const totalWithdrawnByUser = allWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+
+  const availableSavings = Math.max(0, totalDeposited - totalWithdrawnByUser);
+
   const withdrawNum = Number(withdrawAmount) || 0;
   const withdrawFee = Math.round(withdrawNum * 0.016); // 1.6%
   const withdrawNet = Math.max(0, withdrawNum - withdrawFee);
@@ -270,8 +291,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       setError('Enter a valid amount.');
       return;
     }
-    if (withdrawNum > currentTotalSaved) {
-      setError(`Insufficient balance. Your available savings balance is ${formatNaira(currentTotalSaved)}.`);
+    if (withdrawNum > availableSavings) {
+      setError(`Insufficient balance. Your available savings balance is ${formatNaira(availableSavings)}.`);
       return;
     }
 
@@ -280,6 +301,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     setShowWithdrawOtp(true);
   };
 
+  // STEP 3 - FIX WITHDRAWAL HANDLER:
   const handleConfirmWithdrawal = async (password: string) => {
     if (isProcessing || loading) return;
     try {
@@ -287,32 +309,69 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       setLoading(true);
       setError(null);
 
-      // Authoritative withdrawal transaction is committed atomically by the server in /api/personal/withdraw
-      const data = await apiRequest('/api/personal/withdraw', {
+      const amount = withdrawNum;
+      // Calculate fee = Math.round(Number(amount) * 0.016)
+      // payout = Number(amount) - fee
+      const fee = Math.round(Number(amount) * 0.016);
+      const payout = Number(amount) - fee;
+
+      // Validation: if (Number(amount) > Number(availableSavings)) throw "Insufficient balance: Available savings is ₦{availableSavings}"
+      if (Number(amount) > Number(availableSavings)) {
+        throw new Error(`Insufficient balance: Available savings is ${formatNaira(availableSavings)}`);
+      }
+
+      // On success BATCH:
+      const batch = writeBatch(db);
+      const wDocRef = doc(collection(db, 'withdrawals'));
+      const effectiveBank = user.bank_name || 'GTBank';
+      const effectiveAccount = user.account_number || '';
+      const wRef = `wth_${Date.now()}`;
+
+      batch.set(wDocRef, {
+        userId: user.id,
+        user_id: user.id,
+        amount: Number(amount),
+        fee,
+        payout,
+        net_amount: payout,
+        bankName: effectiveBank,
+        bank_name: effectiveBank,
+        accountNumber: effectiveAccount,
+        account_number: effectiveAccount,
+        status: 'completed',
+        type: 'personal_withdrawal',
+        reference: wRef,
+        timestamp: serverTimestamp(),
+        created_at: new Date().toISOString()
+      });
+
+      batch.update(doc(db, 'users', user.id), {
+        totalWithdrawn: increment(Number(amount)),
+        total_withdrawn: increment(Number(amount))
+      });
+
+      batch.update(doc(db, 'platformRevenue', 'main'), {
+        stream4: increment(fee),
+        totalGross: increment(fee),
+        unifiedAvailable: increment(fee)
+      });
+
+      await batch.commit();
+
+      setShowWithdrawOtp(false);
+      setShowWithdrawModal(false);
+      setSuccessMessage(`Withdrawal of ${formatNaira(payout)} completed! Sent to ${effectiveBank} (Fee: ${formatNaira(fee)}).`);
+      setTimeout(() => setSuccessMessage(null), 6000);
+
+      // In background call API to sync in-memory/server records
+      apiRequest('/api/personal/withdraw', {
         method: 'POST',
         body: JSON.stringify({
           userId: user.id,
-          amount: withdrawNum,
+          amount: Number(amount),
           password
         })
-      });
-
-      if (!data || !data.success) {
-        throw new Error(data?.error || 'Withdrawal failed');
-      }
-
-      setShowWithdrawOtp(false);
-      const newBal = Number(data.newBalance ?? data.personalAjo?.balance ?? (currentTotalSaved - withdrawNum));
-      const newWithdrawn = Number(data.totalWithdrawn ?? (Number(personalAjo.total_withdrawn || 0) + withdrawNum));
-      onUpdatePersonalAjo({
-        ...personalAjo,
-        ...(data.personalAjo || {}),
-        balance: newBal,
-        total_saved: newBal,
-        total_withdrawn: newWithdrawn
-      });
-      setSuccessMessage(data.message || `Withdrawal of ${formatNaira(withdrawNet)} completed!`);
-      setTimeout(() => setSuccessMessage(null), 6000);
+      }).catch((err) => console.warn('[Withdrawal sync background warn]:', err));
     } catch (err: any) {
       setError(err?.message || 'Withdrawal failed');
       throw err;
@@ -384,8 +443,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
   const handleSimulateBankTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
-    const amt = Number(simulateTransferAmount);
-    if (isNaN(amt) || amt <= 0) {
+    const savingsAmount = Number(simulateTransferAmount);
+    if (isNaN(savingsAmount) || savingsAmount <= 0) {
       setError('Please enter a valid transfer amount.');
       return;
     }
@@ -393,37 +452,76 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
     try {
       setSimulatingTransfer(true);
       setError(null);
-      const res = await apiRequest('/api/virtual-account/transfer', {
+      const effectiveRef = `VA_TRF_${Date.now()}`;
+      const userId = user.id;
+
+      // STEP 2: Handler handleSimulateTransfer must use writeBatch:
+      const batch = writeBatch(db);
+      const contribRef = doc(collection(db, 'contributions'));
+      batch.set(contribRef, {
+        userId,
+        user_id: userId,
+        amount: Number(savingsAmount),
+        status: 'success',
+        type: 'DEPOSIT - PERSONAL AJO SAVINGS',
+        timestamp: serverTimestamp(),
+        reference: effectiveRef,
+        created_at: new Date().toISOString()
+      });
+
+      const packRef = doc(collection(db, 'pack_transactions'));
+      batch.set(packRef, {
+        userId,
+        user_id: userId,
+        amount: Number(savingsAmount),
+        fee: 60,
+        status: 'success',
+        type: 'personal_deposit',
+        timestamp: serverTimestamp(),
+        reference: effectiveRef,
+        created_at: new Date().toISOString()
+      });
+
+      const userDocRef = doc(db, 'users', userId);
+      batch.update(userDocRef, {
+        totalDeposited: increment(Number(savingsAmount)),
+        total_deposited: increment(Number(savingsAmount)),
+        savingsBalance: increment(Number(savingsAmount)),
+        balance: increment(Number(savingsAmount)),
+        total_saved: increment(Number(savingsAmount))
+      });
+
+      const revDocRef = doc(db, 'platformRevenue', 'main');
+      batch.update(revDocRef, {
+        stream2: increment(60),
+        totalGross: increment(60),
+        unifiedAvailable: increment(60)
+      });
+
+      await batch.commit();
+
+      // Background local sync to in-memory db
+      apiRequest('/api/virtual-account/transfer', {
         method: 'POST',
         body: JSON.stringify({
           account_number: vaAccountNumber,
-          amount: amt,
-          savings_amount: amt,
+          amount: savingsAmount,
+          savings_amount: savingsAmount,
+          reference: effectiveRef,
           fee: 60,
-          total: amt + 60
+          total: savingsAmount
         })
-      });
+      }).catch((err) => console.warn('[VA Sync] Background local sync warning:', err));
 
-      if (res.personalAjo) {
-        onUpdatePersonalAjo(res.personalAjo);
-      }
-      setSimulateSuccess(`Transfer Confirmed! Savings: ₦${amt.toLocaleString()} credited in full (+ ₦60 platform fee paid to Super Admin). Total: ₦${(amt + 60).toLocaleString()}.`);
-      
-      // Refresh transactions from server
-      apiRequest(`/api/personal/payments/${encodeURIComponent(user.id)}`)
-        .then((pRes) => {
-          if (pRes?.payments && Array.isArray(pRes.payments)) {
-            setTransactions(pRes.payments);
-          }
-        })
-        .catch(() => {});
+      setSimulateSuccess(`Transfer Confirmed! Savings: ₦${savingsAmount.toLocaleString()} credited in full.`);
 
       setTimeout(() => {
         setSimulateSuccess(null);
         setShowSimulateTransferModal(false);
-      }, 2500);
+      }, 2000);
     } catch (err: any) {
-      setError(err.message || 'Transfer failed');
+      console.error('[SimulateBankTransfer] error:', err);
+      setError(err?.message || 'Transfer failed');
     } finally {
       setSimulatingTransfer(false);
     }
@@ -530,7 +628,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 <span>Personal Better Ajo</span>
               </div>
               <div className="text-3xl sm:text-5xl font-black tracking-tight text-white">
-                {formatNaira(currentTotalSaved)}
+                {formatNaira(availableSavings)}
               </div>
               <div className="text-xs text-slate-400 mt-1.5 font-medium">
                 Available Balance Ready For Instant Withdrawal
@@ -584,7 +682,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               Total Saved
             </span>
             <span className="text-xl font-black text-slate-900 mt-1 block">
-              {formatNaira(currentTotalSaved)}
+              {formatNaira(availableSavings)}
             </span>
           </div>
 
@@ -593,7 +691,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               Total Deposited
             </span>
             <span className="text-xl font-black text-[#008751] mt-1 block">
-              {formatNaira(personalAjo.total_deposited)}
+              {formatNaira(totalDeposited)}
             </span>
           </div>
 
@@ -602,7 +700,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
               Total Withdrawn
             </span>
             <span className="text-xl font-black text-slate-700 mt-1 block">
-              {formatNaira(personalAjo.total_withdrawn)}
+              {formatNaira(totalWithdrawnByUser)}
             </span>
           </div>
 
@@ -969,7 +1067,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-lg">₦</span>
                   <input
                     type="number"
-                    max={personalAjo.balance}
+                    max={availableSavings}
                     min={100}
                     required
                     value={withdrawAmount}
@@ -978,7 +1076,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                   />
                 </div>
                 <div className="text-[11px] text-slate-500 mt-1">
-                  Available: {formatNaira(personalAjo.balance)}
+                  Available: {formatNaira(availableSavings)}
                 </div>
               </div>
 
@@ -998,7 +1096,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                 </div>
                 <div className="border-t border-slate-100 pt-1.5 flex justify-between text-[11px] text-slate-500">
                   <span>Remaining Savings Balance:</span>
-                  <span className="font-mono font-semibold text-slate-700">{formatNaira(Math.max(0, currentTotalSaved - withdrawNum))}</span>
+                  <span className="font-mono font-semibold text-slate-700">{formatNaira(Math.max(0, availableSavings - withdrawNum))}</span>
                 </div>
               </div>
 
@@ -1008,7 +1106,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
               <button
                 type="submit"
-                disabled={loading || isProcessing || withdrawNum <= 0 || withdrawNum > currentTotalSaved}
+                disabled={loading || isProcessing || withdrawNum <= 0 || withdrawNum > availableSavings}
                 className="w-full flex items-center justify-center space-x-2 rounded-xl bg-[#008751] py-3.5 px-4 text-sm font-bold text-white shadow-lg shadow-[#008751]/20 hover:bg-[#007345] hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 cursor-pointer"
               >
                 {loading || isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Authorize Withdrawal</span>}
@@ -1290,16 +1388,16 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
                     <span className="font-medium">Platform Fee:</span>
-                    <span className="font-bold text-amber-700 text-sm">+₦60</span>
+                    <span className="font-bold text-amber-700 text-sm">+₦60 (paid to Super Admin, NOT added to user transfer)</span>
                   </div>
                   <div className="border-t border-emerald-200 pt-1.5 flex justify-between items-center text-sm font-black text-slate-900">
                     <span>Total Transfer:</span>
-                    <span className="text-[#008751] text-base font-black">₦{(Number(simulateTransferAmount || 0) + 60).toLocaleString()}</span>
+                    <span className="text-[#008751] text-base font-black">₦{Number(simulateTransferAmount || 0).toLocaleString()}</span>
                   </div>
                 </div>
 
                 <div className="text-[11px] text-slate-500 leading-relaxed">
-                  ✓ <strong>Addition Model:</strong> ₦{Number(simulateTransferAmount || 0).toLocaleString()} is credited in full to your savings. ₦60 platform fee is credited to Super Admin platform wallet.
+                  ✓ <strong>Full Credit:</strong> ₦{Number(simulateTransferAmount || 0).toLocaleString()} is credited in full to your savings. ₦60 platform fee is paid to Super Admin platform wallet.
                 </div>
 
                 <div className="pt-2 flex items-center justify-end space-x-2">
@@ -1318,7 +1416,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                     {simulatingTransfer ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <span>Simulate Bank Transfer (Total: ₦{(Number(simulateTransferAmount || 0) + 60).toLocaleString()})</span>
+                      <span>Simulate Bank Transfer (Total: ₦{Number(simulateTransferAmount || 0).toLocaleString()})</span>
                     )}
                   </button>
                 </div>

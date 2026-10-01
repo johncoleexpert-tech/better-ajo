@@ -4061,7 +4061,7 @@ apiRouter.post(['/superadmin/withdraw-earnings', '/super-admin-withdraw', '/supe
       Number(fsRev?.unifiedAvailable || 0),
       Number(wallet?.available_balance || 0),
       Number((wallet as any)?.availableRevenue || 0),
-      660
+      0
     );
 
     // Optical rounding tolerance: if user submitted Math.round(available) (e.g. 5267 when available is 5266.50)
@@ -4207,17 +4207,68 @@ apiRouter.get('/user/:userId/balance', async (req: Request, res: Response) => {
     const { userId } = req.params;
     const dbInst = getFirestoreDb();
     if (dbInst) {
-      const uDoc = await dbInst.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
-      if (uDoc.exists) {
-        const uData = uDoc.data() || {};
-        const personalBalance = Number(uData.personalBalance ?? uData.balance ?? 0);
-        return res.json({
-          success: true,
-          userId,
-          personalBalance,
-          balance: personalBalance
+      // Calculate from contributions, pack_transactions, and withdrawals (STEP 1)
+      const cSnap = await dbInst.collection(FIRESTORE_COLLECTIONS.CONTRIBUTIONS)
+        .where('user_id', 'in', [userId])
+        .get().catch(() => null);
+
+      const ptxSnap = await dbInst.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS)
+        .where('user_id', '==', userId)
+        .get().catch(() => null);
+
+      const wSnap = await dbInst.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS)
+        .where('user_id', '==', userId)
+        .get().catch(() => null);
+
+      const deposits: any[] = [];
+      if (cSnap) cSnap.docs.forEach((d: any) => deposits.push(d.data()));
+      if (ptxSnap) ptxSnap.docs.forEach((d: any) => deposits.push(d.data()));
+
+      const validDeposits = deposits.filter((doc: any) => {
+        const s = String(doc.status || '').toLowerCase();
+        const t = String(doc.type || doc.transactionType || '').toLowerCase();
+        const isActivationFee = t.includes('registration') || t.includes('activation') || t.includes('fee_paid') || doc.category === 'ACTIVATION_FEE';
+        if (isActivationFee && Number(doc.amount) === 600) return false;
+        return (s === 'success' || s === 'credited' || s === 'completed') && (t.includes('deposit') || t.includes('savings') || Number(doc.amount) > 0);
+      });
+
+      const seenRefs = new Set<string>();
+      let totalDeposited = 0;
+      validDeposits.forEach((doc: any) => {
+        const ref = doc.reference || doc.ref || doc.id;
+        if (ref) {
+          if (seenRefs.has(ref)) return;
+          seenRefs.add(ref);
+        }
+        totalDeposited += Number(doc.amount || doc.savingsAmount || 0);
+      });
+
+      let totalWithdrawn = 0;
+      if (wSnap) {
+        wSnap.docs.forEach((d: any) => {
+          const w = d.data();
+          const s = String(w.status || '').toLowerCase();
+          if (s === 'success' || s === 'completed' || s === 'approved' || s === 'disbursed') {
+            totalWithdrawn += Number(w.amount || 0);
+          }
         });
       }
+
+      const availableSavings = Math.max(0, totalDeposited - totalWithdrawn);
+      const uDoc = await dbInst.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get().catch(() => null);
+      const uData = uDoc && uDoc.exists ? uDoc.data() || {} : {};
+      const fallbackBal = Number(uData.savingsBalance ?? uData.personalBalance ?? uData.balance ?? 0);
+      const finalBalance = totalDeposited > 0 ? availableSavings : fallbackBal;
+
+      return res.json({
+        success: true,
+        userId,
+        personalBalance: finalBalance,
+        balance: finalBalance,
+        totalDeposited: totalDeposited > 0 ? totalDeposited : Number(uData.totalDeposited || 0),
+        totalWithdrawn: totalWithdrawn > 0 ? totalWithdrawn : Number(uData.totalWithdrawn || 0),
+        availableSavings: finalBalance
+      });
     }
     // Fallback to in-memory db
     const personal = db.getPersonalAjoByUserId(userId);
@@ -4296,18 +4347,37 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
     let withdrawn = 0;
 
     if (fsDb) {
-      // 1. stream1 = sum type personal_ajo_fee success
+      // 0. Read authoritative platformRevenue/main doc if present
       try {
-        const ptxSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS)
-          .where('type', '==', 'personal_ajo_fee')
-          .where('status', '==', 'success')
-          .get();
-        ptxSnap.docs.forEach((d: any) => {
-          stream1 += Number(d.data().amount || 0);
-        });
+        const revDoc = await fsDb.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main').get();
+        if (revDoc.exists) {
+          const revData = revDoc.data() || {};
+          if (revData.stream1 !== undefined) stream1 = Number(revData.stream1);
+          if (revData.stream2 !== undefined) stream2 = Number(revData.stream2);
+          if (revData.stream3 !== undefined) stream3 = Number(revData.stream3);
+          if (revData.stream4 !== undefined) stream4 = Number(revData.stream4);
+          if (revData.totalWithdrawn !== undefined) withdrawn = Number(revData.totalWithdrawn);
+        }
       } catch {}
 
-      // 2. stream2 = sum type contribution_fee success (Flat ₦60 per deposit)
+      // 1. stream1 = users count who paid activation fee * 600 (STEP 4)
+      try {
+        const usersSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.USERS).get();
+        let activatedCount = 0;
+        usersSnap.docs.forEach((d: any) => {
+          const u = d.data();
+          const role = (u.role || '').toLowerCase();
+          if (role !== 'super_admin' && role !== 'superadmin') {
+            if (u.isActivated || u.activationFeePaid || u.personal_ajo_active || (u.personal_ajo_fee_paid && Number(u.personal_ajo_fee_paid) > 0) || u.personal_ajo_activated_at) {
+              activatedCount++;
+            }
+          }
+        });
+        const calcStream1 = activatedCount * 600;
+        if (calcStream1 > stream1) stream1 = calcStream1;
+      } catch {}
+
+      // 2. stream2 = contributions count * 60 (Flat ₦60 per deposit, STEP 4)
       try {
         const contribSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.CONTRIBUTIONS)
           .where('status', 'in', ['Paid', 'success', 'successful', 'credited'])
@@ -4317,7 +4387,9 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
           .where('status', '==', 'success')
           .get();
         const count = Math.max(contribSnap.docs.length, ptxContribSnap.docs.length);
-        stream2 = count * 60;
+        if (count * 60 > stream2) {
+          stream2 = count * 60;
+        }
       } catch {}
 
       // 3. stream3 = sum commissions super_admin packing_commission success
@@ -4336,14 +4408,18 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
         const withSnap = await fsDb.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS)
           .where('status', 'in', ['completed', 'successful', 'success'])
           .get();
+        let userFeeSum = 0;
+        let saWithdrawnSum = 0;
         withSnap.docs.forEach((d: any) => {
           const w = d.data();
           if (w.withdrawal_type === 'personal' || w.type === 'personal_withdrawal') {
-            stream4 += Number(w.fee || Math.round(Number(w.amount || 0) * 0.016));
+            userFeeSum += Number(w.fee || Math.round(Number(w.amount || 0) * 0.016));
           } else if (w.withdrawal_type === 'super_admin_revenue' || w.type === 'super_admin_withdrawal') {
-            withdrawn += Number(w.amount || 0);
+            saWithdrawnSum += Number(w.amount || 0);
           }
         });
+        if (userFeeSum > stream4) stream4 = userFeeSum;
+        if (saWithdrawnSum > withdrawn) withdrawn = saWithdrawnSum;
       } catch {}
     }
 

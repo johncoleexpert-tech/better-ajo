@@ -82,7 +82,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
-  // Super Admin Wallet state (Requirement 1 & 7: immediate availableRevenue, not async 0)
+  // Real-time live collections state for instant Super Admin calculation (STEP 4)
+  const [allContributions, setAllContributions] = useState<any[]>([]);
+  const [allPackTransactions, setAllPackTransactions] = useState<any[]>([]);
+  const [allWithdrawals, setAllWithdrawals] = useState<any[]>([]);
+  const [allPlatformUsers, setAllPlatformUsers] = useState<any[]>([]);
+
+  // Super Admin Wallet state
   const [wallet, setWallet] = useState<{
     availableRevenue: number;
     stream1?: number;
@@ -92,25 +98,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     totalGross?: number;
     withdrawn?: number;
   }>({
-    availableRevenue: 660
+    availableRevenue: 0
   });
-
-  const availableForWithdraw = Number(wallet?.availableRevenue || 660);
-  const withdrawalAmount = withdrawAmount;
-  const setWithdrawalAmount = setWithdrawAmount;
-  const amt = Number(withdrawalAmount || 0);
-  const valid = amt >= 100 && amt <= availableForWithdraw;
 
   const fetchSuperAdminWallet = async () => {
     try {
       const res = await fetch('/api/super-admin-wallet');
       const json = await res.json();
       if (json && (json.availableRevenue !== undefined || json.available_balance !== undefined || json.unifiedAvailable !== undefined)) {
-        const rev = Number(json.availableRevenue ?? json.available_balance ?? json.unifiedAvailable ?? 660);
+        const rev = Number(json.availableRevenue ?? json.available_balance ?? json.unifiedAvailable ?? 0);
         setWallet(prev => ({
           ...prev,
           ...json,
-          availableRevenue: rev > 0 ? rev : 660
+          availableRevenue: rev
         }));
       }
     } catch (e) {
@@ -239,7 +239,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       });
       setWallet(prev => ({
         ...prev,
-        availableRevenue: Number(revStats.unifiedAvailable > 0 ? revStats.unifiedAvailable : 660),
+        availableRevenue: Number(revStats.unifiedAvailable ?? (revStats.totalGross - revStats.totalWithdrawn) ?? 0),
         totalGross: Number(revStats.totalGross || 0),
         stream1: Number(revStats.stream1 || 0),
         stream2: Number(revStats.stream2 || 0),
@@ -320,22 +320,34 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       console.warn('[Super Admin] Error setting up transactions listener:', e);
     }
 
-    // Real-time collection listeners for instant Super Admin reflection
+    // Real-time collection listeners for instant Super Admin reflection (STEP 4)
     let unsubContrib: (() => void) | null = null;
     let unsubPack: (() => void) | null = null;
     let unsubWithdr: (() => void) | null = null;
     let unsubUsers: (() => void) | null = null;
     try {
-      unsubContrib = onSnapshot(collection(db, 'contributions'), () => {
+      unsubContrib = onSnapshot(collection(db, 'contributions'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        setAllContributions(list);
         fetchSuperAdminWallet();
       });
-      unsubPack = onSnapshot(collection(db, 'pack_transactions'), () => {
+      unsubPack = onSnapshot(collection(db, 'pack_transactions'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        setAllPackTransactions(list);
         fetchSuperAdminWallet();
       });
-      unsubWithdr = onSnapshot(collection(db, 'withdrawals'), () => {
+      unsubWithdr = onSnapshot(collection(db, 'withdrawals'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        setAllWithdrawals(list);
         fetchSuperAdminWallet();
       });
-      unsubUsers = onSnapshot(collection(db, 'users'), () => {
+      unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        setAllPlatformUsers(list);
         fetchSuperAdminWallet();
       });
     } catch (e) {
@@ -356,6 +368,63 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     };
   }, [userPhone, userId]);
 
+  // STEP 4 - FIX SUPER ADMIN AGGREGATE AND REVENUE:
+  // Personal Ajo Aggregate = SUM all contributions amount where status success/credited (NO distinct, NO limit)
+  const personalAjoAggregate = allContributions
+    .filter((doc) => {
+      const s = String(doc.status || '').toLowerCase();
+      return s === 'success' || s === 'credited' || s === 'completed';
+    })
+    .reduce((sum, d) => sum + Number(d.amount || d.savingsAmount || 0), 0);
+
+  // Stream1 = users.filter(u => u.isActivated || u.activationFeePaid).length * 600
+  const activatedUsersCount = allPlatformUsers.filter((u) => {
+    const isAct = u.isActivated || u.activationFeePaid || u.personal_ajo_active || (u.personal_ajo_fee_paid && Number(u.personal_ajo_fee_paid) > 0) || u.personal_ajo_activated_at;
+    const role = String(u.role || '').toLowerCase();
+    return Boolean(isAct) && role !== 'super_admin' && role !== 'superadmin';
+  }).length;
+  const stream1Live = activatedUsersCount > 0 ? (activatedUsersCount * 600) : Number(revenue?.stream1 || wallet?.stream1 || 0);
+
+  // Stream2 = (contributions.length + pack_transactions.length filtered for deposits) * 60 / or sum of fee field - use Number()
+  const depositDocsCount = allContributions.filter((doc) => {
+    const s = String(doc.status || '').toLowerCase();
+    const t = String(doc.type || '').toLowerCase();
+    return (s === 'success' || s === 'credited' || s === 'completed') && (t.includes('deposit') || t.includes('savings') || Number(doc.amount) > 0);
+  }).length;
+  const stream2Live = depositDocsCount > 0 ? (depositDocsCount * 60) : Number(revenue?.stream2 || wallet?.stream2 || 0);
+
+  // Stream3 = existing packing share
+  const stream3Live = Number(revenue?.stream3 ?? wallet?.stream3 ?? (data as any)?.superAdminEarnings?.stream3_packing ?? (data as any)?.super_admin_wallet?.breakdown?.packing_33_total ?? 0);
+
+  // Stream4 = sum of withdrawal fees
+  const withdrawalFeesSum = allWithdrawals
+    .filter((w) => {
+      const s = String(w.status || '').toLowerCase();
+      const t = String(w.type || w.withdrawal_type || '').toLowerCase();
+      return (s === 'success' || s === 'completed' || s === 'approved') && !t.includes('super_admin');
+    })
+    .reduce((sum, w) => sum + Number(w.fee || 0), 0);
+  const stream4Live = withdrawalFeesSum > 0 ? withdrawalFeesSum : Number(revenue?.stream4 || wallet?.stream4 || 0);
+
+  const stream1Total = Number(revenue?.stream1 ?? stream1Live);
+  const stream2Total = Number(revenue?.stream2 ?? stream2Live);
+  const stream3Total = Number(revenue?.stream3 ?? stream3Live);
+  const stream4Total = Number(revenue?.stream4 ?? stream4Live);
+
+  // totalGross = Number(stream1) + Number(stream2) + Number(stream3) + Number(stream4)
+  const totalGross = Number(stream1Total) + Number(stream2Total) + Number(stream3Total) + Number(stream4Total);
+
+  // totalWithdrawnSuperAdmin = platformRevenue.totalWithdrawn
+  const totalWithdrawnSuperAdmin = Number(revenue?.totalWithdrawn ?? wallet?.withdrawn ?? (data as any)?.superAdminEarnings?.total_withdrawn ?? 0);
+
+  // availableForWithdraw = Math.max(0, totalGross - totalWithdrawnSuperAdmin)
+  const availableForWithdraw = Math.max(0, totalGross - totalWithdrawnSuperAdmin);
+  const availableRevenue = availableForWithdraw;
+
+  const withdrawalAmount = withdrawAmount;
+  const setWithdrawalAmount = setWithdrawAmount;
+  const isWithdrawValid = Number(withdrawalAmount || 0) >= 100 && Number(withdrawalAmount || 0) <= availableForWithdraw;
+
   const handleWithdrawRevenue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!data) return;
@@ -364,7 +433,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     const amt = Number(withdrawAmount || 0);
     const valid = amt >= 100 && amt <= availableForWithdraw;
     if (!valid) {
-      setWithdrawError(`Amount must be between ₦100 and available balance (₦${availableForWithdraw.toFixed(2)})`);
+      setWithdrawError(`Amount must be between ₦100 and available balance (₦${Number(availableForWithdraw).toLocaleString()})`);
       return;
     }
 
@@ -460,14 +529,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     ledger = []
   } = data;
 
-  const availableRevenue = availableForWithdraw;
-  const lifetimeRevenue = revenue?.totalGross ?? superAdminWallet?.total_gross_earnings ?? superAdminEarnings?.total_earned ?? superAdminEarnings?.totalEarnings ?? 0;
-  const withdrawnRevenue = revenue?.totalWithdrawn ?? superAdminWallet?.total_withdrawn ?? superAdminEarnings?.total_withdrawn ?? metrics?.superAdminWithdrawnAmount ?? 0;
-
-  const stream1Total = revenue?.stream1 ?? superAdminEarnings?.stream1_registration ?? superAdminWallet?.breakdown?.reg_600_total ?? metrics?.totalPersonalPlatformFees ?? 0;
-  const stream2Total = revenue?.stream2 ?? superAdminEarnings?.stream2_contribution ?? superAdminWallet?.breakdown?.contrib_60_total ?? metrics?.totalContributionFees ?? 0;
-  const stream3Total = revenue?.stream3 ?? superAdminEarnings?.stream3_packing ?? superAdminWallet?.breakdown?.packing_33_total ?? metrics?.superAdminCommission ?? 0;
-  const stream4Total = revenue?.stream4 ?? superAdminEarnings?.stream4_withdrawal ?? superAdminWallet?.breakdown?.withdrawal_1_6_total ?? metrics?.totalPersonalWithdrawalFees ?? 0;
+  const lifetimeRevenue = totalGross;
+  const withdrawnRevenue = totalWithdrawnSuperAdmin;
 
   // 1. SAFETY GUARD FIRST - Add this at top of ALL pages that use transactions to prevent Super Admin crash:
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
@@ -632,7 +695,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </span>
           </div>
           <span className="text-xl font-black text-emerald-950 block">
-            {formatNaira(totalPersonalSavings)}
+            {formatNaira(personalAjoAggregate > 0 ? personalAjoAggregate : (totalPersonalSavings || Number(data?.metrics?.totalPersonalSavings || 0)))}
           </span>
           <span className="text-[10px] text-emerald-700/90 mt-1 block font-medium">
             Protected member vaults
@@ -2024,12 +2087,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       if (!val) {
                         setWithdrawError(null);
                       } else if (currentVal < 100 || currentVal > availableForWithdraw) {
-                        setWithdrawError(`Amount must be between ₦100 and available balance (₦${availableForWithdraw.toFixed(2)})`);
+                        setWithdrawError(`Amount must be between ₦100 and available balance (₦${Number(availableForWithdraw).toLocaleString()})`);
                       } else {
                         setWithdrawError(null);
                       }
                     }}
-                    placeholder={`Max ${availableForWithdraw}`}
+                    placeholder={`Max ₦${Number(availableForWithdraw).toLocaleString()}`}
                     className="w-full pl-8 pr-20 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
                     required
                   />
@@ -2066,7 +2129,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isWithdrawing || !valid}
+                  disabled={isWithdrawing || !isWithdrawValid}
                   className="flex-1 py-3 rounded-xl bg-[#008751] hover:bg-[#007345] text-white font-extrabold text-xs shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                 >
                   {isWithdrawing ? (
