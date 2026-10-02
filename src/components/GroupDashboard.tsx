@@ -28,7 +28,7 @@ import { PaystackModal, PaymentBreakdown } from './PaystackModal.js';
 import { OtpModal } from './OtpModal.js';
 import { apiRequest } from '../lib/api.js';
 import { db } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc } from 'firebase/firestore';
 
 interface GroupDashboardProps {
   groupId: string;
@@ -114,6 +114,68 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
 
   useEffect(() => {
     fetchGroupData();
+
+    if (!db || !groupId) return;
+
+    const effectiveGroupId = groupId;
+    console.log('[GroupDashboard] Initializing members onSnapshot for groupId:', effectiveGroupId);
+
+    const syncMembersFromSnap = (rawDocs: any[]) => {
+      if (!rawDocs || rawDocs.length === 0) return;
+      const memberMap = new Map<string, any>();
+      rawDocs.forEach(d => {
+        const item: any = typeof d.data === 'function' ? { ...d.data(), id: d.id } : d;
+        if (item.user_id === currentUser.id && item.role === 'admin' && !item.position) {
+          return;
+        }
+        memberMap.set(item.id, item);
+      });
+
+      const memberList = Array.from(memberMap.values());
+      memberList.sort((a, b) => (a.position || 0) - (b.position || 0));
+
+      if (memberList.length > 0) {
+        setData((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            members: memberList
+          };
+        });
+      }
+    };
+
+    const subColRef = collection(db, 'groups', effectiveGroupId, 'members');
+    const unsubSub = onSnapshot(subColRef, (snap) => {
+      if (!snap.empty) syncMembersFromSnap(snap.docs);
+    }, (err) => console.warn('[GroupDashboard Sub Members Warn]:', err));
+
+    const q1 = query(collection(db, 'group_members'), where('group_id', '==', effectiveGroupId));
+    const unsubQ1 = onSnapshot(q1, (snap) => {
+      if (!snap.empty) syncMembersFromSnap(snap.docs);
+    }, (err) => console.warn('[GroupDashboard Q1 Warn]:', err));
+
+    const q2 = query(collection(db, 'group_members'), where('groupId', '==', effectiveGroupId));
+    const unsubQ2 = onSnapshot(q2, (snap) => {
+      if (!snap.empty) syncMembersFromSnap(snap.docs);
+    }, (err) => console.warn('[GroupDashboard Q2 Warn]:', err));
+
+    const groupDocRef = doc(db, 'groups', effectiveGroupId);
+    const unsubGroupDoc = onSnapshot(groupDocRef, (snap) => {
+      if (snap.exists()) {
+        const gData = snap.data();
+        if (Array.isArray(gData?.members) && gData.members.length > 0) {
+          syncMembersFromSnap(gData.members);
+        }
+      }
+    }, (err) => console.warn('[GroupDashboard Group Doc Warn]:', err));
+
+    return () => {
+      unsubSub();
+      unsubQ1();
+      unsubQ2();
+      unsubGroupDoc();
+    };
   }, [groupId, currentUser.id, simulatedDate]);
 
   const showToast = (msg: string) => {

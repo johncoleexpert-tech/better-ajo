@@ -39,7 +39,7 @@ import {
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
 import { db } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -273,6 +273,90 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         }
       })
       .catch(() => {});
+
+    if (!db || !groupId) return;
+
+    const effectiveGroupId = groupId;
+    console.log('[GroupAdminDashboard] Initializing members onSnapshot for groupId:', effectiveGroupId);
+
+    // Sync helper: guarantees admin is not a member and never added to count
+    const syncMembersFromSnap = (rawDocs: any[]) => {
+      if (!rawDocs || rawDocs.length === 0) return;
+      const memberMap = new Map<string, GroupAdminMemberItem>();
+      rawDocs.forEach(d => {
+        const item: any = typeof d.data === 'function' ? { ...d.data(), id: d.id } : d;
+        // DO NOT make admin a member. DO NOT add admin to count. Keep admin as non-contributor exclusive manager.
+        if (item.user_id === currentUser.id || item.userId === currentUser.id || item.id === currentUser.id) {
+          return;
+        }
+        memberMap.set(item.id, item as GroupAdminMemberItem);
+      });
+
+      const memberList = Array.from(memberMap.values());
+      memberList.sort((a, b) => (a.position || 0) - (b.position || 0));
+
+      if (memberList.length > 0) {
+        setData(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            members: memberList,
+            membersJoinedCount: memberList.length
+          };
+        });
+      }
+    };
+
+    // 1. Sub-collection: groups/{effectiveGroupId}/members
+    const subColRef = collection(db, 'groups', effectiveGroupId, 'members');
+    const unsubSub = onSnapshot(subColRef, (snap) => {
+      if (!snap.empty) {
+        syncMembersFromSnap(snap.docs);
+      }
+    }, (err) => console.warn('[Members Sub Snapshot Warn]:', err));
+
+    // 2. Root group_members query by group_id
+    const q1 = query(collection(db, 'group_members'), where('group_id', '==', effectiveGroupId));
+    const unsubQ1 = onSnapshot(q1, (snap) => {
+      if (!snap.empty) {
+        syncMembersFromSnap(snap.docs);
+      }
+    }, (err) => console.warn('[Members Q1 Snapshot Warn]:', err));
+
+    // 3. Root group_members query by groupId
+    const q2 = query(collection(db, 'group_members'), where('groupId', '==', effectiveGroupId));
+    const unsubQ2 = onSnapshot(q2, (snap) => {
+      if (!snap.empty) {
+        syncMembersFromSnap(snap.docs);
+      }
+    }, (err) => console.warn('[Members Q2 Snapshot Warn]:', err));
+
+    // 4. Legacy groupMembers query by groupId
+    const q3 = query(collection(db, 'groupMembers'), where('groupId', '==', effectiveGroupId));
+    const unsubQ3 = onSnapshot(q3, (snap) => {
+      if (!snap.empty) {
+        syncMembersFromSnap(snap.docs);
+      }
+    }, (err) => console.warn('[Members Q3 Snapshot Warn]:', err));
+
+    // 5. Group doc itself for embedded members array
+    const groupDocRef = doc(db, 'groups', effectiveGroupId);
+    const unsubGroupDoc = onSnapshot(groupDocRef, (snap) => {
+      if (snap.exists()) {
+        const gData = snap.data();
+        if (Array.isArray(gData?.members) && gData.members.length > 0) {
+          syncMembersFromSnap(gData.members);
+        }
+      }
+    }, (err) => console.warn('[Group Doc Snapshot Warn]:', err));
+
+    return () => {
+      unsubSub();
+      unsubQ1();
+      unsubQ2();
+      unsubQ3();
+      unsubGroupDoc();
+    };
   }, [groupId, currentUser.id]);
 
   const handleInitiateWithdrawal = async (e: React.FormEvent) => {

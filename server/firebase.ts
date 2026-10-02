@@ -1049,7 +1049,9 @@ export async function fsUpsertGroup(group: GroupAjo, memberUserIds?: string[]): 
     const dataToSave: any = {
       ...group,
       owner_id: group.admin_id,
-      admin_id: group.admin_id
+      admin_id: group.admin_id,
+      groupId: group.id,
+      group_id: group.id
     };
     if (Array.isArray(memberUserIds) && memberUserIds.length > 0) {
       dataToSave.members = memberUserIds;
@@ -1144,10 +1146,92 @@ export async function fsGetMembersForGroup(groupId: string): Promise<GroupMember
   const db = getFirestoreDb();
   if (!db || !groupId) return [];
   try {
-    const snap = await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS)
-      .where('group_id', '==', groupId)
-      .get();
-    const members = snap.docs.map(d => d.data() as GroupMember);
+    const memberMap = new Map<string, GroupMember>();
+
+    // 1. Root group_members by group_id
+    try {
+      const snap1 = await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS)
+        .where('group_id', '==', groupId)
+        .get();
+      snap1.docs.forEach(d => {
+        const m = d.data() as GroupMember;
+        const key = m.id || d.id;
+        memberMap.set(key, { ...m, id: key, group_id: groupId, groupId: groupId });
+      });
+    } catch (e1) {
+      console.warn(`[fsGetMembersForGroup] snap1 warn:`, e1);
+    }
+
+    // 2. Root group_members by groupId
+    try {
+      const snap2 = await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS)
+        .where('groupId', '==', groupId)
+        .get();
+      snap2.docs.forEach(d => {
+        const m = d.data() as GroupMember;
+        const key = m.id || d.id;
+        if (!memberMap.has(key)) {
+          memberMap.set(key, { ...m, id: key, group_id: groupId, groupId: groupId });
+        }
+      });
+    } catch (e2) {
+      console.warn(`[fsGetMembersForGroup] snap2 warn:`, e2);
+    }
+
+    // 3. Sub-collection groups/{groupId}/members
+    try {
+      const subSnap = await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(groupId).collection('members').get();
+      subSnap.docs.forEach(d => {
+        const m = d.data() as GroupMember;
+        const key = m.id || d.id;
+        if (!memberMap.has(key)) {
+          memberMap.set(key, { ...m, id: key, group_id: groupId, groupId: groupId });
+        }
+      });
+    } catch (e3) {
+      console.warn(`[fsGetMembersForGroup] subSnap warn:`, e3);
+    }
+
+    // 4. Legacy collection groupMembers by groupId
+    try {
+      const legacySnap = await db.collection('groupMembers')
+        .where('groupId', '==', groupId)
+        .get();
+      legacySnap.docs.forEach(d => {
+        const m = d.data() as GroupMember;
+        const key = m.id || d.id;
+        if (!memberMap.has(key)) {
+          memberMap.set(key, { ...m, id: key, group_id: groupId, groupId: groupId });
+        }
+      });
+    } catch {}
+
+    // 5. Group document's embedded members array field
+    try {
+      const grpDoc = await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(groupId).get();
+      if (grpDoc.exists) {
+        const gData = grpDoc.data();
+        if (Array.isArray(gData?.members) && gData.members.length > 0) {
+          gData.members.forEach((m: any, idx: number) => {
+            if (m && typeof m === 'object' && m.full_name) {
+              const key = m.id || `mem_${groupId}_${idx + 1}`;
+              if (!memberMap.has(key)) {
+                memberMap.set(key, {
+                  ...m,
+                  id: key,
+                  group_id: groupId,
+                  groupId: groupId,
+                  position: m.position || idx + 1,
+                  status: m.status || 'active'
+                });
+              }
+            }
+          });
+        }
+      }
+    } catch {}
+
+    const members = Array.from(memberMap.values());
     return members.sort((a, b) => (a.position || 0) - (b.position || 0));
   } catch (err) {
     console.warn(`Firestore getMembersForGroup error (${groupId}):`, err);
@@ -1160,8 +1244,14 @@ export async function fsGetMemberById(memberId: string): Promise<GroupMember | n
   if (!db || !memberId) return null;
   try {
     const doc = await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS).doc(memberId).get();
-    if (!doc.exists) return null;
-    return doc.data() as GroupMember;
+    if (doc.exists) {
+      return doc.data() as GroupMember;
+    }
+    const legacyDoc = await db.collection('groupMembers').doc(memberId).get();
+    if (legacyDoc.exists) {
+      return legacyDoc.data() as GroupMember;
+    }
+    return null;
   } catch (err) {
     console.warn(`Firestore getMemberById error (${memberId}):`, err);
     return null;
@@ -1189,7 +1279,25 @@ export async function fsUpsertGroupMember(member: GroupMember): Promise<boolean>
   const db = getFirestoreDb();
   if (!db || !member || !member.id) return false;
   try {
-    await db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS).doc(member.id).set(cleanUndefinedFields(member), { merge: true });
+    const payload = cleanUndefinedFields({
+      ...member,
+      groupId: member.group_id || (member as any).groupId,
+      group_id: member.group_id || (member as any).groupId
+    });
+
+    const writes = [
+      db.collection(FIRESTORE_COLLECTIONS.GROUP_MEMBERS).doc(member.id).set(payload, { merge: true }),
+      db.collection('groupMembers').doc(member.id).set(payload, { merge: true })
+    ];
+
+    if (member.group_id || (member as any).groupId) {
+      const gid = member.group_id || (member as any).groupId;
+      writes.push(
+        db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(gid).collection('members').doc(member.id).set(payload, { merge: true })
+      );
+    }
+
+    await Promise.all(writes);
     return true;
   } catch (err) {
     console.error(`Firestore upsertGroupMember error (${member.id}):`, err);

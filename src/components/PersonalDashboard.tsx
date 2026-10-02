@@ -97,6 +97,8 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
   const [showSimulateTransferModal, setShowSimulateTransferModal] = useState(false);
   const [simulateTransferAmount, setSimulateTransferAmount] = useState('10000');
   const [simulatingTransfer, setSimulatingTransfer] = useState(false);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [optimisticDeposit, setOptimisticDeposit] = useState<number>(0);
   const [simulateSuccess, setSimulateSuccess] = useState<string | null>(null);
 
   // Durable real-time Firestore listeners for user personal balance and transaction history
@@ -293,7 +295,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
   const totalWithdrawnByUser = allWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
 
-  const availableSavings = Math.max(0, totalDeposited - totalWithdrawnByUser);
+  const availableSavings = Math.max(0, totalDeposited + optimisticDeposit - totalWithdrawnByUser);
 
   const withdrawNum = Number(withdrawAmount) || 0;
   const withdrawFee = Math.round(withdrawNum * 0.016); // 1.6%
@@ -516,28 +518,39 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
   const handleSimulateBankTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Bug 4: Do not allow two transactions to run concurrently
+    if (isDepositing || simulatingTransfer) return;
+
     const savingsAmount = Number(simulateTransferAmount);
     if (isNaN(savingsAmount) || savingsAmount <= 0) {
       setError('Please enter a valid transfer amount.');
       return;
     }
 
-    try {
-      setSimulatingTransfer(true);
-      setError(null);
-      const effectiveRef = `VA_TRF_${Date.now()}`;
-      const userId = user.id;
-      const nowIso = new Date().toISOString();
+    // Bug 4: Immediately disable button to prevent double-click on bad network
+    setIsDepositing(true);
+    setSimulatingTransfer(true);
+    setError(null);
 
-      // Deduplication idempotency check
+    // Bug 4: Idempotency reference: DEP_${uid}_${Date.now()}
+    const effectiveRef = `DEP_${user.id}_${Date.now()}`;
+    const userId = user.id;
+    const nowIso = new Date().toISOString();
+
+    // Bug 2: Optimistic UI - show toast "Credited ₦{amount}" instantly, update local state first
+    setOptimisticDeposit((prev) => prev + savingsAmount);
+    setSuccessMessage(`Credited ₦${savingsAmount.toLocaleString()} to your Personal Better Ajo!`);
+    setShowSimulateTransferModal(false);
+
+    try {
+      // Idempotency: check platform_transactions collection for duplicate reference before write
       const existingQuery = query(collection(db, 'platform_transactions'), where('reference', '==', effectiveRef));
       const existingSnap = await getDocs(existingQuery);
       if (!existingSnap.empty) {
         throw new Error('This deposit transaction has already been processed.');
       }
 
-      // STEP 2 & 4: Handler handleSimulateTransfer must use runTransaction across 4 collections:
-      // contributions, pack_transactions, transaction_logs, platform_transactions, plus increment stream2 and totalGross
+      // Bug 4: Fully atomic runTransaction: credits full amount or rollback to 0, never partial 75k
       await runTransaction(db, async (t) => {
         const revRef = doc(db, 'platformRevenue', 'main');
         const userDocRef = doc(db, 'users', userId);
@@ -648,7 +661,7 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         });
       });
 
-      // Background local sync to in-memory db
+      // Background local sync to in-memory db without blocking UI
       apiRequest('/api/virtual-account/transfer', {
         method: 'POST',
         body: JSON.stringify({
@@ -661,11 +674,16 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         })
       }).catch((err) => console.warn('[VA Sync] Background local sync warning:', err));
 
-      setSimulateSuccess(`Transfer Confirmed! Savings: ₦${savingsAmount.toLocaleString()} credited in full.`);
+      // Reset optimistic increment once background write is complete
+      setOptimisticDeposit(0);
     } catch (err: any) {
       console.error('[SimulateBankTransfer] error:', err);
+      // Bug 4: On error, catch and revert local optimistic increment
+      setOptimisticDeposit(0);
+      setSuccessMessage(null);
       setError(err?.message || 'Transfer failed');
     } finally {
+      setIsDepositing(false);
       setSimulatingTransfer(false);
     }
   };
@@ -1559,24 +1577,21 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Addition Fee Model Breakdown */}
-                <div className="rounded-2xl bg-emerald-50/60 p-3.5 border border-emerald-200/80 space-y-2 text-xs">
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-medium">Savings (Full Credit):</span>
-                    <span className="font-bold text-slate-900 text-sm">₦{Number(simulateTransferAmount || 0).toLocaleString()}</span>
+                {/* BUG 3: Clean fintech card */}
+                <div className="bg-slate-50 border rounded-xl p-4 space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Your Savings</span>
+                    <span className="font-semibold">₦{Number(simulateTransferAmount || 0).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-medium">Platform Fee:</span>
-                    <span className="font-bold text-amber-700 text-sm">+₦60 (paid to Super Admin, NOT added to user transfer)</span>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Platform Fee</span>
+                    <span className="font-semibold text-gray-500">₦60</span>
                   </div>
-                  <div className="border-t border-emerald-200 pt-1.5 flex justify-between items-center text-sm font-black text-slate-900">
-                    <span>Total Transfer:</span>
-                    <span className="text-[#008751] text-base font-black">₦{Number(simulateTransferAmount || 0).toLocaleString()}</span>
+                  <p className="text-xs text-gray-500 italic">Charged to platform, not deducted from you</p>
+                  <div className="border-t pt-3 flex justify-between font-bold">
+                    <span>Total Transfer</span>
+                    <span className="text-green-700">₦{Number(simulateTransferAmount || 0).toLocaleString()}</span>
                   </div>
-                </div>
-
-                <div className="text-[11px] text-slate-500 leading-relaxed">
-                  ✓ <strong>Full Credit:</strong> ₦{Number(simulateTransferAmount || 0).toLocaleString()} is credited in full to your savings. ₦60 platform fee is paid to Super Admin platform wallet.
                 </div>
 
                 <div className="pt-2 flex items-center justify-end space-x-2">
@@ -1589,14 +1604,10 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={simulatingTransfer}
+                    disabled={isDepositing || simulatingTransfer}
                     className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
                   >
-                    {simulatingTransfer ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <span>Simulate Bank Transfer (Total: ₦{Number(simulateTransferAmount || 0).toLocaleString()})</span>
-                    )}
+                    <span>Simulate Bank Transfer (Total: ₦{Number(simulateTransferAmount || 0).toLocaleString()})</span>
                   </button>
                 </div>
               </form>

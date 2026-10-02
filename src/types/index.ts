@@ -145,6 +145,7 @@ export interface GroupAjo {
 export interface GroupMember {
   id: string;
   group_id: string;
+  groupId?: string;
   user_id: string;
   full_name: string;
   phone: string;

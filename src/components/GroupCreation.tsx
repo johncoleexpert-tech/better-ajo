@@ -3,6 +3,8 @@ import { ArrowLeft, Users, Coins, Clock, Loader2, CheckCircle2, Shield, Phone, M
 import { UserProfile, PackingCycle } from '../types/index.js';
 import { NIGERIAN_BANKS, formatNaira, formatPhone } from '../lib/formatters.js';
 import { apiRequest } from '../lib/api.js';
+import { db } from '../lib/firebase.js';
+import { doc, writeBatch, collection } from 'firebase/firestore';
 
 interface GroupCreationProps {
   currentUser: UserProfile | null;
@@ -228,6 +230,57 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
           members: sanitizedMembers
         })
       });
+
+      // Save to Firestore with EXACT same groupId as group doc id (groupRef.id)
+      if (db && data?.group?.id) {
+        try {
+          const groupRef = doc(db, 'groups', data.group.id);
+          const membersArray = (data.members && data.members.length > 0)
+            ? data.members.map((m: any, idx: number) => ({
+                ...m,
+                groupId: groupRef.id,
+                group_id: groupRef.id,
+                position: m.position || (idx + 1),
+                status: 'active'
+              }))
+            : sanitizedMembers.map((m, idx) => ({
+                ...m,
+                id: `mem_${groupRef.id}_${idx + 1}_${Math.random().toString(36).substring(2, 6)}`,
+                groupId: groupRef.id,
+                group_id: groupRef.id,
+                position: idx + 1,
+                status: 'active'
+              }));
+
+          const batch = writeBatch(db);
+          // Save members as array field inside group doc
+          batch.set(groupRef, {
+            ...data.group,
+            id: groupRef.id,
+            groupId: groupRef.id,
+            group_id: groupRef.id,
+            members: membersArray
+          }, { merge: true });
+
+          // Save members as sub-collection: groups/{groupRef.id}/members
+          // AND in group_members and groupMembers collections
+          membersArray.forEach((m: any) => {
+            const memberDocRef = doc(db, 'groups', groupRef.id, 'members', m.id);
+            batch.set(memberDocRef, { ...m, groupId: groupRef.id, group_id: groupRef.id }, { merge: true });
+
+            const rootMemberRef = doc(db, 'group_members', m.id);
+            batch.set(rootMemberRef, { ...m, groupId: groupRef.id, group_id: groupRef.id }, { merge: true });
+
+            const legacyMemberRef = doc(db, 'groupMembers', m.id);
+            batch.set(legacyMemberRef, { ...m, groupId: groupRef.id, group_id: groupRef.id }, { merge: true });
+          });
+
+          await batch.commit();
+          console.log('[handleCreateGroup] batch committed successfully. Group ID:', groupRef.id, 'Members:', membersArray.length);
+        } catch (batchErr) {
+          console.warn('[handleCreateGroup] Firestore batch commit error:', batchErr);
+        }
+      }
 
       onSuccess({
         group: data.group,

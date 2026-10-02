@@ -40,6 +40,7 @@ import {
   fsGetGroupById,
   fsGetGroupByCode,
   fsGetGroupsForUser,
+  fsGetMembersForGroup,
   fsUpsertGroupMember,
   fsUpsertContribution,
   fsUpsertPackTransaction,
@@ -1858,6 +1859,8 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
       platformShare
     ).catch(err => console.warn('[Firestore Group Creation Fee Warn]:', err?.message || err));
 
+    (result.group as any).members = createdMembers;
+    await Promise.all(createdMembers.map(m => fsUpsertGroupMember(m))).catch(err => console.warn('[fsUpsertGroupMember batch warn]:', err));
     await syncGroupToSupabase(result.group).catch(() => {});
     await fsUpsertGroup(result.group).catch(() => {});
     if (result.adminProfile) {
@@ -2391,14 +2394,28 @@ apiRouter.post('/groups/:groupId/check-disbursement', async (req: Request, res: 
   }
 });
 
-apiRouter.get('/groups/:groupId/dashboard', (req: Request, res: Response) => {
+apiRouter.get('/groups/:groupId/dashboard', async (req: Request, res: Response) => {
   try {
     const { groupId } = req.params;
     const { userId } = req.query;
     const simulatedDate = (req.headers['x-simulated-date'] as string) || (req.query.simulatedDate as string);
 
-    const group = db.getGroupById(groupId);
+    let group = db.getGroupById(groupId);
+    if (!group) {
+      try {
+        const fsGroup = await fsGetGroupById(groupId);
+        if (fsGroup) {
+          db.syncRemoteGroup(fsGroup);
+          group = fsGroup;
+        }
+      } catch (err) {
+        console.warn('Direct Firestore group lookup error in dashboard:', err);
+      }
+    }
     if (!group) return res.status(404).json({ error: 'Group not found' });
+
+    // Sync all financial records and group members from Firestore
+    await syncGroupFinancialsFromFirestore(groupId);
 
     // Cron safeguard on dashboard load: check if scheduled_date <= today and contributions complete, auto-execute pack
     db.checkAndAutoExecutePayAheadPack(groupId, simulatedDate);
@@ -3353,6 +3370,20 @@ async function syncGroupFinancialsFromFirestore(groupId: string): Promise<void> 
         db.data.withdrawals.push({ ...wData, id: effectiveId });
       }
     });
+
+    // 4. Sync group_members explicitly for this group so members never vanish
+    const fsMembers = await fsGetMembersForGroup(groupId);
+    if (fsMembers && fsMembers.length > 0) {
+      for (const m of fsMembers) {
+        const effectiveId = m.id;
+        const idx = db.data.group_members.findIndex(existing => existing.id === effectiveId);
+        if (idx >= 0) {
+          db.data.group_members[idx] = { ...db.data.group_members[idx], ...m };
+        } else {
+          db.data.group_members.push(m);
+        }
+      }
+    }
   } catch (err) {
     console.warn('[SyncGroupFinancials Warn]:', err);
   }
