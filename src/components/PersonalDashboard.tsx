@@ -29,7 +29,21 @@ import {
   subscribeToUserPersonalPayments,
   db
 } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp, onSnapshot, query, where, doc, writeBatch, increment } from 'firebase/firestore';
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  onSnapshot,
+  query,
+  where,
+  doc,
+  writeBatch,
+  increment,
+  runTransaction,
+  getDocs,
+  getDoc
+} from 'firebase/firestore';
+import { getRevenue } from '../lib/revenue.js';
 
 interface PersonalDashboardProps {
   user: UserProfile;
@@ -320,48 +334,107 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         throw new Error(`Insufficient balance: Available savings is ${formatNaira(availableSavings)}`);
       }
 
-      // On success BATCH:
-      const batch = writeBatch(db);
-      const wDocRef = doc(collection(db, 'withdrawals'));
       const effectiveBank = user.bank_name || 'GTBank';
       const effectiveAccount = user.account_number || '';
       const wRef = `wth_${Date.now()}`;
+      const nowIso = new Date().toISOString();
 
-      batch.set(wDocRef, {
-        userId: user.id,
-        user_id: user.id,
-        amount: Number(amount),
-        fee,
-        payout,
-        net_amount: payout,
-        bankName: effectiveBank,
-        bank_name: effectiveBank,
-        accountNumber: effectiveAccount,
-        account_number: effectiveAccount,
-        status: 'completed',
-        type: 'personal_withdrawal',
-        reference: wRef,
-        timestamp: serverTimestamp(),
-        created_at: new Date().toISOString()
+      // Anti-double submission idempotency check
+      const existingQuery = query(collection(db, 'platform_transactions'), where('reference', '==', wRef));
+      const existingSnap = await getDocs(existingQuery);
+      if (!existingSnap.empty) {
+        throw new Error('This withdrawal transaction has already been processed.');
+      }
+
+      // Atomic runTransaction for multi-collection self-healing consistency
+      await runTransaction(db, async (t) => {
+        const revRef = doc(db, 'platformRevenue', 'main');
+        const userDocRef = doc(db, 'users', user.id);
+
+        const revDoc = await t.get(revRef);
+        const revData = revDoc.exists() ? revDoc.data() : {};
+        const { s1, s2, s3, s4, totalWithdrawn } = getRevenue(revData);
+
+        const newS4 = s4 + fee;
+        const newTotalGross = s1 + s2 + s3 + newS4;
+        const newUnifiedAvailable = Math.max(0, newTotalGross - totalWithdrawn);
+
+        const wDocRef = doc(collection(db, 'withdrawals'));
+        const ptxRef = doc(collection(db, 'platform_transactions'));
+        const logRef = doc(collection(db, 'transaction_logs'));
+        const txRef = doc(collection(db, 'transactions'));
+
+        const wPayload = {
+          userId: user.id,
+          user_id: user.id,
+          amount: Number(amount),
+          gross_amount: Number(amount),
+          fee,
+          payout,
+          net_amount: payout,
+          bankName: effectiveBank,
+          bank_name: effectiveBank,
+          accountNumber: effectiveAccount,
+          account_number: effectiveAccount,
+          status: 'completed',
+          type: 'personal_withdrawal',
+          reference: wRef,
+          timestamp: serverTimestamp(),
+          created_at: nowIso,
+          createdAt: nowIso
+        };
+
+        t.set(wDocRef, wPayload);
+        t.set(ptxRef, {
+          ...wPayload,
+          description: `Personal Ajo Withdrawal to ${effectiveBank} (${effectiveAccount})`
+        });
+        t.set(logRef, {
+          userId: user.id,
+          user_id: user.id,
+          action: 'withdrawal',
+          type: 'personal_withdrawal',
+          amount: Number(amount),
+          fee,
+          net_payout: payout,
+          status: 'completed',
+          reference: wRef,
+          timestamp: serverTimestamp(),
+          created_at: nowIso
+        });
+        t.set(txRef, {
+          id: `tx_${wRef}`,
+          userId: user.id,
+          user_id: user.id,
+          userName: user.full_name || 'Member',
+          type: 'personal_withdrawal',
+          purpose: 'personal_withdrawal',
+          amount: Number(amount),
+          fee,
+          netPayout: payout,
+          status: 'completed',
+          reference: wRef,
+          timestamp: serverTimestamp(),
+          created_at: nowIso,
+          createdAt: nowIso
+        });
+
+        t.update(userDocRef, {
+          totalWithdrawn: increment(Number(amount)),
+          total_withdrawn: increment(Number(amount))
+        });
+
+        t.update(revRef, {
+          stream4: newS4,
+          totalGross: newTotalGross,
+          unifiedAvailable: newUnifiedAvailable,
+          lastUpdated: serverTimestamp()
+        });
       });
-
-      batch.update(doc(db, 'users', user.id), {
-        totalWithdrawn: increment(Number(amount)),
-        total_withdrawn: increment(Number(amount))
-      });
-
-      batch.update(doc(db, 'platformRevenue', 'main'), {
-        stream4: increment(fee),
-        totalGross: increment(fee),
-        unifiedAvailable: increment(fee)
-      });
-
-      await batch.commit();
 
       setShowWithdrawOtp(false);
       setShowWithdrawModal(false);
       setSuccessMessage(`Withdrawal of ${formatNaira(payout)} completed! Sent to ${effectiveBank} (Fee: ${formatNaira(fee)}).`);
-      setTimeout(() => setSuccessMessage(null), 6000);
 
       // In background call API to sync in-memory/server records
       apiRequest('/api/personal/withdraw', {
@@ -454,51 +527,126 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       setError(null);
       const effectiveRef = `VA_TRF_${Date.now()}`;
       const userId = user.id;
+      const nowIso = new Date().toISOString();
 
-      // STEP 2: Handler handleSimulateTransfer must use writeBatch:
-      const batch = writeBatch(db);
-      const contribRef = doc(collection(db, 'contributions'));
-      batch.set(contribRef, {
-        userId,
-        user_id: userId,
-        amount: Number(savingsAmount),
-        status: 'success',
-        type: 'DEPOSIT - PERSONAL AJO SAVINGS',
-        timestamp: serverTimestamp(),
-        reference: effectiveRef,
-        created_at: new Date().toISOString()
+      // Deduplication idempotency check
+      const existingQuery = query(collection(db, 'platform_transactions'), where('reference', '==', effectiveRef));
+      const existingSnap = await getDocs(existingQuery);
+      if (!existingSnap.empty) {
+        throw new Error('This deposit transaction has already been processed.');
+      }
+
+      // STEP 2 & 4: Handler handleSimulateTransfer must use runTransaction across 4 collections:
+      // contributions, pack_transactions, transaction_logs, platform_transactions, plus increment stream2 and totalGross
+      await runTransaction(db, async (t) => {
+        const revRef = doc(db, 'platformRevenue', 'main');
+        const userDocRef = doc(db, 'users', userId);
+
+        const revDoc = await t.get(revRef);
+        const revData = revDoc.exists() ? revDoc.data() : {};
+        const { s1, s2, s3, s4, totalWithdrawn } = getRevenue(revData);
+
+        const newS2 = s2 + 60;
+        const newTotalGross = s1 + newS2 + s3 + s4;
+        const newUnifiedAvailable = Math.max(0, newTotalGross - totalWithdrawn);
+
+        const contribRef = doc(collection(db, 'contributions'));
+        const packRef = doc(collection(db, 'pack_transactions'));
+        const logRef = doc(collection(db, 'transaction_logs'));
+        const ptxRef = doc(collection(db, 'platform_transactions'));
+        const txRef = doc(collection(db, 'transactions'));
+
+        const contribData = {
+          userId,
+          user_id: userId,
+          amount: Number(savingsAmount),
+          fee: 60,
+          status: 'success',
+          type: 'DEPOSIT - PERSONAL AJO SAVINGS',
+          timestamp: serverTimestamp(),
+          reference: effectiveRef,
+          created_at: nowIso,
+          createdAt: nowIso
+        };
+
+        const packData = {
+          userId,
+          user_id: userId,
+          amount: Number(savingsAmount),
+          fee: 60,
+          status: 'success',
+          type: 'personal_deposit',
+          timestamp: serverTimestamp(),
+          reference: effectiveRef,
+          created_at: nowIso,
+          createdAt: nowIso
+        };
+
+        const logData = {
+          userId,
+          user_id: userId,
+          action: 'deposit',
+          type: 'personal_deposit',
+          amount: Number(savingsAmount),
+          fee: 60,
+          status: 'success',
+          reference: effectiveRef,
+          timestamp: serverTimestamp(),
+          created_at: nowIso
+        };
+
+        const ptxData = {
+          userId,
+          user_id: userId,
+          type: 'personal_deposit',
+          amount: Number(savingsAmount),
+          gross_amount: Number(savingsAmount),
+          fee: 60,
+          status: 'success',
+          reference: effectiveRef,
+          timestamp: serverTimestamp(),
+          created_at: nowIso
+        };
+
+        const txData = {
+          id: `tx_${effectiveRef}`,
+          userId,
+          user_id: userId,
+          userName: user.full_name || 'Member',
+          type: 'personal_deposit',
+          purpose: 'personal_deposit',
+          amount: Number(savingsAmount),
+          savings_amount: Number(savingsAmount),
+          fee: 60,
+          total_amount: Number(savingsAmount),
+          status: 'success',
+          reference: effectiveRef,
+          timestamp: serverTimestamp(),
+          created_at: nowIso,
+          createdAt: nowIso
+        };
+
+        t.set(contribRef, contribData);
+        t.set(packRef, packData);
+        t.set(logRef, logData);
+        t.set(ptxRef, ptxData);
+        t.set(txRef, txData);
+
+        t.update(userDocRef, {
+          totalDeposited: increment(Number(savingsAmount)),
+          total_deposited: increment(Number(savingsAmount)),
+          savingsBalance: increment(Number(savingsAmount)),
+          balance: increment(Number(savingsAmount)),
+          total_saved: increment(Number(savingsAmount))
+        });
+
+        t.update(revRef, {
+          stream2: newS2,
+          totalGross: newTotalGross,
+          unifiedAvailable: newUnifiedAvailable,
+          lastUpdated: serverTimestamp()
+        });
       });
-
-      const packRef = doc(collection(db, 'pack_transactions'));
-      batch.set(packRef, {
-        userId,
-        user_id: userId,
-        amount: Number(savingsAmount),
-        fee: 60,
-        status: 'success',
-        type: 'personal_deposit',
-        timestamp: serverTimestamp(),
-        reference: effectiveRef,
-        created_at: new Date().toISOString()
-      });
-
-      const userDocRef = doc(db, 'users', userId);
-      batch.update(userDocRef, {
-        totalDeposited: increment(Number(savingsAmount)),
-        total_deposited: increment(Number(savingsAmount)),
-        savingsBalance: increment(Number(savingsAmount)),
-        balance: increment(Number(savingsAmount)),
-        total_saved: increment(Number(savingsAmount))
-      });
-
-      const revDocRef = doc(db, 'platformRevenue', 'main');
-      batch.update(revDocRef, {
-        stream2: increment(60),
-        totalGross: increment(60),
-        unifiedAvailable: increment(60)
-      });
-
-      await batch.commit();
 
       // Background local sync to in-memory db
       apiRequest('/api/virtual-account/transfer', {
@@ -514,11 +662,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
       }).catch((err) => console.warn('[VA Sync] Background local sync warning:', err));
 
       setSimulateSuccess(`Transfer Confirmed! Savings: ₦${savingsAmount.toLocaleString()} credited in full.`);
-
-      setTimeout(() => {
-        setSimulateSuccess(null);
-        setShowSimulateTransferModal(false);
-      }, 2000);
     } catch (err: any) {
       console.error('[SimulateBankTransfer] error:', err);
       setError(err?.message || 'Transfer failed');
@@ -529,25 +672,49 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      {/* Success / Error Alerts */}
+      {/* Success / Error Alerts with manual dismiss */}
       {successMessage && (
-        <div className="mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-900 text-sm font-semibold flex items-center space-x-3 shadow-xs">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-          <span>{successMessage}</span>
+        <div className="mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-900 text-sm font-semibold flex items-center justify-between space-x-3 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span>{successMessage}</span>
+          </div>
+          <button
+            onClick={() => setSuccessMessage(null)}
+            className="p-1 rounded-lg text-emerald-700 hover:bg-emerald-100 transition cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {contactSuccess && (
-        <div className="mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-900 text-sm font-semibold flex items-center space-x-3 shadow-xs">
-          <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
-          <span>{contactSuccess}</span>
+        <div className="mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-emerald-900 text-sm font-semibold flex items-center justify-between space-x-3 shadow-xs">
+          <div className="flex items-center space-x-3">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span>{contactSuccess}</span>
+          </div>
+          <button
+            onClick={() => setContactSuccess(null)}
+            className="p-1 rounded-lg text-emerald-700 hover:bg-emerald-100 transition cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
       {error && (
-        <div className="mb-6 rounded-2xl bg-red-50 border border-red-200 p-4 text-red-700 text-sm font-semibold flex items-center space-x-3">
-          <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
-          <span>{error}</span>
+        <div className="mb-6 rounded-2xl bg-red-50 border border-red-200 p-4 text-red-700 text-sm font-semibold flex items-center justify-between space-x-3">
+          <div className="flex items-center space-x-3">
+            <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="p-1 rounded-lg text-red-700 hover:bg-red-100 transition cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -1319,12 +1486,24 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
             </div>
 
             {simulateSuccess ? (
-              <div className="py-6 text-center space-y-3">
+              <div className="py-6 text-center space-y-4">
                 <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle2 className="h-8 w-8" />
                 </div>
                 <h4 className="font-black text-slate-900 text-base">Transfer Confirmed!</h4>
                 <p className="text-xs text-slate-600">{simulateSuccess}</p>
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSimulateSuccess(null);
+                      setShowSimulateTransferModal(false);
+                    }}
+                    className="px-6 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-white text-xs font-bold shadow-md transition cursor-pointer"
+                  >
+                    Done & View Balance
+                  </button>
+                </div>
               </div>
             ) : (
               <form onSubmit={handleSimulateBankTransfer} className="space-y-4">

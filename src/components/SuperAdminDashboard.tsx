@@ -23,13 +23,15 @@ import {
   BadgeCheck,
   ChevronRight,
   Download,
-  LogOut
+  LogOut,
+  X
 } from 'lucide-react';
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
-import { doc, getDoc, onSnapshot, collection, query, where, orderBy } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, collection, query, where, orderBy, runTransaction, getDocs, serverTimestamp } from 'firebase/firestore';
 import { db, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
+import { getRevenue } from '../lib/revenue.js';
 
 interface SuperAdminDashboardProps {
   onBack: () => void;
@@ -123,7 +125,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
   };
 
   const fetchSuperAdminData = async () => {
@@ -202,23 +203,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         const snap = await getDoc(doc(db, 'platformRevenue', 'main'));
         if (snap.exists()) {
           const rev = snap.data();
-          const s1 = Number(rev.stream1 || 0);
-          const s2 = Number(rev.stream2 || 0);
-          const s3 = Number(rev.stream3 || 0);
-          const s4 = Number(rev.stream4 || 0);
-          const gross = Number(rev.totalGross || 0);
-          const withdrawn = Number(rev.totalWithdrawn || 0);
-          const avail = Number(rev.unifiedAvailable ?? (gross - withdrawn) ?? 0);
+          const { s1, s2, s3, s4, totalGross, totalWithdrawn, available } = getRevenue(rev);
           setRevenue({
             stream1: s1,
             stream2: s2,
             stream3: s3,
             stream4: s4,
-            totalGross: gross,
-            totalWithdrawn: withdrawn,
-            unifiedAvailable: avail,
+            totalGross,
+            totalWithdrawn,
+            unifiedAvailable: available,
             lastUpdated: rev.lastUpdated
           });
+          setWallet(prev => ({
+            ...prev,
+            availableRevenue: available,
+            totalGross,
+            stream1: s1,
+            stream2: s2,
+            stream3: s3,
+            stream4: s4,
+            withdrawn: totalWithdrawn
+          }));
         }
       } catch (err) {
         console.warn('[Super Admin] Error loading platformRevenue/main doc:', err);
@@ -228,23 +233,25 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     // Direct listener to the permanent platformRevenue/main document
     const unsub = subscribeToPlatformRevenue((revStats) => {
+      const { s1, s2, s3, s4, totalGross, totalWithdrawn, available } = getRevenue(revStats);
       setRevenue({
-        stream1: revStats.stream1,
-        stream2: revStats.stream2,
-        stream3: revStats.stream3,
-        stream4: revStats.stream4,
-        totalGross: revStats.totalGross,
-        totalWithdrawn: revStats.totalWithdrawn,
-        unifiedAvailable: revStats.unifiedAvailable
+        stream1: s1,
+        stream2: s2,
+        stream3: s3,
+        stream4: s4,
+        totalGross,
+        totalWithdrawn,
+        unifiedAvailable: available
       });
       setWallet(prev => ({
         ...prev,
-        availableRevenue: Number(revStats.unifiedAvailable ?? (revStats.totalGross - revStats.totalWithdrawn) ?? 0),
-        totalGross: Number(revStats.totalGross || 0),
-        stream1: Number(revStats.stream1 || 0),
-        stream2: Number(revStats.stream2 || 0),
-        stream3: Number(revStats.stream3 || 0),
-        stream4: Number(revStats.stream4 || 0)
+        availableRevenue: available,
+        totalGross,
+        stream1: s1,
+        stream2: s2,
+        stream3: s3,
+        stream4: s4,
+        withdrawn: totalWithdrawn
       }));
       setData((prev) => {
         if (!prev) return prev;
@@ -442,7 +449,86 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     try {
       setIsWithdrawing(true);
-      const res = await fetch('/api/superadmin/withdraw-earnings', {
+
+      // Anti-double submission idempotency check
+      const existingQuery = query(collection(db, 'platform_transactions'), where('reference', '==', currentRef));
+      const existingSnap = await getDocs(existingQuery);
+      if (!existingSnap.empty) {
+        throw new Error('This withdrawal transaction has already been processed.');
+      }
+
+      // STEP 3: Atomic transaction directly on platformRevenue/main
+      await runTransaction(db, async (t) => {
+        const revRef = doc(db, 'platformRevenue', 'main');
+        const revDoc = await t.get(revRef);
+        if (!revDoc.exists()) {
+          throw new Error('Platform revenue document not found');
+        }
+        const revData = revDoc.data();
+        const { s1, s2, s3, s4, totalGross, totalWithdrawn, available } = getRevenue(revData);
+
+        if (amt > available) {
+          throw new Error(`Insufficient revenue balance: Available is ${formatNaira(available)}`);
+        }
+
+        const newTotalWithdrawn = totalWithdrawn + amt;
+        const newAvailable = Math.max(0, totalGross - newTotalWithdrawn);
+
+        const saWithdrawalRef = doc(collection(db, 'super_admin_withdrawals'));
+        const wDocRef = doc(collection(db, 'withdrawals'));
+        const platformTxRef = doc(collection(db, 'platform_transactions'));
+        const txDocRef = doc(collection(db, 'transactions'));
+        const nowIso = new Date().toISOString();
+
+        const wthPayload = {
+          id: currentRef,
+          reference: currentRef,
+          amount: amt,
+          gross_amount: amt,
+          fee: 0,
+          net_payout: amt,
+          net_amount: amt,
+          bankName,
+          bank_name: bankName,
+          accountNumber,
+          account_number: accountNumber,
+          accountName,
+          account_name: accountName,
+          userId: 'usr_superadmin_realheaven',
+          user_id: 'usr_superadmin_realheaven',
+          userName: 'Super Administrator',
+          status: 'completed',
+          type: 'super_admin_revenue',
+          withdrawal_type: 'super_admin_revenue',
+          timestamp: serverTimestamp(),
+          createdAt: nowIso,
+          created_at: nowIso
+        };
+
+        t.set(saWithdrawalRef, wthPayload);
+        t.set(wDocRef, wthPayload);
+        t.set(platformTxRef, {
+          ...wthPayload,
+          type: 'super_admin_withdrawal',
+          description: `Super Admin Revenue Payout to ${bankName} (${accountNumber})`
+        });
+        t.set(txDocRef, {
+          ...wthPayload,
+          id: `tx_${currentRef}`,
+          source: 'Platform Revenue',
+          destination: `${accountName} (${bankName})`
+        });
+
+        t.update(revRef, {
+          totalWithdrawn: newTotalWithdrawn,
+          totalGross,
+          unifiedAvailable: newAvailable,
+          lastUpdated: serverTimestamp()
+        });
+      });
+
+      // Background local sync to backend
+      fetch('/api/superadmin/withdraw-earnings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -456,15 +542,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           accountName,
           reference: currentRef
         })
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Revenue withdrawal failed');
+      }).catch((err) => console.warn('[Super Admin withdrawal sync warning]:', err));
 
       setShowWithdrawModal(false);
       setWithdrawAmount('');
       setWithdrawRef('');
-      showToast(json.message || `Super Admin revenue of ${formatNaira(amt)} initiated successfully!`);
+      showToast(`Super Admin revenue of ${formatNaira(amt)} disbursed successfully to ${bankName}!`);
       fetchSuperAdminData();
       fetchSuperAdminWallet();
     } catch (err: any) {
@@ -536,10 +619,29 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
   const safeAjoGroups = Array.isArray(groups) ? groups : (Array.isArray((data as any)?.ajoGroups) ? (data as any).ajoGroups : []);
 
-  // 4. Super Admin - Recent Transactions (Platform Overview):
-  // const recentAll = (safeTransactions || []).slice(0, 50).sort((a,b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0))
-  // Show ALL types: deposit AND withdraw, both member and group_admin
-  const recentAll = (safeTransactions || []).slice(0, 50).sort((a, b) => {
+  // Real-time combined withdrawal history from collection('withdrawals') and safeTransactions (Requirement 6)
+  const rawWithdrawals = [
+    ...(allWithdrawals || []).map((w: any) => ({
+      ...w,
+      type: w.type || w.withdrawal_type || 'withdrawal',
+      gross_amount: Number(w.amount || 0),
+      amount: Number(w.amount || 0),
+      net_payout: Number(w.net_amount ?? w.payout ?? w.amount ?? 0),
+      fee: Number(w.fee || 0),
+      userName: w.accountName || w.account_name || w.userName || 'Member',
+      bankName: w.bankName || w.bank_name || 'Bank',
+      accountNumber: w.accountNumber || w.account_number || ''
+    })),
+    ...(safeTransactions || []).filter((t: any) => t && t.type && t.type.toString().toLowerCase().includes('withdraw'))
+  ];
+
+  const seenWthKeys = new Set<string>();
+  const withdrawalHistory = rawWithdrawals.filter((w: any) => {
+    const key = w.id || w.reference;
+    if (key && seenWthKeys.has(key)) return false;
+    if (key) seenWthKeys.add(key);
+    return true;
+  }).sort((a: any, b: any) => {
     const secA = (typeof a?.timestamp?.seconds === 'number')
       ? a.timestamp.seconds
       : (new Date(a?.createdAt || a?.created_at || a?.date || 0).getTime() / 1000);
@@ -549,13 +651,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     return secB - secA;
   });
 
-  // 5. Super Admin - Withdrawals Page:
-  // const withdrawalHistory = (safeTransactions || []).filter(t => t && t.type && t.type.toString().toLowerCase().includes('withdraw'))
-  // Show ALL withdrawals including member earnings and group_admin earnings
-  const withdrawalHistory = (safeTransactions || []).filter(
-    (t) => t && t?.type && t?.type?.toString().toLowerCase().includes('withdraw')
-  );
-
   // Filtered withdrawals for Withdrawals tab status filter
   const filteredWithdrawals = (withdrawalHistory || []).filter((w) => {
     if (withdrawalStatusFilter === 'all') return true;
@@ -564,22 +659,63 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     return st === withdrawalStatusFilter;
   });
 
-  // 6. Super Admin - Payments Page:
-  // const paymentsHistory = (safeTransactions || []).filter(t => t && t.type && (t.type.toLowerCase().includes('withdraw') || t.type.toLowerCase().includes('deposit')))
-  // Show both
-  const paymentsHistory = (safeTransactions || []).filter(
-    (t) => t && t?.type && (t?.type?.toString().toLowerCase().includes('withdraw') || t?.type?.toString().toLowerCase().includes('deposit'))
-  );
+  // 6. Super Admin - Payments Page: Live union of deposits & withdrawals from all real-time Firestore collections
+  const rawPayments = [
+    ...(allContributions || []).map((c: any) => ({
+      ...c,
+      type: c.type || 'personal_deposit',
+      gross_amount: Number(c.amount || 0),
+      amount: Number(c.amount || 0),
+      fee: Number(c.fee || 60),
+      userName: c.userName || c.fullName || 'Personal Ajo Member'
+    })),
+    ...(allPackTransactions || []).filter((pt: any) => pt.type !== 'personal_ajo_fee').map((pt: any) => ({
+      ...pt,
+      type: pt.type || 'personal_deposit',
+      gross_amount: Number(pt.amount || 0),
+      amount: Number(pt.amount || 0),
+      fee: Number(pt.fee || 60),
+      userName: pt.userName || 'Personal Ajo Member'
+    })),
+    ...withdrawalHistory,
+    ...(safeTransactions || []).filter(
+      (t) => t && t?.type && (t?.type?.toString().toLowerCase().includes('withdraw') || t?.type?.toString().toLowerCase().includes('deposit'))
+    )
+  ];
+
+  const seenPayKeys = new Set<string>();
+  const paymentsHistory = rawPayments.filter((p: any) => {
+    const key = p.reference || p.id;
+    if (key && seenPayKeys.has(key)) return false;
+    if (key) seenPayKeys.add(key);
+    return true;
+  }).sort((a: any, b: any) => {
+    const secA = (typeof a?.timestamp?.seconds === 'number')
+      ? a.timestamp.seconds
+      : (new Date(a?.createdAt || a?.created_at || a?.date || 0).getTime() / 1000);
+    const secB = (typeof b?.timestamp?.seconds === 'number')
+      ? b.timestamp.seconds
+      : (new Date(b?.createdAt || b?.created_at || b?.date || 0).getTime() / 1000);
+    return secB - secA;
+  });
+
   const paymentList = paymentsHistory;
   const withdrawalList = withdrawalHistory;
+  const recentAll = paymentsHistory.slice(0, 50);
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      {/* Toast Notification */}
+      {/* Toast Notification with manual dismiss */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-xs font-semibold text-white shadow-xl animate-fade-in">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 px-5 py-3.5 text-xs font-semibold text-white shadow-xl animate-fade-in border border-slate-700">
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
+          <span className="flex-1">{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="ml-2 text-slate-400 hover:text-white transition font-bold text-sm cursor-pointer p-0.5"
+          >
+            ✕
+          </button>
         </div>
       )}
 

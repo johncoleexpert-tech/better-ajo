@@ -16,7 +16,9 @@ import { InfoModal } from './components/InfoModals.js';
 import { LiveSupportChat } from './components/LiveSupportChat.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { UserProfile, PersonalAjo, GroupAjo } from './types/index.js';
-import { subscribeToUserPersonalBalance } from './lib/firebase.js';
+import { subscribeToUserPersonalBalance, db } from './lib/firebase.js';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { getRevenue } from './lib/revenue.js';
 
 export type AppView =
   | 'home'
@@ -51,6 +53,27 @@ export default function App() {
 
   // Database status modal
   const [isDbStatusOpen, setIsDbStatusOpen] = useState(false);
+
+  // Requirement 5: Defensive Self-Healing on App Start
+  // Auto-corrects totalGross and unifiedAvailable if they ever become out of sync with component streams
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(doc(db, 'platformRevenue', 'main'), (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const { totalGross, available } = getRevenue(data);
+        if (data.totalGross !== totalGross || data.unifiedAvailable !== available) {
+          updateDoc(doc(db, 'platformRevenue', 'main'), {
+            totalGross,
+            unifiedAvailable: available
+          }).catch((e) => console.warn('[Self-Healing] platformRevenue auto-correct failed:', e));
+        }
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn('[Self-Healing] Error attaching platformRevenue listener in App:', e);
+    }
+  }, []);
 
   // Check URL query parameters and local session on mount
   useEffect(() => {

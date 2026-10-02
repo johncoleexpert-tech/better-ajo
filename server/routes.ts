@@ -4437,6 +4437,20 @@ apiRouter.get(['/super-admin-wallet', '/super-admin/wallet', '/superadmin/wallet
     const totalGross = Number(stream1) + Number(stream2) + Number(stream3) + Number(stream4);
     const availableRevenue = Math.max(0, totalGross - Number(withdrawn));
 
+    // Self-healing synchronization to platformRevenue/main doc
+    if (fsDb) {
+      fsDb.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main').set({
+        stream1: Number(stream1),
+        stream2: Number(stream2),
+        stream3: Number(stream3),
+        stream4: Number(stream4),
+        totalGross: Number(totalGross),
+        totalWithdrawn: Number(withdrawn),
+        unifiedAvailable: Number(availableRevenue),
+        lastUpdated: new Date().toISOString()
+      }, { merge: true }).catch((e: any) => console.warn('[Auto-heal platformRevenue sync warn]:', e?.message));
+    }
+
     return res.json({
       success: true,
       stream1: Number(stream1),
