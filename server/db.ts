@@ -2608,31 +2608,15 @@ class Database {
   hasMemberPaidCurrentCycle(groupId: string, memberId: string, roundNumber: number, simulatedDate?: string): boolean {
     const group = this.getGroupById(groupId);
     if (!group) return false;
+    const required = group.contribution_amount;
+    const member = this.data.group_members.find(m => m.id === memberId && m.group_id === groupId);
+    const credit = Number(member?.credit_balance || 0);
 
-    const cycleInfo = this.getGroupCycleInfo(groupId, roundNumber, simulatedDate);
+    const paidForRound = this.data.contributions
+      .filter(c => c.group_id === groupId && c.member_id === memberId && c.round_number === roundNumber && !c.is_pay_ahead)
+      .reduce((sum, c) => sum + Number(c.amount || 0), 0);
 
-    // Find all verified Paid contributions by this member in this round
-    const paidContributions = this.data.contributions.filter(
-      c => c.group_id === groupId && c.member_id === memberId && c.round_number === roundNumber && c.status === 'Paid'
-    );
-
-    if (paidContributions.length === 0) return false;
-
-    // Early Payment Allowed:
-    // Members can pay ANYTIME before due date (Day 1, 2, 3... of a 7-day cycle).
-    // System accepts early payment and recognizes it as paid ahead for this cycle!
-    const hasCyclePayment = paidContributions.some(c => {
-      if (typeof c.cycle_number === 'number') {
-        return c.cycle_number === cycleInfo.cycleNumber;
-      }
-      if (c.paid_at && cycleInfo.lastPackDate) {
-        const paidCalDate = getNigeriaCalendarDate(c.paid_at);
-        return paidCalDate >= cycleInfo.lastPackDate;
-      }
-      return true;
-    });
-
-    return hasCyclePayment;
+    return (paidForRound + credit) >= required;
   }
 
   getCycleContributionStatus(groupId: string, roundNumber: number, simulatedDate?: string): {
@@ -2646,24 +2630,34 @@ class Database {
     const group = this.getGroupById(groupId);
     const activeMembers = this.getGroupMembers(groupId);
     const totalRequired = group ? group.member_limit : activeMembers.length;
+    const required = group ? group.contribution_amount : 20000;
     const cycleInfo = this.getGroupCycleInfo(groupId, roundNumber, simulatedDate);
 
     const unpaidMemberIds: string[] = [];
     let paidCount = 0;
 
     for (const m of activeMembers) {
-      if (this.hasMemberPaidCurrentCycle(groupId, m.id, roundNumber, simulatedDate)) {
+      const credit = Number(m.credit_balance || (m as any).creditBalance || 0);
+      const paid = this.data.contributions
+        .filter(c =>
+          (c.group_id === groupId || (c as any).groupId === groupId) &&
+          (c.member_id === m.id || (c as any).memberId === m.id) &&
+          (c.round_number === roundNumber || (c as any).round === roundNumber) &&
+          !c.is_pay_ahead &&
+          !(c as any).isPayAhead
+        )
+        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const totalEffective = paid + credit;
+
+      if (totalEffective >= required) {
         paidCount++;
       } else {
         unpaidMemberIds.push(m.id);
       }
     }
 
-    const allPaid = totalRequired > 0 && activeMembers.length >= totalRequired && paidCount >= totalRequired && unpaidMemberIds.length === 0;
-
-    // Scheduled disbursement scenarios:
-    // 1. If all 10 pay early on Day 2, system must WAIT till Day 7 before auto-disbursing (isEarlyWaiting = true).
-    // 2. If on Day 7, only 9 members have paid, system must PAUSE (isPaused = true).
+    // CRITICAL: NOBODY can pack until ALL members in group fully paid for that round. 5 members = 5 must pay. 20 members = 20 must pay. If 19 of 20 paid, pack NOT activated.
+    const allPaid = activeMembers.length > 0 && unpaidMemberIds.length === 0 && paidCount === activeMembers.length && (totalRequired <= 0 || activeMembers.length >= totalRequired);
     const isEarlyWaiting = allPaid && !cycleInfo.isCycleOpen;
     const isPaused = cycleInfo.isCycleOpen && !allPaid && activeMembers.length > 0;
 
@@ -3334,12 +3328,29 @@ class Database {
     const scheduleMap = new Map(schedule.map(s => [s.position, s]));
 
     // Members list for this group only
+    const groupContribs = this.data.contributions.filter(c => c.group_id === groupId || (c as any).groupId === groupId);
     const memberItems: GroupAdminMemberItem[] = members.map(m => {
-      const hasContributed = this.hasMemberPaidCurrentCycle(groupId, m.id, group.current_round);
+      const required = group.contribution_amount;
+      const paidForRound = groupContribs
+        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (c.round_number === group.current_round || (c as any).round === group.current_round) && !c.is_pay_ahead && !(c as any).isPayAhead)
+        .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+      const creditBalance = Number(m.credit_balance || (m as any).creditBalance || 0);
+      const totalEffectivePaid = paidForRound + creditBalance;
+      const remaining = Math.max(0, required - totalEffectivePaid);
+      const isFullyPaid = totalEffectivePaid >= required;
+      const isPayAhead = groupContribs
+        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (((c.round_number || (c as any).round) > group.current_round) || c.is_pay_ahead || (c as any).isPayAhead)).length > 0
+        || (paidForRound > 0 && groupContribs.filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (c.round_number === group.current_round || (c as any).round === group.current_round)).length > 1)
+        || (isFullyPaid && creditBalance > 0);
+      const payAheadAmount = groupContribs
+        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (((c.round_number || (c as any).round) > group.current_round) || c.is_pay_ahead || (c as any).isPayAhead))
+        .reduce((s, c) => s + Number(c.amount || 0), 0) || (isPayAhead ? creditBalance : 0);
+
+      const hasContributed = isFullyPaid;
       const hasPacked = this.isMemberPacked(groupId, m.id, group.current_round);
       const current_round_status = hasPacked ? 'packed' : (hasContributed ? 'contributed' : 'pending_contribution');
-      const totalContributed = this.data.contributions
-        .filter(c => c.group_id === groupId && c.member_id === m.id && c.status === 'Paid')
+      const totalContributed = groupContribs
+        .filter(c => c.member_id === m.id && c.status === 'Paid')
         .reduce((sum, c) => sum + c.amount, 0);
 
       const sched = scheduleMap.get(m.position);
@@ -3373,7 +3384,8 @@ class Database {
         hasPacked,
         virtual_account_name: vaName,
         virtual_account_number: vaNumber,
-        credit_balance: Number(m.credit_balance || 0),
+        credit_balance: creditBalance,
+        creditBalance,
         payment_type: m.payment_type || 'bank_transfer',
         next_round_consent: m.next_round_consent,
         scheduledPackDate,
@@ -3384,7 +3396,14 @@ class Database {
         verification_type: userProf?.verification_type || 'BVN',
         verification_masked: maskedV,
         verification_status: 'Verified',
-        joined_at: m.joined_at
+        joined_at: m.joined_at,
+        required,
+        paidForRound,
+        totalEffectivePaid,
+        remaining,
+        isFullyPaid,
+        isPayAhead,
+        payAheadAmount
       };
     });
 
@@ -3491,6 +3510,7 @@ class Database {
       earningsHistory,
       withdrawals,
       transactions,
+      contributions: groupContribs,
       adminBankDetails: {
         bank_name: adminProfile?.bank_name || '',
         account_number: adminProfile?.account_number || '',

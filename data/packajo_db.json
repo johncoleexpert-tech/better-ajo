@@ -328,6 +328,92 @@
         }
       ],
       "packedRounds": []
+    },
+    {
+      "id": "test_grp_pack_ahead",
+      "group_name": "OLOPA AJO AHEAD TEST",
+      "admin_id": "admin_123",
+      "admin_name": "Admin Test",
+      "contribution_amount": 20000,
+      "packing_amount": 100000,
+      "packing_fee": 3000,
+      "member_limit": 5,
+      "current_round": 1,
+      "cycle_type": "daily",
+      "status": "active",
+      "created_at": "2026-10-03T09:39:47.677Z",
+      "packingSchedule": [
+        {
+          "user_id": "u_ahead_1",
+          "member_id": "m_ahead_1",
+          "user_name": "Member Ahead 1",
+          "position": 1,
+          "scheduled_date": "2026-10-03",
+          "status": "packed",
+          "cycle": 1,
+          "is_packed": true,
+          "packed_at": "2026-10-03T09:39:47.699Z"
+        },
+        {
+          "user_id": "u_ahead_2",
+          "member_id": "m_ahead_2",
+          "user_name": "Member Ahead 2",
+          "position": 2,
+          "scheduled_date": "2026-10-04",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "u_ahead_3",
+          "member_id": "m_ahead_3",
+          "user_name": "Member Ahead 3",
+          "position": 3,
+          "scheduled_date": "2026-10-05",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "u_ahead_4",
+          "member_id": "m_ahead_4",
+          "user_name": "Member Ahead 4",
+          "position": 4,
+          "scheduled_date": "2026-10-06",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "u_ahead_5",
+          "member_id": "m_ahead_5",
+          "user_name": "Member Ahead 5",
+          "position": 5,
+          "scheduled_date": "2026-10-07",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        }
+      ],
+      "withdrawalFee": 3000,
+      "superAdminRevenue": 1000,
+      "groupAdminRevenue": 2000,
+      "group_admin_revenue": 2000,
+      "availableBalance": 2000,
+      "available_balance": 2000,
+      "commissionBalance": 2000,
+      "commission_balance": 2000,
+      "withdrawableBalance": 2000,
+      "withdrawable_balance": 2000,
+      "admin_commission_balance": 2000,
+      "totalEarnings": 2000,
+      "total_earnings": 2000,
+      "packedRounds": [
+        "pck_1791020387699_m_ahead_1"
+      ],
+      "current_packer_index": 2,
+      "next_scheduled_date": "2026-10-04",
+      "next_packer_id": "u_ahead_2"
     }
   ],
   "group_members": [
@@ -440,11 +526,160 @@
       "whatsapp_number": "08069702564",
       "groupId": "grp_1790934569043_a9pj",
       "hasPackedThisRound": false
+    },
+    {
+      "id": "m_ahead_1",
+      "group_id": "test_grp_pack_ahead",
+      "user_id": "u_ahead_1",
+      "full_name": "Member Ahead 1",
+      "phone": "08099999991",
+      "position": 1,
+      "packing_position": 1,
+      "status": "active",
+      "current_round_status": "packed",
+      "joined_at": "2026-10-03T09:39:47.677Z",
+      "credit_balance": 0,
+      "hasPackedThisRound": true
+    },
+    {
+      "id": "m_ahead_2",
+      "group_id": "test_grp_pack_ahead",
+      "user_id": "u_ahead_2",
+      "full_name": "Member Ahead 2",
+      "phone": "08099999992",
+      "position": 2,
+      "packing_position": 2,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-10-03T09:39:47.677Z",
+      "credit_balance": 0
+    },
+    {
+      "id": "m_ahead_3",
+      "group_id": "test_grp_pack_ahead",
+      "user_id": "u_ahead_3",
+      "full_name": "Member Ahead 3",
+      "phone": "08099999993",
+      "position": 3,
+      "packing_position": 3,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-10-03T09:39:47.677Z",
+      "credit_balance": 0
+    },
+    {
+      "id": "m_ahead_4",
+      "group_id": "test_grp_pack_ahead",
+      "user_id": "u_ahead_4",
+      "full_name": "Member Ahead 4",
+      "phone": "08099999994",
+      "position": 4,
+      "packing_position": 4,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-10-03T09:39:47.677Z",
+      "credit_balance": 0
+    },
+    {
+      "id": "m_ahead_5",
+      "group_id": "test_grp_pack_ahead",
+      "user_id": "u_ahead_5",
+      "full_name": "Member Ahead 5",
+      "phone": "08099999995",
+      "position": 5,
+      "packing_position": 5,
+      "status": "active",
+      "current_round_status": "pending_contribution",
+      "joined_at": "2026-10-03T09:39:47.677Z",
+      "credit_balance": 0
     }
   ],
-  "contributions": [],
-  "pack_transactions": [],
-  "commissions": [],
+  "contributions": [
+    {
+      "id": "c_m_ahead_1",
+      "group_id": "test_grp_pack_ahead",
+      "member_id": "m_ahead_1",
+      "user_id": "u_ahead_1",
+      "round_number": 1,
+      "amount": 20000,
+      "status": "Paid",
+      "created_at": "2026-10-03T09:39:47.677Z"
+    },
+    {
+      "id": "c_m_ahead_2",
+      "group_id": "test_grp_pack_ahead",
+      "member_id": "m_ahead_2",
+      "user_id": "u_ahead_2",
+      "round_number": 1,
+      "amount": 20000,
+      "status": "Paid",
+      "created_at": "2026-10-03T09:39:47.677Z"
+    },
+    {
+      "id": "c_m_ahead_3",
+      "group_id": "test_grp_pack_ahead",
+      "member_id": "m_ahead_3",
+      "user_id": "u_ahead_3",
+      "round_number": 1,
+      "amount": 20000,
+      "status": "Paid",
+      "created_at": "2026-10-03T09:39:47.677Z"
+    },
+    {
+      "id": "c_m_ahead_4",
+      "group_id": "test_grp_pack_ahead",
+      "member_id": "m_ahead_4",
+      "user_id": "u_ahead_4",
+      "round_number": 1,
+      "amount": 20000,
+      "status": "Paid",
+      "created_at": "2026-10-03T09:39:47.677Z"
+    },
+    {
+      "id": "c_m_ahead_5",
+      "group_id": "test_grp_pack_ahead",
+      "member_id": "m_ahead_5",
+      "user_id": "u_ahead_5",
+      "round_number": 1,
+      "amount": 20000,
+      "status": "Paid",
+      "created_at": "2026-10-03T09:39:47.677Z"
+    }
+  ],
+  "pack_transactions": [
+    {
+      "id": "pck_1791020387699_m_ahead_1",
+      "group_id": "test_grp_pack_ahead",
+      "member_id": "m_ahead_1",
+      "user_id": "u_ahead_1",
+      "member_name": "Member Ahead 1",
+      "round_number": 1,
+      "packing_amount": 100000,
+      "packing_fee": 3000,
+      "withdrawalFee": 3000,
+      "member_amount": 97000,
+      "memberPayout": 97000,
+      "status": "completed",
+      "created_at": "2026-10-03T09:39:47.699Z"
+    }
+  ],
+  "commissions": [
+    {
+      "id": "com_1791020387699_pck_1791020387699_m_ahead_1",
+      "group_id": "test_grp_pack_ahead",
+      "pack_transaction_id": "pck_1791020387699_m_ahead_1",
+      "packing_fee": 3000,
+      "withdrawalFee": 3000,
+      "admin_amount": 2000,
+      "groupAdminShare": 2000,
+      "super_admin_amount": 1000,
+      "superAdminShare": 1000,
+      "stream": "packing_commission",
+      "type": "packing_commission",
+      "recipient_role": "GROUP_ADMIN",
+      "created_at": "2026-10-03T09:39:47.699Z"
+    }
+  ],
   "withdrawals": [],
   "payments": [],
   "otps": [],
@@ -504,38 +739,68 @@
       },
       "ip_address": "127.0.0.1",
       "created_at": "2026-09-30T07:26:44.417Z"
+    },
+    {
+      "id": "aud_1791020387703_wknyn",
+      "event_type": "GROUP_PACK_COMPLETED",
+      "user_id": "u_ahead_1",
+      "group_id": "test_grp_pack_ahead",
+      "details": {
+        "round_number": 1,
+        "member_name": "Member Ahead 1",
+        "packing_amount": 100000,
+        "packing_fee": 3000,
+        "member_amount": 97000,
+        "admin_commission": 2000,
+        "super_admin_commission": 1000
+      },
+      "created_at": "2026-10-03T09:39:47.703Z"
     }
   ],
   "support_messages": [],
   "group_notifications": [],
-  "superAdminRevenue": 1334,
-  "groupAdminRevenue": 2666,
+  "superAdminRevenue": 2334,
+  "groupAdminRevenue": 4666,
   "superAdminEarnings": {
-    "totalEarnings": 0,
-    "available_balance": 0,
-    "total_earned": 0,
+    "totalEarnings": 1000,
+    "available_balance": 1000,
+    "total_earned": 1000,
     "total_withdrawn": 0,
     "totalWithdrawn": 0,
-    "lifetimeEarned": 0,
+    "lifetimeEarned": 1000,
     "personalPlatformFeesMerged": true,
     "pending_withdrawals": 0,
     "breakdown": [],
     "history": [],
-    "updated_at": "2026-10-02T10:35:25.745Z"
+    "updated_at": "2026-10-03T09:39:47.676Z"
   },
   "super_admin_wallet": {
-    "total_gross_earnings": 0,
+    "total_gross_earnings": 1000,
     "total_withdrawn": 0,
-    "available_balance": 0,
+    "available_balance": 1000,
     "breakdown": {
       "reg_600_total": 0,
       "contrib_60_total": 0,
-      "packing_33_total": 0,
+      "packing_33_total": 1000,
       "withdrawal_1_6_total": 0
     },
-    "updated_at": "2026-10-02T10:35:25.745Z"
+    "updated_at": "2026-10-03T09:39:47.703Z"
   },
-  "admin_revenue_ledger": [],
+  "admin_revenue_ledger": [
+    {
+      "id": "rev_1791020387703_b6x14",
+      "date": "2026-10-03T09:39:47.703Z",
+      "type": "packing_33",
+      "group_or_user": "Group: OLOPA AJO AHEAD TEST",
+      "group_id": "test_grp_pack_ahead",
+      "gross_amount": 3000,
+      "fee_amount": 1000,
+      "balance_after": 1000,
+      "reference": "pck_1791020387699_m_ahead_1",
+      "description": "33.33% Share of Group Packing Fee (Total Fee: ₦3,000)",
+      "created_at": "2026-10-03T09:39:47.703Z"
+    }
+  ],
   "personal_transactions": [],
   "super_admin_transactions": [],
   "transactions": []

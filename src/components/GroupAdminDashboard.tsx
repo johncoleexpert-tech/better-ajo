@@ -102,11 +102,58 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const [copiedVaNumId, setCopiedVaNumId] = useState<string | null>(null);
   const [copiedVaNameId, setCopiedVaNameId] = useState<string | null>(null);
 
+  const [isProcessingPack, setIsProcessingPack] = useState(false);
+
   const openSimulateModal = (m: GroupAdminMemberItem) => {
     setSimulatingMember(m);
-    const expected = (data?.group?.contribution_amount || 10000) + 60;
-    setSimulateAmount(expected.toString());
+    const req = Number(data?.group?.contribution_amount || 20000);
+    const curRound = Number(data?.group?.current_round || 1);
+    const contribs = Array.isArray(data?.contributions) ? data.contributions : [];
+    const paidForRound = contribs
+      .filter((c: any) =>
+        (c.member_id === m.id || c.memberId === m.id) &&
+        (c.round_number === curRound || c.round === curRound) &&
+        !c.is_pay_ahead &&
+        !c.isPayAhead
+      )
+      .reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+    const credit = Number(m.creditBalance ?? m.credit_balance ?? 0);
+    const totalEffective = paidForRound + credit;
+    const remaining = Math.max(0, req - totalEffective);
+    const isFullyPaid = totalEffective >= req;
+
+    // If fully paid, default to req for pay-ahead. If partially paid, default to remaining balance. If unpaid, default to req.
+    const defaultAmount = isFullyPaid ? req : (remaining > 0 ? remaining : req);
+    setSimulateAmount(defaultAmount.toString());
     setSimulateError(null);
+  };
+
+  const handleAdminPackCurrentMember = async () => {
+    const packer = data?.currentPacker;
+    if (!packer) return;
+    try {
+      setIsProcessingPack(true);
+      const res = await fetch(`/api/groups/${groupId}/pack`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': currentUser.id
+        },
+        body: JSON.stringify({
+          memberId: packer.id
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Packing execution failed');
+      }
+      showToast(json.message || `Packing completed for ${packer.full_name}!`);
+      fetchDashboardData();
+    } catch (err: any) {
+      showToast(err.message || 'Error processing packing');
+    } finally {
+      setIsProcessingPack(false);
+    }
   };
 
   const handleConfirmSimulatePayment = async (e: React.FormEvent) => {
@@ -556,6 +603,77 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const safeEarningsHistory = Array.isArray(earningsHistory) ? earningsHistory : [];
   const safeMembers = Array.isArray(members) ? members : [];
 
+  // 1. CONTRIBUTION TRACKING - Part Payment + Pay Ahead (Generic for any group)
+  const contributions: any[] = Array.isArray(data?.contributions) ? data.contributions : [];
+  const required = Number(group.contribution_amount || (group as any).contributionAmount || 20000);
+  const currentRound = Number(group.current_round || 1);
+  const nextRound = currentRound + 1;
+  const groupMembers = safeMembers;
+  const totalCount = groupMembers.length;
+
+  const memberStatusList = groupMembers.map((m) => {
+    const memberId = m.id;
+    const paidForRound = contributions
+      .filter((c: any) =>
+        (c.member_id === memberId || c.memberId === memberId) &&
+        (c.round_number === currentRound || c.round === currentRound) &&
+        !c.is_pay_ahead &&
+        !c.isPayAhead
+      )
+      .reduce((s: number, c: any) => s + Number(c.amount || 0), 0);
+
+    const creditBalance = Number(m.creditBalance ?? m.credit_balance ?? 0);
+    const totalEffectivePaid = paidForRound + creditBalance;
+    const remaining = Math.max(0, required - totalEffectivePaid);
+    const isFullyPaid = totalEffectivePaid >= required;
+
+    const isPayAhead =
+      contributions.filter(
+        (c: any) =>
+          (c.member_id === memberId || c.memberId === memberId) &&
+          ((c.round_number || c.round) > currentRound || c.is_pay_ahead || c.isPayAhead)
+      ).length > 0 ||
+      (paidForRound > 0 &&
+        contributions.filter(
+          (c: any) =>
+            (c.member_id === memberId || c.memberId === memberId) &&
+            (c.round_number === currentRound || c.round === currentRound)
+        ).length > 1) ||
+      (isFullyPaid && creditBalance > 0);
+
+    const payAheadAmount =
+      creditBalance > 0
+        ? creditBalance
+        : contributions
+            .filter(
+              (c: any) =>
+                (c.member_id === memberId || c.memberId === memberId) &&
+                ((c.round_number || c.round) > currentRound || c.is_pay_ahead || c.isPayAhead)
+            )
+            .reduce((s: number, c: any) => s + Number(c.amount || 0), 0) || (isPayAhead ? required : 0);
+
+    return {
+      member: m,
+      paidForRound,
+      creditBalance,
+      totalEffectivePaid,
+      remaining,
+      isFullyPaid,
+      isPayAhead,
+      payAheadAmount
+    };
+  });
+
+  const memberStatusMap = new Map(memberStatusList.map((item) => [item.member.id, item]));
+
+  // 3. PACK ACTIVATION LOGIC - CRITICAL: CanPack = EVERY member in group has totalEffectivePaid >= required
+  const paidMembersCount = memberStatusList.filter((item) => item.isFullyPaid).length;
+  const unpaidMembersCount = totalCount - paidMembersCount;
+  const allMembersPaid = totalCount > 0 && memberStatusList.every((item) => item.isFullyPaid);
+  const packTooltip = !allMembersPaid
+    ? `Cannot pack - ${unpaidMembersCount} members not fully paid yet. ${paidMembersCount}/${totalCount} paid`
+    : 'All members have paid for this round. Ready to pack!';
+
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Toast Notification */}
@@ -991,6 +1109,51 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         return <span className="font-extrabold text-slate-700">Scheduled</span>;
                       })()}
                     </div>
+
+                    {/* Pack Action Button on Current Packer Card */}
+                    <div className="mt-3 pt-2.5 border-t border-emerald-100/80">
+                      {currentPacker.current_round_status === 'packed' || (members.find(m => m.id === currentPacker.id) as any)?.hasPacked ? (
+                        <div className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                          <span>Packed for Round {group.current_round} ✓</span>
+                        </div>
+                      ) : (
+                        <div className="relative group/pack w-full">
+                          <button
+                            onClick={handleAdminPackCurrentMember}
+                            disabled={!allMembersPaid || isProcessingPack}
+                            title={packTooltip}
+                            className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl font-black text-xs transition ${
+                              allMembersPaid
+                                ? 'bg-[#008751] hover:bg-[#007345] text-white shadow-md shadow-[#008751]/20 cursor-pointer animate-pulse'
+                                : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                            }`}
+                          >
+                            {isProcessingPack ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <span>PACKING IN PROGRESS...</span>
+                              </>
+                            ) : allMembersPaid ? (
+                              <>
+                                <Coins className="h-4 w-4" />
+                                <span>Ready to Pack</span>
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="h-4 w-4" />
+                                <span>Cannot pack - {unpaidMembersCount} members not fully paid yet ({paidMembersCount}/{totalCount} paid)</span>
+                              </>
+                            )}
+                          </button>
+                          {!allMembersPaid && (
+                            <div className="hidden group-hover/pack:block absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl whitespace-nowrap z-30 pointer-events-none">
+                              {packTooltip}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <p className="text-xs text-slate-500 py-4">No packer active for this round yet.</p>
@@ -1156,35 +1319,105 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <div className="space-y-1">
-                            {!m.hasContributed && creditBal <= 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-rose-100 text-rose-700 border border-rose-200">
-                                Unpaid - ₦0 of {formatNaira(group.contribution_amount)} paid
-                              </span>
-                            ) : m.hasContributed && creditBal <= 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                PAID - {formatNaira(group.contribution_amount)}
-                              </span>
-                            ) : m.hasContributed && creditBal > 0 ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-blue-100 text-blue-800 border border-blue-200">
-                                PAID AHEAD - {formatNaira(group.contribution_amount)} | Credit: {formatNaira(creditBal)}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wide bg-amber-100 text-amber-800 border border-amber-200">
-                                PARTIAL - {formatNaira(creditBal)} of {formatNaira(group.contribution_amount)} paid
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const statusItem = memberStatusMap.get(m.id);
+                            const isFullyPaid = statusItem?.isFullyPaid ?? m.isFullyPaid;
+                            const isPayAhead = statusItem?.isPayAhead ?? m.isPayAhead;
+                            const totalEff = statusItem?.totalEffectivePaid ?? ((m.paidForRound || 0) + Number(m.credit_balance || 0));
+                            const rem = statusItem?.remaining ?? Math.max(0, required - totalEff);
+                            const creditBal = statusItem?.creditBalance ?? Number(m.credit_balance || 0);
+                            const payAheadAmt = statusItem?.payAheadAmount ?? (creditBal > 0 ? creditBal : required);
+
+                            if (isFullyPaid && isPayAhead) {
+                              return (
+                                <div className="space-y-1">
+                                  <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold inline-block">
+                                    PAID - {formatNaira(required)}
+                                  </div>
+                                  <div className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-xs font-bold inline-block">
+                                    CREDITED - {formatNaira(payAheadAmt)} Pay Ahead R{nextRound}
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            if (isFullyPaid) {
+                              return (
+                                <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-bold inline-block">
+                                  PAID - {formatNaira(required)}
+                                </div>
+                              );
+                            }
+
+                            if (totalEff > 0) {
+                              return (
+                                <div className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold inline-block">
+                                  PART PAID {formatNaira(totalEff)} / {formatNaira(required)} - Remaining {formatNaira(rem)}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-xs font-bold inline-block">
+                                PENDING - {formatNaira(required)}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-                          <button
-                            onClick={() => openSimulateModal(m)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] transition cursor-pointer border border-amber-200 shadow-2xs"
-                            title="Simulate Moniepoint payment for this member"
-                          >
-                            <Coins className="h-3 w-3 text-amber-600" />
-                            <span>SIMULATE PAYMENT (Test)</span>
-                          </button>
+                          {(() => {
+                            const statusItem = memberStatusMap.get(m.id);
+                            const isFullyPaid = statusItem?.isFullyPaid ?? m.isFullyPaid;
+                            const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
+
+                            let simLabel = 'SIMULATE PAYMENT (Test)';
+                            let simClass = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
+                            let simIconClass = 'text-amber-600';
+
+                            if (isFullyPaid) {
+                              simLabel = 'SIMULATE PAY AHEAD (Test)';
+                              simClass = 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200';
+                              simIconClass = 'text-blue-600';
+                            } else if (rem > 0 && rem < required) {
+                              simLabel = `SIMULATE BALANCE (Test) ${formatNaira(rem)}`;
+                              simClass = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
+                              simIconClass = 'text-amber-600';
+                            }
+
+                            return (
+                              <button
+                                onClick={() => openSimulateModal(m)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer border shadow-2xs ${simClass}`}
+                                title="Simulate payment for this member"
+                              >
+                                <Coins className={`h-3 w-3 ${simIconClass}`} />
+                                <span>{simLabel}</span>
+                              </button>
+                            );
+                          })()}
+                          {/* Pack Button for Current Packer in table */}
+                          {currentPacker && m.id === currentPacker.id && !m.hasPacked && currentPacker.current_round_status !== 'packed' && (
+                            allMembersPaid ? (
+                              <button
+                                onClick={handleAdminPackCurrentMember}
+                                disabled={isProcessingPack}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#008751] hover:bg-[#007345] text-white font-black text-[11px] transition cursor-pointer shadow-xs animate-pulse"
+                                title="Ready to Pack"
+                              >
+                                <Coins className="h-3 w-3" />
+                                <span>{isProcessingPack ? 'Packing...' : 'Ready to Pack'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                disabled
+                                title={packTooltip}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-400 font-bold text-[11px] border border-slate-200 cursor-not-allowed"
+                              >
+                                <Lock className="h-3 w-3" />
+                                <span>Cannot pack ({paidMembersCount}/{totalCount} paid)</span>
+                              </button>
+                            )
+                          )}
                           <button
                             onClick={() => handleCopyVirtualAccount(m)}
                             className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition cursor-pointer ${
@@ -2058,17 +2291,35 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               </button>
             </div>
 
-            <div className="mb-4 p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 space-y-1">
-              <p className="font-bold">Moniepoint Test Virtual Account Simulator</p>
-              <p className="text-[11px] text-amber-800">
-                Required for this cycle: <strong>{formatNaira(group.contribution_amount)}</strong> contribution + <strong>₦60</strong> platform fee = <strong>{formatNaira(group.contribution_amount + 60)}</strong>.
-              </p>
-              <ul className="text-[10px] text-amber-800 list-disc list-inside space-y-0.5 pt-1">
-                <li>Exact ({formatNaira(group.contribution_amount + 60)}): Marks as <strong>PAID</strong></li>
-                <li>Extra ({formatNaira(group.contribution_amount + 60 + 1000)}): Marks <strong>PAID AHEAD</strong> & adds extra to Credit Wallet</li>
-                <li>Less than {formatNaira(group.contribution_amount + 60)}: Marks as <strong>PARTIAL</strong> and adds to Credit Wallet</li>
-              </ul>
-            </div>
+            {(() => {
+              const statusItem = simulatingMember ? memberStatusMap.get(simulatingMember.id) : null;
+              const isFullyPaid = statusItem?.isFullyPaid ?? simulatingMember?.isFullyPaid;
+              const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
+
+              return (
+                <div className="mb-4 p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 space-y-1">
+                  <p className="font-bold">Moniepoint Test Virtual Account Simulator</p>
+                  <p className="text-[11px] text-amber-800">
+                    Round {currentRound} required contribution: <strong>{formatNaira(required)}</strong>.
+                  </p>
+                  {isFullyPaid && (
+                    <p className="text-[11px] font-bold text-blue-800 bg-blue-50/80 p-2 rounded-xl border border-blue-200 mt-1">
+                      ✓ Member is ALREADY fully paid for Round {currentRound}. Any payment now will be CREDITED as PAY AHEAD for Round {nextRound}.
+                    </p>
+                  )}
+                  {!isFullyPaid && rem > 0 && rem < required && (
+                    <p className="text-[11px] font-bold text-amber-900 bg-amber-100/70 p-2 rounded-xl border border-amber-200 mt-1">
+                      Partially paid. Remaining balance to complete Round {currentRound} is {formatNaira(rem)}.
+                    </p>
+                  )}
+                  {!isFullyPaid && rem === required && (
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      Full contribution required to mark member as Paid for Round {currentRound}.
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             {simulateError && (
               <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
@@ -2090,26 +2341,46 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                     required
                     value={simulateAmount}
                     onChange={(e) => setSimulateAmount(e.target.value)}
-                    placeholder="e.g. 50060"
+                    placeholder="e.g. 20000"
                     className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono font-bold text-sm text-slate-900 outline-none transition"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 mt-2">
                   <span className="text-[11px] text-slate-400 font-medium mr-1">Presets:</span>
-                  {[
-                    { label: 'Exact (Fee Incl.)', val: group.contribution_amount + 60 },
-                    { label: '+₦1,000 Credit', val: group.contribution_amount + 60 + 1000 },
-                    { label: 'Partial', val: Math.round(group.contribution_amount / 2) }
-                  ].map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setSimulateAmount(p.val.toString())}
-                      className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition border border-slate-200"
-                    >
-                      {p.label}: ₦{p.val.toLocaleString()}
-                    </button>
-                  ))}
+                  {(() => {
+                    const statusItem = simulatingMember ? memberStatusMap.get(simulatingMember.id) : null;
+                    const isFullyPaid = statusItem?.isFullyPaid ?? simulatingMember?.isFullyPaid;
+                    const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
+
+                    const presets = isFullyPaid
+                      ? [
+                          { label: 'Pay Ahead (Full)', val: required },
+                          { label: 'Overpay Credit', val: required + 1000 },
+                          { label: 'Part Pay Ahead', val: Math.round(required / 2) }
+                        ]
+                      : rem > 0 && rem < required
+                      ? [
+                          { label: 'Remaining Balance', val: rem },
+                          { label: 'Full Round Amount', val: required },
+                          { label: 'Part of Balance', val: Math.round(rem / 2) }
+                        ]
+                      : [
+                          { label: 'Full Contribution', val: required },
+                          { label: 'Part Payment (50%)', val: Math.round(required / 2) },
+                          { label: 'Overpay (+₦1,000 Credit)', val: required + 1000 }
+                        ];
+
+                    return presets.map((p, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setSimulateAmount(p.val.toString())}
+                        className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition border border-slate-200"
+                      >
+                        {p.label}: ₦{p.val.toLocaleString()}
+                      </button>
+                    ));
+                  })()}
                 </div>
               </div>
 

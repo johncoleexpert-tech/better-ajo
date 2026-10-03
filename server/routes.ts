@@ -2269,40 +2269,57 @@ apiRouter.post(['/virtual-account/transfer', '/moniepoint/webhook'], async (req:
 });
 
 // Dedicated Member Test Payment Simulator Route
-// Used by Group Admin to test payment verification, packing, and commission flow
+// Supports Part Payment, Overpay Credit, and Pay Ahead
 apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req: Request, res: Response) => {
   try {
     const { groupId, memberId } = req.params;
     const { amount } = req.body;
     const authUserId = (req.headers['x-user-id'] as string) || req.body.admin_id;
 
-    const group = db.getGroupById(groupId);
+    let group = db.getGroupById(groupId);
+    if (!group) {
+      try {
+        const fsGroup = await fsGetGroupById(groupId);
+        if (fsGroup) {
+          db.syncRemoteGroup(fsGroup);
+          group = fsGroup;
+        }
+      } catch {}
+    }
     if (!group) return res.status(404).json({ error: 'Group not found.' });
 
     if (authUserId && group.admin_id !== authUserId) {
       return res.status(403).json({ error: 'Only the group admin can simulate member payments.' });
     }
 
-    const member = db.data.group_members.find(m => m.id === memberId && m.group_id === groupId);
+    await syncGroupFinancialsFromFirestore(groupId);
+
+    const member = db.data.group_members.find(m => m.id === memberId && (m.group_id === groupId || (m as any).groupId === groupId));
     if (!member) return res.status(404).json({ error: 'Member not found in this group.' });
 
-    const numAmount = Number(amount);
+    const numAmount = Number(amount) || group.contribution_amount;
     if (isNaN(numAmount) || numAmount <= 0) {
       return res.status(400).json({ error: 'Valid payment amount is required.' });
     }
 
-    const ref = `SIM_PAY_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const currentRound = group.current_round;
+    const nextRound = currentRound + 1;
+    const required = group.contribution_amount;
 
-    // Process contribution payment
-    const result = db.processContributionPayment(
-      groupId,
-      memberId,
-      numAmount,
-      'simulation',
-      ref,
-      undefined,
-      member.user_id
+    // Check existing contributions for currentRound (excluding pay-aheads for future rounds)
+    const existingContribs = db.data.contributions.filter(
+      c => (c.group_id === groupId || (c as any).groupId === groupId) &&
+           (c.member_id === memberId || (c as any).memberId === memberId) &&
+           (c.round_number === currentRound || (c as any).round === currentRound) &&
+           !c.is_pay_ahead && !(c as any).isPayAhead
     );
+    const paidForRound = existingContribs.reduce((s, c) => s + Number(c.amount || 0), 0);
+    const currentCredit = Number(member.credit_balance || (member as any).creditBalance || 0);
+    const totalEffectivePaid = paidForRound + currentCredit;
+
+    const ref = `SIM_PAY_${Date.now()}_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const nowIso = new Date().toISOString();
+    let toastMessage = '';
 
     // Save payment record in central payments
     const paymentRec = db.createPendingPayment(
@@ -2315,20 +2332,206 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
     paymentRec.virtual_account_number = member.virtual_account_number;
     paymentRec.virtual_account_name = member.virtual_account_name;
     paymentRec.payment_type = 'simulation';
-    db.save();
 
-    syncPaymentRecordToSupabase(paymentRec).catch(() => {});
-    fsUpsertPayment(paymentRec).catch(() => {});
+    // 1. If member already fully paid for currentRound: This is PAY AHEAD for next round
+    if (totalEffectivePaid >= required) {
+      const newCreditBalance = currentCredit + numAmount;
+      member.credit_balance = newCreditBalance;
+      (member as any).creditBalance = newCreditBalance;
+      (member as any).payAheadForRound = nextRound;
+      (member as any).is_pay_ahead = true;
+      (member as any).isPayAhead = true;
 
-    return res.json({
-      success: true,
-      result,
-      message: result.isPaid
-        ? (result.isPaidAhead
-            ? `Payment of ₦${numAmount.toLocaleString()} confirmed! Marked PAID AHEAD (Credit: ₦${result.newCreditBalance.toLocaleString()}).`
-            : `Payment of ₦${numAmount.toLocaleString()} confirmed! Marked PAID.`)
-        : `Partial payment of ₦${numAmount.toLocaleString()} credited to Credit Wallet. Remaining ₦${result.remainingRequired.toLocaleString()} required.`
-    });
+      const payAheadContrib: Contribution = {
+        id: `cnt_${Date.now()}_${member.id}_r${nextRound}`,
+        group_id: groupId,
+        groupId: groupId,
+        member_id: member.id,
+        memberId: member.id,
+        user_id: member.user_id,
+        round_number: nextRound,
+        round: nextRound,
+        amount: numAmount,
+        status: 'Paid',
+        reference: ref,
+        paid_at: nowIso,
+        created_at: nowIso,
+        is_pay_ahead: true,
+        isPayAhead: true,
+        isCredit: true,
+        note: `Pay Ahead - Already paid for Round ${currentRound}`,
+        payment_type: 'simulation'
+      };
+
+      db.data.contributions.push(payAheadContrib);
+      db.save();
+
+      fsUpsertContribution(payAheadContrib).catch(() => {});
+      fsUpsertGroupMember(member).catch(() => {});
+      fsUpsertPayment(paymentRec).catch(() => {});
+
+      toastMessage = `Credited ₦${numAmount.toLocaleString()} as Pay Ahead for Round ${nextRound}`;
+
+      return res.json({
+        success: true,
+        message: toastMessage,
+        type: 'pay_ahead',
+        creditBalance: newCreditBalance,
+        isPayAhead: true,
+        isFullyPaid: true,
+        member
+      });
+    }
+
+    // 2. Member has NOT yet fully paid currentRound
+    const remaining = Math.max(0, required - totalEffectivePaid);
+
+    if (numAmount < remaining) {
+      // Part payment
+      const newRemaining = remaining - numAmount;
+      const partContrib: Contribution = {
+        id: `cnt_${Date.now()}_${member.id}_r${currentRound}`,
+        group_id: groupId,
+        groupId: groupId,
+        member_id: member.id,
+        memberId: member.id,
+        user_id: member.user_id,
+        round_number: currentRound,
+        round: currentRound,
+        amount: numAmount,
+        status: 'Partial',
+        reference: ref,
+        paid_at: nowIso,
+        created_at: nowIso,
+        payment_type: 'simulation'
+      };
+
+      db.data.contributions.push(partContrib);
+      member.current_round_status = 'pending_contribution';
+      (member as any).hasContributed = false;
+      db.save();
+
+      fsUpsertContribution(partContrib).catch(() => {});
+      fsUpsertGroupMember(member).catch(() => {});
+      fsUpsertPayment(paymentRec).catch(() => {});
+
+      toastMessage = `Part Payment ₦${numAmount.toLocaleString()} received, Remaining ₦${newRemaining.toLocaleString()}`;
+
+      return res.json({
+        success: true,
+        message: toastMessage,
+        type: 'part_payment',
+        remaining: newRemaining,
+        isFullyPaid: false,
+        member
+      });
+    } else if (numAmount > remaining) {
+      // Overpay: remaining goes to current round, extra goes to next round credit
+      const overpay = numAmount - remaining;
+      const paidContrib: Contribution = {
+        id: `cnt_${Date.now()}_${member.id}_r${currentRound}`,
+        group_id: groupId,
+        groupId: groupId,
+        member_id: member.id,
+        memberId: member.id,
+        user_id: member.user_id,
+        round_number: currentRound,
+        round: currentRound,
+        amount: remaining,
+        status: 'Paid',
+        reference: ref,
+        paid_at: nowIso,
+        created_at: nowIso,
+        payment_type: 'simulation'
+      };
+      db.data.contributions.push(paidContrib);
+
+      const nextRoundCredit: Contribution = {
+        id: `cnt_${Date.now()}_${member.id}_r${nextRound}_overpay`,
+        group_id: groupId,
+        groupId: groupId,
+        member_id: member.id,
+        memberId: member.id,
+        user_id: member.user_id,
+        round_number: nextRound,
+        round: nextRound,
+        amount: overpay,
+        status: 'Paid',
+        reference: `${ref}_credit`,
+        paid_at: nowIso,
+        created_at: nowIso,
+        is_pay_ahead: true,
+        isPayAhead: true,
+        isCredit: true,
+        note: `Overpay credit from Round ${currentRound}`,
+        payment_type: 'simulation'
+      };
+      db.data.contributions.push(nextRoundCredit);
+
+      const newCreditBalance = currentCredit + overpay;
+      member.credit_balance = newCreditBalance;
+      (member as any).creditBalance = newCreditBalance;
+      (member as any).payAheadForRound = nextRound;
+      (member as any).is_pay_ahead = true;
+      (member as any).isPayAhead = true;
+      (member as any).hasContributed = true;
+      member.current_round_status = 'contributed';
+      db.save();
+
+      fsUpsertContribution(paidContrib).catch(() => {});
+      fsUpsertContribution(nextRoundCredit).catch(() => {});
+      fsUpsertGroupMember(member).catch(() => {});
+      fsUpsertPayment(paymentRec).catch(() => {});
+
+      toastMessage = `Paid ₦${remaining.toLocaleString()} for today, Credited ₦${overpay.toLocaleString()} for tomorrow`;
+
+      return res.json({
+        success: true,
+        message: toastMessage,
+        type: 'overpay',
+        creditBalance: newCreditBalance,
+        isFullyPaid: true,
+        isPayAhead: true,
+        member
+      });
+    } else {
+      // Exact payment: amount === remaining
+      const paidContrib: Contribution = {
+        id: `cnt_${Date.now()}_${member.id}_r${currentRound}`,
+        group_id: groupId,
+        groupId: groupId,
+        member_id: member.id,
+        memberId: member.id,
+        user_id: member.user_id,
+        round_number: currentRound,
+        round: currentRound,
+        amount: remaining,
+        status: 'Paid',
+        reference: ref,
+        paid_at: nowIso,
+        created_at: nowIso,
+        payment_type: 'simulation'
+      };
+      db.data.contributions.push(paidContrib);
+
+      (member as any).hasContributed = true;
+      member.current_round_status = 'contributed';
+      db.save();
+
+      fsUpsertContribution(paidContrib).catch(() => {});
+      fsUpsertGroupMember(member).catch(() => {});
+      fsUpsertPayment(paymentRec).catch(() => {});
+
+      toastMessage = `Contribution of ₦${remaining.toLocaleString()} completed for Round ${currentRound}!`;
+
+      return res.json({
+        success: true,
+        message: toastMessage,
+        type: 'full_payment',
+        isFullyPaid: true,
+        member
+      });
+    }
   } catch (err: any) {
     return res.status(500).json({ error: err.message || 'Payment simulation failed' });
   }
@@ -3060,12 +3263,13 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
       return res.status(400).json({ error: 'You are not an active member of this group.' });
     }
 
-    // Strict authentication check: authUserId must be present and match member account
+    // Strict authentication check: authUserId must be present and match member account or group admin
     const authUserId = (req.headers['x-user-id'] as string) || req.body.userId;
     if (!authUserId) {
       return res.status(401).json({ error: 'Authentication required. Please log in.' });
     }
-    if (member.user_id !== authUserId) {
+    const isAdmin = group.admin_id === authUserId;
+    if (member.user_id !== authUserId && !isAdmin) {
       return res.status(403).json({ error: 'Security violation: You can only pack for your own member account.' });
     }
 
@@ -3131,19 +3335,21 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
       });
     }
 
-    // 9. Verify Authorization (Password preferred, OTP fallback)
-    const memberProfile = db.getProfileById(member.user_id);
-    if (password) {
-      if (memberProfile?.password && memberProfile.password !== password) {
-        return res.status(400).json({ error: 'Incorrect login password. Please enter your valid password to authorize packing.' });
+    // 9. Verify Authorization (Admin override or Password/OTP for member)
+    if (!isAdmin) {
+      const memberProfile = db.getProfileById(member.user_id);
+      if (password) {
+        if (memberProfile?.password && memberProfile.password !== password) {
+          return res.status(400).json({ error: 'Incorrect login password. Please enter your valid password to authorize packing.' });
+        }
+      } else if (otp_code) {
+        const isValidOtp = await verifyOtpSafe(member.phone, otp_code, 'pack_now');
+        if (!isValidOtp) {
+          return res.status(400).json({ error: 'Invalid or expired OTP.' });
+        }
+      } else if (memberProfile?.password) {
+        return res.status(400).json({ error: 'Your login password is required to authorize packing.' });
       }
-    } else if (otp_code) {
-      const isValidOtp = await verifyOtpSafe(member.phone, otp_code, 'pack_now');
-      if (!isValidOtp) {
-        return res.status(400).json({ error: 'Invalid or expired OTP.' });
-      }
-    } else if (memberProfile?.password) {
-      return res.status(400).json({ error: 'Your login password is required to authorize packing.' });
     }
 
     // 10. Execute server-side pack calculation and state advancement

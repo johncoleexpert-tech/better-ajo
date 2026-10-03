@@ -829,7 +829,7 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
                   className="flex items-center space-x-2 px-6 py-3.5 rounded-xl bg-[#008751] hover:bg-[#007043] text-white font-black text-sm shadow-lg shadow-[#008751]/30 active:scale-95 transition cursor-pointer animate-pulse"
                 >
                   <Coins className="h-5 w-5" />
-                  <span>PACK NOW</span>
+                  <span>Ready to Pack</span>
                 </button>
               ) : (
                 <div className="flex flex-col items-end gap-1">
@@ -839,6 +839,10 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
                       {(() => {
                         const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
                         const targetDate = cycleInfo?.scheduledPackDate || (userMember as any)?.scheduledPackDate || '';
+                        if (!cycleStatus.allPaid) {
+                          const unpaidCount = Math.max(0, (cycleStatus.totalRequired || 0) - (cycleStatus.paidCount || 0));
+                          return `Cannot pack - ${unpaidCount} members not fully paid yet. ${cycleStatus.paidCount}/${cycleStatus.totalRequired} paid`;
+                        }
                         if (targetDate > today) {
                           return `SCHEDULED • ${cycleInfo?.scheduledPackDateDisplay || targetDate}`;
                         } else if (targetDate < today && targetDate !== '') {
@@ -855,25 +859,14 @@ export const GroupDashboard: React.FC<GroupDashboardProps> = ({
                       !hasUserContributed
                         ? "Please pay your contribution before packing"
                         : !cycleStatus.allPaid
-                        ? `Waiting for all members to contribute (${cycleStatus.paidCount}/${cycleStatus.totalRequired} paid)`
+                        ? `Cannot pack - ${(cycleStatus.totalRequired || 0) - (cycleStatus.paidCount || 0)} members not fully paid yet. ${cycleStatus.paidCount}/${cycleStatus.totalRequired} paid`
                         : !isCycleOpen
                         ? `Scheduled for ${cycleInfo?.scheduledPackDateDisplay}`
                         : "Packing is locked"
                     }
                   >
                     <Lock className="h-4 w-4 text-slate-400" />
-                    <span>
-                      {(() => {
-                        const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
-                        const targetDate = cycleInfo?.scheduledPackDate || '';
-                        if (targetDate > today) {
-                          return `SCHEDULED (${cycleInfo?.scheduledPackDateDisplay || targetDate})`;
-                        } else if (targetDate < today && targetDate !== '') {
-                          return 'OVERDUE (DISABLED)';
-                        }
-                        return 'PACK NOW (DISABLED)';
-                      })()}
-                    </span>
+                    <span>Cannot Pack Yet</span>
                   </button>
                 </div>
               )

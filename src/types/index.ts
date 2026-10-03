@@ -169,9 +169,13 @@ export interface GroupMember {
 export interface Contribution {
   id: string;
   group_id: string;
+  groupId?: string;
   member_id: string;
+  memberId?: string;
   user_id: string;
+  userId?: string;
   round_number: number;
+  round?: number;
   cycle_number?: number;
   calendar_date?: string;
   amount: number;
@@ -180,10 +184,14 @@ export interface Contribution {
   virtual_account_number?: string;
   virtual_account_name?: string;
   credit_balance?: number;
+  creditBalance?: number;
   payment_type?: string;
   paid_at?: string;
   created_at?: string;
   is_pay_ahead?: boolean;
+  isPayAhead?: boolean;
+  isCredit?: boolean;
+  note?: string;
   credited_for_date?: string;
 }
 
@@ -331,12 +339,21 @@ export interface GroupAdminMemberItem {
   virtual_account_number?: string;
   virtual_account_name?: string;
   credit_balance?: number;
+  creditBalance?: number;
   payment_type?: string;
   verification_type?: 'NIN' | 'BVN';
   verification_masked?: string;
   verification_status?: string;
   joined_at: string;
   next_round_consent?: boolean;
+  required?: number;
+  paidForRound?: number;
+  totalEffectivePaid?: number;
+  remaining?: number;
+  isFullyPaid?: boolean;
+  isPayAhead?: boolean;
+  payAheadAmount?: number;
+  payAheadForRound?: number;
 }
 
 export interface GroupAdminEarningItem {
@@ -378,6 +395,7 @@ export interface GroupAdminDashboardData {
     account_number: string;
     account_name: string;
   };
+  contributions?: Contribution[];
   cycleStatus?: {
     totalRequired: number;
     paidCount: number;
