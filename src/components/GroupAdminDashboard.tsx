@@ -397,12 +397,52 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
     }, (err) => console.warn('[Group Doc Snapshot Warn]:', err));
 
+    // 6. Contributions query by group_id
+    const qContribs1 = query(collection(db, 'contributions'), where('group_id', '==', effectiveGroupId));
+    const unsubContribs1 = onSnapshot(qContribs1, (snap) => {
+      if (!snap.empty) {
+        const cList: any[] = [];
+        snap.docs.forEach(d => cList.push({ ...d.data(), id: d.id }));
+        setData(prev => {
+          if (!prev) return prev;
+          const merged = [...(prev.contributions || [])];
+          cList.forEach(c => {
+            const idx = merged.findIndex(existing => existing.id === c.id || (existing.reference && existing.reference === c.reference));
+            if (idx >= 0) merged[idx] = { ...merged[idx], ...c };
+            else merged.push(c);
+          });
+          return { ...prev, contributions: merged };
+        });
+      }
+    }, (err) => console.warn('[Contribs1 Snapshot Warn]:', err));
+
+    // 7. Contributions query by groupId
+    const qContribs2 = query(collection(db, 'contributions'), where('groupId', '==', effectiveGroupId));
+    const unsubContribs2 = onSnapshot(qContribs2, (snap) => {
+      if (!snap.empty) {
+        const cList: any[] = [];
+        snap.docs.forEach(d => cList.push({ ...d.data(), id: d.id }));
+        setData(prev => {
+          if (!prev) return prev;
+          const merged = [...(prev.contributions || [])];
+          cList.forEach(c => {
+            const idx = merged.findIndex(existing => existing.id === c.id || (existing.reference && existing.reference === c.reference));
+            if (idx >= 0) merged[idx] = { ...merged[idx], ...c };
+            else merged.push(c);
+          });
+          return { ...prev, contributions: merged };
+        });
+      }
+    }, (err) => console.warn('[Contribs2 Snapshot Warn]:', err));
+
     return () => {
       unsubSub();
       unsubQ1();
       unsubQ2();
       unsubQ3();
       unsubGroupDoc();
+      unsubContribs1();
+      unsubContribs2();
     };
   }, [groupId, currentUser.id]);
 
@@ -631,8 +671,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       contributions.filter(
         (c: any) =>
           (c.member_id === memberId || c.memberId === memberId) &&
-          ((c.round_number || c.round) > currentRound || c.is_pay_ahead || c.isPayAhead)
+          ((c.round_number || c.round) > currentRound || c.is_pay_ahead || c.isPayAhead || c.type === 'pay_ahead')
       ).length > 0 ||
+      Boolean((m as any).payAheadForRound && (m as any).payAheadForRound > currentRound) ||
+      Boolean((m as any).isPayAhead || (m as any).is_pay_ahead) ||
       (paidForRound > 0 &&
         contributions.filter(
           (c: any) =>
@@ -648,7 +690,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             .filter(
               (c: any) =>
                 (c.member_id === memberId || c.memberId === memberId) &&
-                ((c.round_number || c.round) > currentRound || c.is_pay_ahead || c.isPayAhead)
+                ((c.round_number || c.round) > currentRound || c.is_pay_ahead || c.isPayAhead || c.type === 'pay_ahead')
             )
             .reduce((s: number, c: any) => s + Number(c.amount || 0), 0) || (isPayAhead ? required : 0);
 
@@ -1368,29 +1410,34 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                           {(() => {
                             const statusItem = memberStatusMap.get(m.id);
                             const isFullyPaid = statusItem?.isFullyPaid ?? m.isFullyPaid;
+                            const isPayAhead = statusItem?.isPayAhead ?? m.isPayAhead;
                             const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
 
                             let simLabel = 'SIMULATE PAYMENT (Test)';
                             let simClass = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
-                            let simIconClass = 'text-amber-600';
+                            let simIcon = <Coins className="h-3 w-3 text-amber-600" />;
 
-                            if (isFullyPaid) {
+                            if (isFullyPaid && isPayAhead) {
+                              simLabel = 'CREDITED ✓';
+                              simClass = 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200';
+                              simIcon = <CheckCircle2 className="h-3 w-3 text-blue-600" />;
+                            } else if (isFullyPaid) {
                               simLabel = 'SIMULATE PAY AHEAD (Test)';
                               simClass = 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200';
-                              simIconClass = 'text-blue-600';
+                              simIcon = <Coins className="h-3 w-3 text-blue-600" />;
                             } else if (rem > 0 && rem < required) {
                               simLabel = `SIMULATE BALANCE (Test) ${formatNaira(rem)}`;
                               simClass = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
-                              simIconClass = 'text-amber-600';
+                              simIcon = <Coins className="h-3 w-3 text-amber-600" />;
                             }
 
                             return (
                               <button
                                 onClick={() => openSimulateModal(m)}
                                 className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer border shadow-2xs ${simClass}`}
-                                title="Simulate payment for this member"
+                                title={isFullyPaid && isPayAhead ? "Already credited for next round. Click to add more advance payment." : "Simulate payment for this member"}
                               >
-                                <Coins className={`h-3 w-3 ${simIconClass}`} />
+                                {simIcon}
                                 <span>{simLabel}</span>
                               </button>
                             );

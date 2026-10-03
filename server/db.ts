@@ -2163,8 +2163,14 @@ class Database {
   }
 
   getGroupMembers(groupId: string): GroupMember[] {
+    const group = this.getGroupById(groupId);
+    const adminId = group?.admin_id;
     return this.data.group_members
-      .filter(m => m.group_id === groupId && m.status === 'active')
+      .filter(m =>
+        (m.group_id === groupId || (m as any).groupId === groupId) &&
+        m.status === 'active' &&
+        (!adminId || (m.user_id !== adminId && (m as any).userId !== adminId))
+      )
       .sort((a, b) => a.position - b.position);
   }
 
@@ -3237,8 +3243,11 @@ class Database {
       Number((group as any).admin_commission_balance || 0)
     );
 
-    // 5. Total gross earned
-    let total = Math.max(commissionEarned, packTxsEarned, storedTotal, explicitAvailable);
+    // 5. Total gross earned strictly from admin packing commissions
+    const earnedFromPacks = Math.max(commissionEarned, packTxsEarned);
+    let total = earnedFromPacks > 0
+      ? earnedFromPacks
+      : (packTxs.length > 0 ? packTxs.length * 10000 : 0);
 
     // 6. Calculate withdrawals strictly for this group
     const withdrawals = (this.data.withdrawals || []).filter(
@@ -3339,11 +3348,13 @@ class Database {
       const remaining = Math.max(0, required - totalEffectivePaid);
       const isFullyPaid = totalEffectivePaid >= required;
       const isPayAhead = groupContribs
-        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (((c.round_number || (c as any).round) > group.current_round) || c.is_pay_ahead || (c as any).isPayAhead)).length > 0
+        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (((c.round_number || (c as any).round) > group.current_round) || c.is_pay_ahead || (c as any).isPayAhead || (c as any).type === 'pay_ahead')).length > 0
+        || Boolean((m as any).payAheadForRound && (m as any).payAheadForRound > group.current_round)
+        || Boolean((m as any).isPayAhead || (m as any).is_pay_ahead)
         || (paidForRound > 0 && groupContribs.filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (c.round_number === group.current_round || (c as any).round === group.current_round)).length > 1)
         || (isFullyPaid && creditBalance > 0);
       const payAheadAmount = groupContribs
-        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (((c.round_number || (c as any).round) > group.current_round) || c.is_pay_ahead || (c as any).isPayAhead))
+        .filter(c => (c.member_id === m.id || (c as any).memberId === m.id) && (((c.round_number || (c as any).round) > group.current_round) || c.is_pay_ahead || (c as any).isPayAhead || (c as any).type === 'pay_ahead'))
         .reduce((s, c) => s + Number(c.amount || 0), 0) || (isPayAhead ? creditBalance : 0);
 
       const hasContributed = isFullyPaid;
@@ -3518,6 +3529,8 @@ class Database {
       },
       cycleStatus: this.getCycleContributionStatus(groupId, group.current_round),
       cycleInfo,
+      canPackNow: memberItems.length > 0 && memberItems.every(m => m.isFullyPaid),
+      allMembersPaid: memberItems.length > 0 && memberItems.every(m => m.isFullyPaid),
       packingSchedule: schedule,
       upcomingPackers: this.getUpcomingPackers(group)
     };

@@ -1231,7 +1231,22 @@ export async function fsGetMembersForGroup(groupId: string): Promise<GroupMember
       }
     } catch {}
 
-    const members = Array.from(memberMap.values());
+    // Filter out group admin so admin never appears as a member
+    let adminId: string | null = null;
+    let adminEmail: string | null = null;
+    try {
+      const gDoc = await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(groupId).get();
+      if (gDoc.exists) {
+        adminId = gDoc.data()?.admin_id || gDoc.data()?.adminId || null;
+        adminEmail = gDoc.data()?.admin_email || gDoc.data()?.adminEmail || null;
+      }
+    } catch {}
+
+    const members = Array.from(memberMap.values()).filter(m => {
+      if (adminId && (m.user_id === adminId || (m as any).userId === adminId)) return false;
+      if (adminEmail && ((m as any).email === adminEmail || m.user_id === adminEmail)) return false;
+      return true;
+    });
     return members.sort((a, b) => (a.position || 0) - (b.position || 0));
   } catch (err) {
     console.warn(`Firestore getMembersForGroup error (${groupId}):`, err);

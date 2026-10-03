@@ -1721,10 +1721,23 @@ apiRouter.post('/groups/create', async (req: Request, res: Response) => {
     }
 
     // If bulk members provided, create them in strict packing order 1..limit
+    // Exclude group admin so admin is NEVER a contributor/member
+    const adminUser = db.getProfileById(admin_id);
+    const adminEmail = adminUser?.email;
+    const adminPhone = (adminUser?.phone || result.adminProfile?.phone) ? normalizeNigerianPhone(adminUser?.phone || result.adminProfile?.phone || '') : '';
+
+    const membersOnly = (Array.isArray(members) ? members : []).filter((m: any) => {
+      const cleanP = normalizeNigerianPhone(m.phone || '');
+      return (m as any).userId !== admin_id &&
+             m.user_id !== admin_id &&
+             (adminEmail ? (m as any).email !== adminEmail : true) &&
+             (adminPhone ? cleanP !== adminPhone : true);
+    });
+
     const createdMembers: GroupMember[] = [];
-    if (Array.isArray(members) && members.length > 0) {
-      for (let i = 0; i < members.length; i++) {
-        const m = members[i];
+    if (membersOnly.length > 0) {
+      for (let i = 0; i < membersOnly.length; i++) {
+        const m = membersOnly[i];
         const packingPosition = i + 1;
         const cleanPhone = normalizeNigerianPhone(m.phone);
         const cleanAcc = m.account_number.toString().replace(/\D/g, '');
@@ -2359,6 +2372,8 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         is_pay_ahead: true,
         isPayAhead: true,
         isCredit: true,
+        type: 'pay_ahead',
+        creditNote: `Pay Ahead R${nextRound}`,
         note: `Pay Ahead - Already paid for Round ${currentRound}`,
         payment_type: 'simulation'
       };
@@ -2463,6 +2478,8 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         is_pay_ahead: true,
         isPayAhead: true,
         isCredit: true,
+        type: 'pay_ahead',
+        creditNote: `Overpay credit from Round ${currentRound}`,
         note: `Overpay credit from Round ${currentRound}`,
         payment_type: 'simulation'
       };
@@ -3589,6 +3606,39 @@ async function syncGroupFinancialsFromFirestore(groupId: string): Promise<void> 
           db.data.group_members.push(m);
         }
       }
+    }
+
+    // 5. Sync contributions from Firestore so contributions and pay-ahead credit persist across reloads
+    try {
+      const contribSnap1 = await fsDb.collection('contributions')
+        .where('group_id', '==', groupId)
+        .get();
+      contribSnap1.forEach(d => {
+        const cData = d.data() as any;
+        const effectiveId = cData.id || d.id;
+        const existingIdx = db.data.contributions.findIndex(existing => existing.id === effectiveId || (existing.reference && existing.reference === cData.reference));
+        if (existingIdx >= 0) {
+          db.data.contributions[existingIdx] = { ...db.data.contributions[existingIdx], ...cData, id: effectiveId };
+        } else {
+          db.data.contributions.push({ ...cData, id: effectiveId });
+        }
+      });
+
+      const contribSnap2 = await fsDb.collection('contributions')
+        .where('groupId', '==', groupId)
+        .get();
+      contribSnap2.forEach(d => {
+        const cData = d.data() as any;
+        const effectiveId = cData.id || d.id;
+        const existingIdx = db.data.contributions.findIndex(existing => existing.id === effectiveId || (existing.reference && existing.reference === cData.reference));
+        if (existingIdx >= 0) {
+          db.data.contributions[existingIdx] = { ...db.data.contributions[existingIdx], ...cData, id: effectiveId };
+        } else {
+          db.data.contributions.push({ ...cData, id: effectiveId });
+        }
+      });
+    } catch (cErr) {
+      console.warn('[SyncGroupFinancials Contributions Warn]:', cErr);
     }
   } catch (err) {
     console.warn('[SyncGroupFinancials Warn]:', err);

@@ -191,6 +191,8 @@ export interface Contribution {
   is_pay_ahead?: boolean;
   isPayAhead?: boolean;
   isCredit?: boolean;
+  type?: string;
+  creditNote?: string;
   note?: string;
   credited_for_date?: string;
 }
@@ -405,6 +407,8 @@ export interface GroupAdminDashboardData {
     isPaused?: boolean;
   };
   cycleInfo?: GroupCycleInfo;
+  canPackNow?: boolean;
+  allMembersPaid?: boolean;
   packingSchedule?: PackingScheduleItem[];
   upcomingPackers?: PackingScheduleItem[];
 }

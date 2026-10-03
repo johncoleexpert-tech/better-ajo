@@ -207,13 +207,21 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
       setLoading(true);
       setError(null);
 
-      // Sanitize member rows
-      const sanitizedMembers = members.map((m) => ({
-        full_name: m.full_name.trim(),
-        phone: m.phone.replace(/\D/g, ''),
-        account_number: m.account_number.replace(/\D/g, ''),
-        bank_name: (m.bank_name || 'Moniepoint MFB').trim()
-      }));
+      // Sanitize member rows - exclude admin so admin is strictly not a contributor
+      const adminPhone = currentUser?.phone ? currentUser.phone.replace(/\D/g, '') : '';
+      const adminEmail = currentUser?.email;
+      const membersOnly = members
+        .map((m) => ({
+          full_name: m.full_name.trim(),
+          phone: m.phone.replace(/\D/g, ''),
+          account_number: m.account_number.replace(/\D/g, ''),
+          bank_name: (m.bank_name || 'Moniepoint MFB').trim()
+        }))
+        .filter((m) => {
+          if (adminPhone && m.phone === adminPhone) return false;
+          if (adminEmail && (m as any).email === adminEmail) return false;
+          return true;
+        });
 
       const data = await apiRequest('/api/groups/create', {
         method: 'POST',
@@ -227,7 +235,7 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
           packing_fee: Number(packingFee),
           whatsapp_number: whatsappNumber,
           whatsappNumber: whatsappNumber,
-          members: sanitizedMembers
+          members: membersOnly
         })
       });
 
@@ -243,7 +251,7 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
                 position: m.position || (idx + 1),
                 status: 'active'
               }))
-            : sanitizedMembers.map((m, idx) => ({
+            : membersOnly.map((m, idx) => ({
                 ...m,
                 id: `mem_${groupRef.id}_${idx + 1}_${Math.random().toString(36).substring(2, 6)}`,
                 groupId: groupRef.id,
