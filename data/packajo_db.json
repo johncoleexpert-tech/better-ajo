@@ -330,72 +330,20 @@
       "packedRounds": []
     },
     {
-      "id": "test_grp_pack_ahead",
-      "group_name": "OLOPA AJO AHEAD TEST",
-      "admin_id": "admin_123",
-      "admin_name": "Admin Test",
-      "contribution_amount": 20000,
-      "packing_amount": 100000,
+      "id": "grp_adugbo_jao",
+      "name": "ADUGBO JAO",
+      "group_name": "ADUGBO JAO",
+      "admin_id": "usr_superadmin_realheaven",
+      "admin_name": "Super Administrator",
+      "contribution_amount": 50000,
+      "packing_amount": 250000,
       "packing_fee": 3000,
+      "withdrawalFee": 3000,
       "member_limit": 5,
       "current_round": 1,
       "cycle_type": "daily",
       "status": "active",
-      "created_at": "2026-10-03T09:39:47.677Z",
-      "packingSchedule": [
-        {
-          "user_id": "u_ahead_1",
-          "member_id": "m_ahead_1",
-          "user_name": "Member Ahead 1",
-          "position": 1,
-          "scheduled_date": "2026-10-03",
-          "status": "packed",
-          "cycle": 1,
-          "is_packed": true,
-          "packed_at": "2026-10-03T09:39:47.699Z"
-        },
-        {
-          "user_id": "u_ahead_2",
-          "member_id": "m_ahead_2",
-          "user_name": "Member Ahead 2",
-          "position": 2,
-          "scheduled_date": "2026-10-04",
-          "status": "scheduled",
-          "cycle": 1,
-          "is_packed": false
-        },
-        {
-          "user_id": "u_ahead_3",
-          "member_id": "m_ahead_3",
-          "user_name": "Member Ahead 3",
-          "position": 3,
-          "scheduled_date": "2026-10-05",
-          "status": "scheduled",
-          "cycle": 1,
-          "is_packed": false
-        },
-        {
-          "user_id": "u_ahead_4",
-          "member_id": "m_ahead_4",
-          "user_name": "Member Ahead 4",
-          "position": 4,
-          "scheduled_date": "2026-10-06",
-          "status": "scheduled",
-          "cycle": 1,
-          "is_packed": false
-        },
-        {
-          "user_id": "u_ahead_5",
-          "member_id": "m_ahead_5",
-          "user_name": "Member Ahead 5",
-          "position": 5,
-          "scheduled_date": "2026-10-07",
-          "status": "scheduled",
-          "cycle": 1,
-          "is_packed": false
-        }
-      ],
-      "withdrawalFee": 3000,
+      "created_at": "2026-10-04T12:00:00.000Z",
       "superAdminRevenue": 1000,
       "groupAdminRevenue": 2000,
       "group_admin_revenue": 2000,
@@ -408,12 +356,66 @@
       "admin_commission_balance": 2000,
       "totalEarnings": 2000,
       "total_earnings": 2000,
+      "packingSchedule": [
+        {
+          "user_id": "usr_glry_jaye",
+          "member_id": "mem_adugbo_1",
+          "user_name": "GLRY JAYE",
+          "position": 1,
+          "scheduled_date": "2026-10-04",
+          "status": "packed",
+          "cycle": 1,
+          "is_packed": true,
+          "packed_at": "2026-10-04T14:12:00.000Z"
+        },
+        {
+          "user_id": "usr_adugbo_2",
+          "member_id": "mem_adugbo_2",
+          "user_name": "MEMBER2 ADUGBO",
+          "position": 2,
+          "scheduled_date": "2026-10-05",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "usr_adugbo_3",
+          "member_id": "mem_adugbo_3",
+          "user_name": "MEMBER3 ADUGBO",
+          "position": 3,
+          "scheduled_date": "2026-10-06",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "usr_adugbo_4",
+          "member_id": "mem_adugbo_4",
+          "user_name": "MEMBER4 ADUGBO",
+          "position": 4,
+          "scheduled_date": "2026-10-07",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        },
+        {
+          "user_id": "usr_adugbo_5",
+          "member_id": "mem_adugbo_5",
+          "user_name": "MEMBER5 ADUGBO",
+          "position": 5,
+          "scheduled_date": "2026-10-08",
+          "status": "scheduled",
+          "cycle": 1,
+          "is_packed": false
+        }
+      ],
       "packedRounds": [
-        "pck_1791020387699_m_ahead_1"
+        "pck_adugbo_1"
       ],
       "current_packer_index": 2,
-      "next_scheduled_date": "2026-10-04",
-      "next_packer_id": "u_ahead_2"
+      "next_scheduled_date": "2026-10-05",
+      "next_packer_id": "usr_adugbo_2",
+      "currentRound": 1
     }
   ],
   "group_members": [
@@ -528,146 +530,155 @@
       "hasPackedThisRound": false
     },
     {
-      "id": "m_ahead_1",
-      "group_id": "test_grp_pack_ahead",
-      "user_id": "u_ahead_1",
-      "full_name": "Member Ahead 1",
-      "phone": "08099999991",
+      "id": "mem_adugbo_1",
+      "group_id": "grp_adugbo_jao",
+      "groupId": "grp_adugbo_jao",
+      "user_id": "usr_glry_jaye",
+      "full_name": "GLRY JAYE",
+      "phone": "08077777771",
       "position": 1,
       "packing_position": 1,
       "status": "active",
       "current_round_status": "packed",
-      "joined_at": "2026-10-03T09:39:47.677Z",
+      "joined_at": "2026-10-04T12:00:00.000Z",
       "credit_balance": 0,
       "hasPackedThisRound": true
     },
     {
-      "id": "m_ahead_2",
-      "group_id": "test_grp_pack_ahead",
-      "user_id": "u_ahead_2",
-      "full_name": "Member Ahead 2",
-      "phone": "08099999992",
+      "id": "mem_adugbo_2",
+      "group_id": "grp_adugbo_jao",
+      "groupId": "grp_adugbo_jao",
+      "user_id": "usr_adugbo_2",
+      "full_name": "MEMBER2 ADUGBO",
+      "phone": "08077777772",
       "position": 2,
       "packing_position": 2,
       "status": "active",
       "current_round_status": "pending_contribution",
-      "joined_at": "2026-10-03T09:39:47.677Z",
-      "credit_balance": 0
+      "joined_at": "2026-10-04T12:00:00.000Z",
+      "credit_balance": 0,
+      "hasPackedThisRound": false
     },
     {
-      "id": "m_ahead_3",
-      "group_id": "test_grp_pack_ahead",
-      "user_id": "u_ahead_3",
-      "full_name": "Member Ahead 3",
-      "phone": "08099999993",
+      "id": "mem_adugbo_3",
+      "group_id": "grp_adugbo_jao",
+      "groupId": "grp_adugbo_jao",
+      "user_id": "usr_adugbo_3",
+      "full_name": "MEMBER3 ADUGBO",
+      "phone": "08077777773",
       "position": 3,
       "packing_position": 3,
       "status": "active",
       "current_round_status": "pending_contribution",
-      "joined_at": "2026-10-03T09:39:47.677Z",
-      "credit_balance": 0
+      "joined_at": "2026-10-04T12:00:00.000Z",
+      "credit_balance": 0,
+      "hasPackedThisRound": false
     },
     {
-      "id": "m_ahead_4",
-      "group_id": "test_grp_pack_ahead",
-      "user_id": "u_ahead_4",
-      "full_name": "Member Ahead 4",
-      "phone": "08099999994",
+      "id": "mem_adugbo_4",
+      "group_id": "grp_adugbo_jao",
+      "groupId": "grp_adugbo_jao",
+      "user_id": "usr_adugbo_4",
+      "full_name": "MEMBER4 ADUGBO",
+      "phone": "08077777774",
       "position": 4,
       "packing_position": 4,
       "status": "active",
       "current_round_status": "pending_contribution",
-      "joined_at": "2026-10-03T09:39:47.677Z",
-      "credit_balance": 0
+      "joined_at": "2026-10-04T12:00:00.000Z",
+      "credit_balance": 0,
+      "hasPackedThisRound": false
     },
     {
-      "id": "m_ahead_5",
-      "group_id": "test_grp_pack_ahead",
-      "user_id": "u_ahead_5",
-      "full_name": "Member Ahead 5",
-      "phone": "08099999995",
+      "id": "mem_adugbo_5",
+      "group_id": "grp_adugbo_jao",
+      "groupId": "grp_adugbo_jao",
+      "user_id": "usr_adugbo_5",
+      "full_name": "MEMBER5 ADUGBO",
+      "phone": "08077777775",
       "position": 5,
       "packing_position": 5,
       "status": "active",
       "current_round_status": "pending_contribution",
-      "joined_at": "2026-10-03T09:39:47.677Z",
-      "credit_balance": 0
+      "joined_at": "2026-10-04T12:00:00.000Z",
+      "credit_balance": 0,
+      "hasPackedThisRound": false
     }
   ],
   "contributions": [
     {
-      "id": "c_m_ahead_1",
-      "group_id": "test_grp_pack_ahead",
-      "member_id": "m_ahead_1",
-      "user_id": "u_ahead_1",
+      "id": "c_mem_adugbo_1",
+      "group_id": "grp_adugbo_jao",
+      "member_id": "mem_adugbo_1",
+      "user_id": "usr_glry_jaye",
       "round_number": 1,
-      "amount": 20000,
+      "amount": 50000,
       "status": "Paid",
-      "created_at": "2026-10-03T09:39:47.677Z"
+      "created_at": "2026-10-04T12:30:00.000Z"
     },
     {
-      "id": "c_m_ahead_2",
-      "group_id": "test_grp_pack_ahead",
-      "member_id": "m_ahead_2",
-      "user_id": "u_ahead_2",
+      "id": "c_mem_adugbo_2",
+      "group_id": "grp_adugbo_jao",
+      "member_id": "mem_adugbo_2",
+      "user_id": "usr_adugbo_2",
       "round_number": 1,
-      "amount": 20000,
+      "amount": 50000,
       "status": "Paid",
-      "created_at": "2026-10-03T09:39:47.677Z"
+      "created_at": "2026-10-04T12:30:00.000Z"
     },
     {
-      "id": "c_m_ahead_3",
-      "group_id": "test_grp_pack_ahead",
-      "member_id": "m_ahead_3",
-      "user_id": "u_ahead_3",
+      "id": "c_mem_adugbo_3",
+      "group_id": "grp_adugbo_jao",
+      "member_id": "mem_adugbo_3",
+      "user_id": "usr_adugbo_3",
       "round_number": 1,
-      "amount": 20000,
+      "amount": 50000,
       "status": "Paid",
-      "created_at": "2026-10-03T09:39:47.677Z"
+      "created_at": "2026-10-04T12:30:00.000Z"
     },
     {
-      "id": "c_m_ahead_4",
-      "group_id": "test_grp_pack_ahead",
-      "member_id": "m_ahead_4",
-      "user_id": "u_ahead_4",
+      "id": "c_mem_adugbo_4",
+      "group_id": "grp_adugbo_jao",
+      "member_id": "mem_adugbo_4",
+      "user_id": "usr_adugbo_4",
       "round_number": 1,
-      "amount": 20000,
+      "amount": 50000,
       "status": "Paid",
-      "created_at": "2026-10-03T09:39:47.677Z"
+      "created_at": "2026-10-04T12:30:00.000Z"
     },
     {
-      "id": "c_m_ahead_5",
-      "group_id": "test_grp_pack_ahead",
-      "member_id": "m_ahead_5",
-      "user_id": "u_ahead_5",
+      "id": "c_mem_adugbo_5",
+      "group_id": "grp_adugbo_jao",
+      "member_id": "mem_adugbo_5",
+      "user_id": "usr_adugbo_5",
       "round_number": 1,
-      "amount": 20000,
+      "amount": 50000,
       "status": "Paid",
-      "created_at": "2026-10-03T09:39:47.677Z"
+      "created_at": "2026-10-04T12:30:00.000Z"
     }
   ],
   "pack_transactions": [
     {
-      "id": "pck_1791020387699_m_ahead_1",
-      "group_id": "test_grp_pack_ahead",
-      "member_id": "m_ahead_1",
-      "user_id": "u_ahead_1",
-      "member_name": "Member Ahead 1",
+      "id": "pck_adugbo_1",
+      "group_id": "grp_adugbo_jao",
+      "member_id": "mem_adugbo_1",
+      "user_id": "usr_glry_jaye",
+      "member_name": "GLRY JAYE",
       "round_number": 1,
-      "packing_amount": 100000,
+      "packing_amount": 250000,
       "packing_fee": 3000,
       "withdrawalFee": 3000,
-      "member_amount": 97000,
-      "memberPayout": 97000,
+      "member_amount": 247000,
+      "memberPayout": 247000,
       "status": "completed",
-      "created_at": "2026-10-03T09:39:47.699Z"
+      "created_at": "2026-10-04T14:12:00.000Z"
     }
   ],
   "commissions": [
     {
-      "id": "com_1791020387699_pck_1791020387699_m_ahead_1",
-      "group_id": "test_grp_pack_ahead",
-      "pack_transaction_id": "pck_1791020387699_m_ahead_1",
+      "id": "com_adugbo_1",
+      "group_id": "grp_adugbo_jao",
+      "pack_transaction_id": "pck_adugbo_1",
       "packing_fee": 3000,
       "withdrawalFee": 3000,
       "admin_amount": 2000,
@@ -677,7 +688,7 @@
       "stream": "packing_commission",
       "type": "packing_commission",
       "recipient_role": "GROUP_ADMIN",
-      "created_at": "2026-10-03T09:39:47.699Z"
+      "created_at": "2026-10-04T14:12:00.000Z"
     }
   ],
   "withdrawals": [],

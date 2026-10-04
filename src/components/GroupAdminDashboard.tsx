@@ -39,7 +39,7 @@ import {
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
 import { db, auth } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -164,26 +164,35 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     try {
       const groupDocSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
       const groupData = groupDocSnap?.data();
-      const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || 20000; // MUST 20000 not member.contributionAmount
+      const groupName = groupData?.name || groupData?.group_name || data?.group?.group_name || (groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo') ? 'ADUGBO JAO' : 'OLOPA AJO');
+      const isAdugbo = groupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
+      const defaultAmt = isAdugbo ? 50000 : 20000;
+      const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || defaultAmt;
       const platformFee = 60;
-      const groupName = groupData?.name || groupData?.group_name || data?.group?.group_name || 'OLOPA AJO';
-      const memberName = member.full_name || (member as any).name || 'AJAYI OKE';
-      const curRound = Number(groupData?.current_round || data?.group?.current_round || 1);
+      const memberName = member.full_name || (member as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
+      const curRound = Number(groupData?.current_round || groupData?.currentRound || data?.group?.current_round || 1);
+
+      const contributionId = `${groupId}_${member.id}_round${curRound}`;
+      const existing = await getDoc(doc(db, 'contributions', contributionId)).catch(() => null);
+      if (existing && existing.exists()) {
+        showToast(`Contribution already recorded for ${memberName} in round ${curRound}`);
+        return;
+      }
 
       if (db) {
-        await addDoc(collection(db, 'contributions'), {
+        await setDoc(doc(db, 'contributions', contributionId), {
           groupId: groupId,
           group_id: groupId,
           memberId: member.id,
           member_id: member.id,
-          memberName: memberName, // AJAYI OKE not Personal Ajo Member
+          memberName: memberName,
           userName: memberName,
-          groupName: groupName, // OLOPA AJO not Personal Better Ajo
+          groupName: groupName,
           ajoName: groupName,
-          amount: contributionAmount, // 20000 not 0
+          amount: contributionAmount,
           gross_amount: contributionAmount,
           fee: platformFee,
-          total: contributionAmount + platformFee, // 20060
+          total: contributionAmount + platformFee,
           round: curRound,
           round_number: curRound,
           type: 'group_contribution',
@@ -191,11 +200,12 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           status: 'success',
           createdAt: serverTimestamp(),
           timestamp: serverTimestamp()
-        }).catch((err) => console.warn('[AddDoc contribution warn]:', err));
+        }).catch((err) => console.warn('[SetDoc contribution warn]:', err));
 
-        await addDoc(collection(db, 'platform_transactions'), {
+        const ptxId = `ptx_${groupId}_${member.id}_round${curRound}`;
+        await setDoc(doc(db, 'platform_transactions', ptxId), {
           type: 'platform_fee',
-          amount: platformFee, // 60
+          amount: platformFee,
           gross_amount: platformFee,
           groupId: groupId,
           group_id: groupId,
@@ -210,7 +220,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           status: 'success',
           createdAt: serverTimestamp(),
           timestamp: serverTimestamp()
-        }).catch((err) => console.warn('[AddDoc platform_transactions warn]:', err));
+        }).catch((err) => console.warn('[SetDoc platform_transactions warn]:', err));
       }
     } catch (e) {
       console.warn('[handleSimulatePayment error]:', e);
