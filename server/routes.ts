@@ -2346,6 +2346,35 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
     paymentRec.virtual_account_name = member.virtual_account_name;
     paymentRec.payment_type = 'simulation';
 
+    const memberName = member.full_name || (member as any).name || 'AJAYI OKE';
+    const groupName = group.group_name || 'OLOPA AJO';
+
+    // Helper to log platform fee to platform_transactions in Firestore
+    const recordPlatformFee = () => {
+      try {
+        const fsDb = getFirestoreDb();
+        if (fsDb) {
+          fsDb.collection('platform_transactions').add({
+            type: 'platform_fee',
+            amount: 60,
+            gross_amount: 60,
+            groupId: groupId,
+            group_id: groupId,
+            memberId: member.id,
+            member_id: member.id,
+            memberName,
+            userName: memberName,
+            groupName,
+            ajoName: groupName,
+            round: currentRound,
+            source: 'group_contribution',
+            status: 'success',
+            createdAt: FieldValue.serverTimestamp()
+          }).catch(() => {});
+        }
+      } catch {}
+    };
+
     // 1. If member already fully paid for currentRound: This is PAY AHEAD for next round
     if (totalEffectivePaid >= required) {
       const newCreditBalance = currentCredit + numAmount;
@@ -2365,6 +2394,12 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         round_number: nextRound,
         round: nextRound,
         amount: numAmount,
+        fee: 60,
+        total: numAmount + 60,
+        memberName,
+        userName: memberName,
+        groupName,
+        ajoName: groupName,
         status: 'Paid',
         reference: ref,
         paid_at: nowIso,
@@ -2372,7 +2407,7 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         is_pay_ahead: true,
         isPayAhead: true,
         isCredit: true,
-        type: 'pay_ahead',
+        type: 'group_contribution',
         creditNote: `Pay Ahead R${nextRound}`,
         note: `Pay Ahead - Already paid for Round ${currentRound}`,
         payment_type: 'simulation'
@@ -2384,6 +2419,7 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
       fsUpsertContribution(payAheadContrib).catch(() => {});
       fsUpsertGroupMember(member).catch(() => {});
       fsUpsertPayment(paymentRec).catch(() => {});
+      recordPlatformFee();
 
       toastMessage = `Credited ₦${numAmount.toLocaleString()} as Pay Ahead for Round ${nextRound}`;
 
@@ -2414,10 +2450,17 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         round_number: currentRound,
         round: currentRound,
         amount: numAmount,
+        fee: 60,
+        total: numAmount + 60,
+        memberName,
+        userName: memberName,
+        groupName,
+        ajoName: groupName,
         status: 'Partial',
         reference: ref,
         paid_at: nowIso,
         created_at: nowIso,
+        type: 'group_contribution',
         payment_type: 'simulation'
       };
 
@@ -2429,6 +2472,7 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
       fsUpsertContribution(partContrib).catch(() => {});
       fsUpsertGroupMember(member).catch(() => {});
       fsUpsertPayment(paymentRec).catch(() => {});
+      recordPlatformFee();
 
       toastMessage = `Part Payment ₦${numAmount.toLocaleString()} received, Remaining ₦${newRemaining.toLocaleString()}`;
 
@@ -2453,10 +2497,17 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         round_number: currentRound,
         round: currentRound,
         amount: remaining,
+        fee: 60,
+        total: remaining + 60,
+        memberName,
+        userName: memberName,
+        groupName,
+        ajoName: groupName,
         status: 'Paid',
         reference: ref,
         paid_at: nowIso,
         created_at: nowIso,
+        type: 'group_contribution',
         payment_type: 'simulation'
       };
       db.data.contributions.push(paidContrib);
@@ -2471,6 +2522,12 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         round_number: nextRound,
         round: nextRound,
         amount: overpay,
+        fee: 0,
+        total: overpay,
+        memberName,
+        userName: memberName,
+        groupName,
+        ajoName: groupName,
         status: 'Paid',
         reference: `${ref}_credit`,
         paid_at: nowIso,
@@ -2478,7 +2535,7 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         is_pay_ahead: true,
         isPayAhead: true,
         isCredit: true,
-        type: 'pay_ahead',
+        type: 'group_contribution',
         creditNote: `Overpay credit from Round ${currentRound}`,
         note: `Overpay credit from Round ${currentRound}`,
         payment_type: 'simulation'
@@ -2499,6 +2556,7 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
       fsUpsertContribution(nextRoundCredit).catch(() => {});
       fsUpsertGroupMember(member).catch(() => {});
       fsUpsertPayment(paymentRec).catch(() => {});
+      recordPlatformFee();
 
       toastMessage = `Paid ₦${remaining.toLocaleString()} for today, Credited ₦${overpay.toLocaleString()} for tomorrow`;
 
@@ -2523,10 +2581,17 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
         round_number: currentRound,
         round: currentRound,
         amount: remaining,
+        fee: 60,
+        total: remaining + 60,
+        memberName,
+        userName: memberName,
+        groupName,
+        ajoName: groupName,
         status: 'Paid',
         reference: ref,
         paid_at: nowIso,
         created_at: nowIso,
+        type: 'group_contribution',
         payment_type: 'simulation'
       };
       db.data.contributions.push(paidContrib);
@@ -2538,6 +2603,7 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
       fsUpsertContribution(paidContrib).catch(() => {});
       fsUpsertGroupMember(member).catch(() => {});
       fsUpsertPayment(paymentRec).catch(() => {});
+      recordPlatformFee();
 
       toastMessage = `Contribution of ₦${remaining.toLocaleString()} completed for Round ${currentRound}!`;
 

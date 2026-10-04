@@ -195,6 +195,12 @@ export interface Contribution {
   creditNote?: string;
   note?: string;
   credited_for_date?: string;
+  fee?: number;
+  total?: number;
+  memberName?: string;
+  userName?: string;
+  groupName?: string;
+  ajoName?: string;
 }
 
 export interface GroupCycleInfo {

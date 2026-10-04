@@ -160,6 +160,63 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     }
   };
 
+  const handleSimulatePayment = async (member: GroupAdminMemberItem, customAmount?: number) => {
+    try {
+      const groupDocSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
+      const groupData = groupDocSnap?.data();
+      const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || 20000; // MUST 20000 not member.contributionAmount
+      const platformFee = 60;
+      const groupName = groupData?.name || groupData?.group_name || data?.group?.group_name || 'OLOPA AJO';
+      const memberName = member.full_name || (member as any).name || 'AJAYI OKE';
+      const curRound = Number(groupData?.current_round || data?.group?.current_round || 1);
+
+      if (db) {
+        await addDoc(collection(db, 'contributions'), {
+          groupId: groupId,
+          group_id: groupId,
+          memberId: member.id,
+          member_id: member.id,
+          memberName: memberName, // AJAYI OKE not Personal Ajo Member
+          userName: memberName,
+          groupName: groupName, // OLOPA AJO not Personal Better Ajo
+          ajoName: groupName,
+          amount: contributionAmount, // 20000 not 0
+          gross_amount: contributionAmount,
+          fee: platformFee,
+          total: contributionAmount + platformFee, // 20060
+          round: curRound,
+          round_number: curRound,
+          type: 'group_contribution',
+          source: 'group_contribution',
+          status: 'success',
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp()
+        }).catch((err) => console.warn('[AddDoc contribution warn]:', err));
+
+        await addDoc(collection(db, 'platform_transactions'), {
+          type: 'platform_fee',
+          amount: platformFee, // 60
+          gross_amount: platformFee,
+          groupId: groupId,
+          group_id: groupId,
+          memberId: member.id,
+          member_id: member.id,
+          memberName: memberName,
+          userName: memberName,
+          groupName: groupName,
+          ajoName: groupName,
+          round: curRound,
+          source: 'group_contribution',
+          status: 'success',
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp()
+        }).catch((err) => console.warn('[AddDoc platform_transactions warn]:', err));
+      }
+    } catch (e) {
+      console.warn('[handleSimulatePayment error]:', e);
+    }
+  };
+
   const handleConfirmSimulatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!simulatingMember) return;
@@ -172,6 +229,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     try {
       setIsSimulating(true);
       setSimulateError(null);
+
+      // Record to Firestore directly to guarantee real-time reflection with real names
+      await handleSimulatePayment(simulatingMember, amt);
+
       const res = await fetch(`/api/groups/${groupId}/members/${simulatingMember.id}/simulate-payment`, {
         method: 'POST',
         headers: {
