@@ -166,9 +166,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       const groupData = groupDocSnap?.data();
       const groupName = groupData?.name || groupData?.group_name || data?.group?.group_name || (groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo') ? 'ADUGBO JAO' : 'OLOPA AJO');
       const isAdugbo = groupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
-      const defaultAmt = isAdugbo ? 50000 : 20000;
-      const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || defaultAmt;
+      const defaultContrib = isAdugbo ? 50000 : 20000;
+      const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || defaultContrib;
       const platformFee = 60;
+      const totalAmount = contributionAmount + platformFee;
       const memberName = member.full_name || (member as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
       const curRound = Number(groupData?.current_round || groupData?.currentRound || data?.group?.current_round || 1);
 
@@ -180,19 +181,21 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
 
       if (db) {
+        // 1. Save contribution record - split internally, amount displays total ₦50,060
         await setDoc(doc(db, 'contributions', contributionId), {
           groupId: groupId,
           group_id: groupId,
+          groupName: groupName,
+          ajoName: groupName,
           memberId: member.id,
           member_id: member.id,
           memberName: memberName,
           userName: memberName,
-          groupName: groupName,
-          ajoName: groupName,
-          amount: contributionAmount,
-          gross_amount: contributionAmount,
-          fee: platformFee,
-          total: contributionAmount + platformFee,
+          contributionAmount: contributionAmount, // 50,000 pot
+          fee: platformFee, // 60 internal
+          total: totalAmount, // 50,060 what user paid
+          amount: totalAmount, // Display ₦50,060 single amount
+          gross_amount: totalAmount,
           round: curRound,
           round_number: curRound,
           type: 'group_contribution',
@@ -202,25 +205,42 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           timestamp: serverTimestamp()
         }).catch((err) => console.warn('[SetDoc contribution warn]:', err));
 
-        const ptxId = `ptx_${groupId}_${member.id}_round${curRound}`;
-        await setDoc(doc(db, 'platform_transactions', ptxId), {
-          type: 'platform_fee',
-          amount: platformFee,
-          gross_amount: platformFee,
+        // 2. Save platform_transactions row - shows ₦50,060 single amount with real name
+        await setDoc(doc(db, 'platform_transactions', contributionId), {
+          type: 'group_contribution',
+          displayType: 'GROUP CONTRIBUTION',
           groupId: groupId,
           group_id: groupId,
+          groupName: groupName,
+          ajoName: groupName,
           memberId: member.id,
           member_id: member.id,
           memberName: memberName,
           userName: memberName,
-          groupName: groupName,
-          ajoName: groupName,
+          amount: totalAmount, // ₦50,060 only - single amount - NO +60 label
+          gross_amount: totalAmount,
+          displayAmount: `₦${totalAmount.toLocaleString()}`,
           round: curRound,
           source: 'group_contribution',
           status: 'success',
           createdAt: serverTimestamp(),
           timestamp: serverTimestamp()
         }).catch((err) => console.warn('[SetDoc platform_transactions warn]:', err));
+
+        // 3. Internal fee to Super Admin wallet - not shown as +60 in main table
+        await setDoc(doc(db, 'platform_transactions', `${contributionId}_fee`), {
+          type: 'platform_fee',
+          groupId: groupId,
+          group_id: groupId,
+          groupName: groupName,
+          ajoName: groupName,
+          amount: platformFee, // 60 goes to right place
+          gross_amount: platformFee,
+          internal: true,
+          status: 'success',
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp()
+        }).catch((err) => console.warn('[SetDoc platform_fee warn]:', err));
       }
     } catch (e) {
       console.warn('[handleSimulatePayment error]:', e);
@@ -230,18 +250,20 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const handleConfirmSimulatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!simulatingMember) return;
-    const amt = Number(simulateAmount);
-    if (isNaN(amt) || amt <= 0) {
-      setSimulateError('Please enter a valid positive payment amount.');
-      return;
-    }
+
+    const isAdugbo = (data?.group?.group_name === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo'));
+    const baseContrib = isAdugbo ? 50000 : Number(data?.group?.contribution_amount || 20000);
+    const totalToPay = baseContrib + 60;
+    const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
+
+    if (!confirm(`Pay ₦${totalToPay.toLocaleString()} for ${memberName}?`)) return;
 
     try {
       setIsSimulating(true);
       setSimulateError(null);
 
-      // Record to Firestore directly to guarantee real-time reflection with real names
-      await handleSimulatePayment(simulatingMember, amt);
+      // Record to Firestore directly with total ₦50,060 (split internally)
+      await handleSimulatePayment(simulatingMember, baseContrib);
 
       const res = await fetch(`/api/groups/${groupId}/members/${simulatingMember.id}/simulate-payment`, {
         method: 'POST',
@@ -249,17 +271,17 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           'Content-Type': 'application/json',
           'x-user-id': currentUser.id
         },
-        body: JSON.stringify({ amount: amt })
+        body: JSON.stringify({ amount: baseContrib })
       });
       const json = await res.json();
       if (!res.ok) {
         throw new Error(json.error || 'Payment simulation failed');
       }
-      showToast(json.message || 'Payment simulation confirmed!');
+      showToast(json.message || `Payment of ₦${totalToPay.toLocaleString()} confirmed!`);
       setSimulatingMember(null);
       fetchDashboardData();
     } catch (err: any) {
-      setSimulateError(err.message || 'Error processing simulated payment');
+      setSimulateError(err.message || 'Error processing payment');
     } finally {
       setIsSimulating(false);
     }
@@ -1590,29 +1612,33 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                             const isPayAhead = statusItem?.isPayAhead ?? m.isPayAhead;
                             const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
 
-                            let simLabel = 'SIMULATE PAYMENT (Test)';
-                            let simClass = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
-                            let simIcon = <Coins className="h-3 w-3 text-amber-600" />;
+                            const isAdugboGroup = (data?.group?.group_name === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo'));
+                            const contribAmount = isAdugboGroup ? 50000 : required;
+                            const totalAmountToPay = contribAmount + 60;
+
+                            let simLabel = `Pay ₦${totalAmountToPay.toLocaleString()}`;
+                            let simClass = 'bg-[#008751] hover:bg-[#007345] text-white border-[#008751]';
+                            let simIcon = <Coins className="h-3 w-3 text-white" />;
 
                             if (isFullyPaid && isPayAhead) {
-                              simLabel = 'CREDITED ✓';
+                              simLabel = 'PAID ✓';
                               simClass = 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200';
                               simIcon = <CheckCircle2 className="h-3 w-3 text-blue-600" />;
                             } else if (isFullyPaid) {
-                              simLabel = 'SIMULATE PAY AHEAD (Test)';
-                              simClass = 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200';
-                              simIcon = <Coins className="h-3 w-3 text-blue-600" />;
+                              simLabel = `Pay ₦${totalAmountToPay.toLocaleString()} (Pay Ahead)`;
+                              simClass = 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600';
+                              simIcon = <Coins className="h-3 w-3 text-white" />;
                             } else if (rem > 0 && rem < required) {
-                              simLabel = `SIMULATE BALANCE (Test) ${formatNaira(rem)}`;
-                              simClass = 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200';
-                              simIcon = <Coins className="h-3 w-3 text-amber-600" />;
+                              simLabel = `Pay ₦${(rem + 60).toLocaleString()}`;
+                              simClass = 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600';
+                              simIcon = <Coins className="h-3 w-3 text-white" />;
                             }
 
                             return (
                               <button
                                 onClick={() => openSimulateModal(m)}
-                                className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-bold text-[11px] transition cursor-pointer border shadow-2xs ${simClass}`}
-                                title={isFullyPaid && isPayAhead ? "Already credited for next round. Click to add more advance payment." : "Simulate payment for this member"}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer border shadow-2xs ${simClass}`}
+                                title={`Pay ₦${totalAmountToPay.toLocaleString()} for ${m.full_name}`}
                               >
                                 {simIcon}
                                 <span>{simLabel}</span>
@@ -2498,138 +2524,74 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         </div>
       )}
 
-      {/* MODAL: Test Payment Simulator */}
+      {/* MODAL: Payment Modal - TOTAL ONLY */}
       {simulatingMember && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
-                  <Coins className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">Simulate Payment (Test)</h3>
-                  <p className="text-[11px] text-slate-500">Position #{simulatingMember.position} • {simulatingMember.full_name}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSimulatingMember(null)}
-                className="rounded-full p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
             {(() => {
-              const statusItem = simulatingMember ? memberStatusMap.get(simulatingMember.id) : null;
-              const isFullyPaid = statusItem?.isFullyPaid ?? simulatingMember?.isFullyPaid;
-              const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
+              const currentGroupName = data?.group?.group_name || 'ADUGBO JAO';
+              const isAdugbo = currentGroupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
+              const baseContrib = isAdugbo ? 50000 : required;
+              const totalToPay = baseContrib + 60;
+              const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
 
               return (
-                <div className="mb-4 p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 space-y-1">
-                  <p className="font-bold">Moniepoint Test Virtual Account Simulator</p>
-                  <p className="text-[11px] text-amber-800">
-                    Round {currentRound} required contribution: <strong>{formatNaira(required)}</strong>.
-                  </p>
-                  {isFullyPaid && (
-                    <p className="text-[11px] font-bold text-blue-800 bg-blue-50/80 p-2 rounded-xl border border-blue-200 mt-1">
-                      ✓ Member is ALREADY fully paid for Round {currentRound}. Any payment now will be CREDITED as PAY AHEAD for Round {nextRound}.
-                    </p>
+                <div>
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                        <Coins className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-base">{currentGroupName}</h3>
+                        <p className="text-xs text-slate-500 font-medium">Member: <strong className="text-slate-800">{memberName}</strong></p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSimulatingMember(null)}
+                      className="rounded-full p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  {simulateError && (
+                    <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      <span>{simulateError}</span>
+                    </div>
                   )}
-                  {!isFullyPaid && rem > 0 && rem < required && (
-                    <p className="text-[11px] font-bold text-amber-900 bg-amber-100/70 p-2 rounded-xl border border-amber-200 mt-1">
-                      Partially paid. Remaining balance to complete Round {currentRound} is {formatNaira(rem)}.
-                    </p>
-                  )}
-                  {!isFullyPaid && rem === required && (
-                    <p className="text-[11px] text-slate-600 mt-0.5">
-                      Full contribution required to mark member as Paid for Round {currentRound}.
-                    </p>
-                  )}
+
+                  <form onSubmit={handleConfirmSimulatePayment} className="space-y-5">
+                    <div className="rounded-2xl bg-slate-50 p-5 border border-slate-200/80">
+                      <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                        Amount to Pay
+                      </span>
+                      <span className="text-3xl font-black text-slate-900 font-mono block">
+                        ₦{totalToPay.toLocaleString()}
+                      </span>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setSimulatingMember(null)}
+                        className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isSimulating}
+                        className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
+                      >
+                        {isSimulating ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Pay ₦{totalToPay.toLocaleString()} Now</span>}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               );
             })()}
-
-            {simulateError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{simulateError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleConfirmSimulatePayment} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Amount Paid (₦) <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₦</span>
-                  <input
-                    type="number"
-                    min={1}
-                    required
-                    value={simulateAmount}
-                    onChange={(e) => setSimulateAmount(e.target.value)}
-                    placeholder="e.g. 20000"
-                    className="w-full pl-8 pr-4 py-2.5 rounded-xl border border-slate-300 focus:border-[#008751] focus:ring-2 focus:ring-[#008751]/20 font-mono font-bold text-sm text-slate-900 outline-none transition"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                  <span className="text-[11px] text-slate-400 font-medium mr-1">Presets:</span>
-                  {(() => {
-                    const statusItem = simulatingMember ? memberStatusMap.get(simulatingMember.id) : null;
-                    const isFullyPaid = statusItem?.isFullyPaid ?? simulatingMember?.isFullyPaid;
-                    const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
-
-                    const presets = isFullyPaid
-                      ? [
-                          { label: 'Pay Ahead (Full)', val: required },
-                          { label: 'Overpay Credit', val: required + 1000 },
-                          { label: 'Part Pay Ahead', val: Math.round(required / 2) }
-                        ]
-                      : rem > 0 && rem < required
-                      ? [
-                          { label: 'Remaining Balance', val: rem },
-                          { label: 'Full Round Amount', val: required },
-                          { label: 'Part of Balance', val: Math.round(rem / 2) }
-                        ]
-                      : [
-                          { label: 'Full Contribution', val: required },
-                          { label: 'Part Payment (50%)', val: Math.round(required / 2) },
-                          { label: 'Overpay (+₦1,000 Credit)', val: required + 1000 }
-                        ];
-
-                    return presets.map((p, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setSimulateAmount(p.val.toString())}
-                        className="px-2 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition border border-slate-200"
-                      >
-                        {p.label}: ₦{p.val.toLocaleString()}
-                      </button>
-                    ));
-                  })()}
-                </div>
-              </div>
-
-              <div className="pt-2 flex items-center justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setSimulatingMember(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSimulating}
-                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-[#008751] hover:bg-[#007345] text-xs font-bold text-white shadow-md shadow-[#008751]/20 transition disabled:opacity-50 cursor-pointer"
-                >
-                  {isSimulating ? <Loader2 className="h-4 w-4 animate-spin" /> : <span>Confirm Payment</span>}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

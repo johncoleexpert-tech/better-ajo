@@ -131,7 +131,7 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
       return;
     }
 
-    // Step 4 Validation: All member fields required, phone must be 11 digits, no empty rows
+    // Step 4 Validation: All member fields required, real names required, phone must be 11 digits, no empty rows
     for (let i = 0; i < members.length; i++) {
       const m = members[i];
       const rowNum = i + 1;
@@ -141,6 +141,10 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
 
       if (!cleanName || cleanName.length < 2) {
         setError(`Row ${rowNum}: Please enter the member's full name.`);
+        return;
+      }
+      if (cleanName.toUpperCase().startsWith('MEMBER')) {
+        setError(`Row ${rowNum}: Enter real name, not MEMBER${rowNum} - e.g., GLRY JAYE or Tunde Okoro`);
         return;
       }
       if (!cleanP || cleanP.length !== 11) {
@@ -267,6 +271,14 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
             id: groupRef.id,
             groupId: groupRef.id,
             group_id: groupRef.id,
+            name: groupName.trim(),
+            group_name: groupName.trim(),
+            contributionAmount: Number(contributionAmount),
+            contribution_amount: Number(contributionAmount),
+            platformFee: 60,
+            totalAmount: Number(contributionAmount) + 60,
+            currentRound: 1,
+            current_round: 1,
             members: membersArray
           }, { merge: true });
 

@@ -366,7 +366,9 @@
           "status": "packed",
           "cycle": 1,
           "is_packed": true,
-          "packed_at": "2026-10-04T14:12:00.000Z"
+          "packed_at": "2026-10-04T14:12:00.000Z",
+          "member_name": "GLRY JAYE",
+          "memberName": "GLRY JAYE"
         },
         {
           "user_id": "usr_adugbo_2",
@@ -376,7 +378,9 @@
           "scheduled_date": "2026-10-05",
           "status": "scheduled",
           "cycle": 1,
-          "is_packed": false
+          "is_packed": false,
+          "member_name": "Tunde Okoro",
+          "memberName": "Tunde Okoro"
         },
         {
           "user_id": "usr_adugbo_3",
@@ -386,7 +390,9 @@
           "scheduled_date": "2026-10-06",
           "status": "scheduled",
           "cycle": 1,
-          "is_packed": false
+          "is_packed": false,
+          "member_name": "Bisi Adebayo",
+          "memberName": "Bisi Adebayo"
         },
         {
           "user_id": "usr_adugbo_4",
@@ -396,7 +402,9 @@
           "scheduled_date": "2026-10-07",
           "status": "scheduled",
           "cycle": 1,
-          "is_packed": false
+          "is_packed": false,
+          "member_name": "Chidi Eze",
+          "memberName": "Chidi Eze"
         },
         {
           "user_id": "usr_adugbo_5",
@@ -406,7 +414,9 @@
           "scheduled_date": "2026-10-08",
           "status": "scheduled",
           "cycle": 1,
-          "is_packed": false
+          "is_packed": false,
+          "member_name": "Fatima Bello",
+          "memberName": "Fatima Bello"
         }
       ],
       "packedRounds": [
@@ -415,7 +425,9 @@
       "current_packer_index": 2,
       "next_scheduled_date": "2026-10-05",
       "next_packer_id": "usr_adugbo_2",
-      "currentRound": 1
+      "currentRound": 1,
+      "contributionAmount": 50000,
+      "packFee": 3000
     }
   ],
   "group_members": [
@@ -542,14 +554,15 @@
       "current_round_status": "packed",
       "joined_at": "2026-10-04T12:00:00.000Z",
       "credit_balance": 0,
-      "hasPackedThisRound": true
+      "hasPackedThisRound": true,
+      "name": "GLRY JAYE"
     },
     {
       "id": "mem_adugbo_2",
       "group_id": "grp_adugbo_jao",
       "groupId": "grp_adugbo_jao",
       "user_id": "usr_adugbo_2",
-      "full_name": "MEMBER2 ADUGBO",
+      "full_name": "Tunde Okoro",
       "phone": "08077777772",
       "position": 2,
       "packing_position": 2,
@@ -557,14 +570,15 @@
       "current_round_status": "pending_contribution",
       "joined_at": "2026-10-04T12:00:00.000Z",
       "credit_balance": 0,
-      "hasPackedThisRound": false
+      "hasPackedThisRound": false,
+      "name": "Tunde Okoro"
     },
     {
       "id": "mem_adugbo_3",
       "group_id": "grp_adugbo_jao",
       "groupId": "grp_adugbo_jao",
       "user_id": "usr_adugbo_3",
-      "full_name": "MEMBER3 ADUGBO",
+      "full_name": "Bisi Adebayo",
       "phone": "08077777773",
       "position": 3,
       "packing_position": 3,
@@ -572,14 +586,15 @@
       "current_round_status": "pending_contribution",
       "joined_at": "2026-10-04T12:00:00.000Z",
       "credit_balance": 0,
-      "hasPackedThisRound": false
+      "hasPackedThisRound": false,
+      "name": "Bisi Adebayo"
     },
     {
       "id": "mem_adugbo_4",
       "group_id": "grp_adugbo_jao",
       "groupId": "grp_adugbo_jao",
       "user_id": "usr_adugbo_4",
-      "full_name": "MEMBER4 ADUGBO",
+      "full_name": "Chidi Eze",
       "phone": "08077777774",
       "position": 4,
       "packing_position": 4,
@@ -587,14 +602,15 @@
       "current_round_status": "pending_contribution",
       "joined_at": "2026-10-04T12:00:00.000Z",
       "credit_balance": 0,
-      "hasPackedThisRound": false
+      "hasPackedThisRound": false,
+      "name": "Chidi Eze"
     },
     {
       "id": "mem_adugbo_5",
       "group_id": "grp_adugbo_jao",
       "groupId": "grp_adugbo_jao",
       "user_id": "usr_adugbo_5",
-      "full_name": "MEMBER5 ADUGBO",
+      "full_name": "Fatima Bello",
       "phone": "08077777775",
       "position": 5,
       "packing_position": 5,
@@ -602,7 +618,8 @@
       "current_round_status": "pending_contribution",
       "joined_at": "2026-10-04T12:00:00.000Z",
       "credit_balance": 0,
-      "hasPackedThisRound": false
+      "hasPackedThisRound": false,
+      "name": "Fatima Bello"
     }
   ],
   "contributions": [
