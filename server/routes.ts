@@ -3408,6 +3408,29 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
       ).catch(err => console.warn('[Firestore Packing Revenue Warn]:', err?.message || err));
     }
 
+    if (result.commission && result.commission.admin_amount > 0) {
+      try {
+        const fsDb = getFirestoreDb();
+        if (fsDb) {
+          const comAmt = Math.floor(result.commission.admin_amount);
+          fsDb.collection('platform_transactions').doc(`ptx_com_${result.transaction.id}`).set({
+            id: `ptx_com_${result.transaction.id}`,
+            adminId: group.admin_id,
+            userId: group.admin_id,
+            groupId: group.id,
+            type: 'admin_commission',
+            amount: comAmt,
+            gross_amount: comAmt,
+            status: 'success',
+            description: `Group Admin Commission for ${group.group_name} Round ${group.current_round}`,
+            createdAt: FieldValue.serverTimestamp()
+          }, { merge: true }).catch(() => {});
+        }
+      } catch (ptxErr) {
+        console.warn('[Firestore Pack platform_transactions Warn]:', ptxErr);
+      }
+    }
+
     const memberPayout = result.transaction.member_amount;
     const transferResult = await initiatePaystackTransfer(
       result.transaction.account_number,
@@ -3675,7 +3698,7 @@ apiRouter.post('/groups/:groupId/withdraw-commission', async (req: Request, res:
     const admin = db.getProfileById(adminId);
     if (!admin) return res.status(404).json({ error: 'Admin profile not found' });
 
-    const numericAmount = Math.round(Number(amount));
+    const numericAmount = Math.floor(Number(amount));
     if (!numericAmount || numericAmount <= 0) {
       return res.status(400).json({ error: 'Please enter a valid withdrawal amount.' });
     }
@@ -3683,7 +3706,7 @@ apiRouter.post('/groups/:groupId/withdraw-commission', async (req: Request, res:
     const balance = db.getAdminCommissionBalance(groupId);
     if (numericAmount > balance.available) {
       return res.status(400).json({
-        error: `Amount exceeds available commission balance of ₦${balance.available.toLocaleString('en-NG')}.`
+        error: `Insufficient balance. Available: ₦${balance.available.toLocaleString('en-NG')}.`
       });
     }
 
@@ -3852,7 +3875,7 @@ apiRouter.post('/groups/:groupId/withdraw-admin-earnings', async (req: Request, 
       });
     }
 
-    const numericAmount = Math.round(Number(amount));
+    const numericAmount = Math.floor(Number(amount));
     if (!numericAmount || numericAmount <= 0) {
       return res.status(400).json({ error: 'Please enter a valid withdrawal amount.' });
     }
@@ -3860,7 +3883,7 @@ apiRouter.post('/groups/:groupId/withdraw-admin-earnings', async (req: Request, 
     const balance = db.getAdminCommissionBalance(groupId);
     if (numericAmount > balance.available) {
       return res.status(400).json({
-        error: `Amount exceeds available commission balance of ₦${balance.available.toLocaleString('en-NG')}.`
+        error: `Insufficient balance. Available: ₦${balance.available.toLocaleString('en-NG')}.`
       });
     }
 
@@ -3936,6 +3959,22 @@ apiRouter.post('/groups/:groupId/withdraw-admin-earnings', async (req: Request, 
     fsExecuteAdminWithdrawalBatch(withdrawal, payment).catch(err => {
       console.warn('[Firestore Group Admin Withdrawal Sync Warn]:', err?.message || err);
     });
+    try {
+      const fsDb = getFirestoreDb();
+      if (fsDb) {
+        fsDb.collection('withdrawals').doc(withdrawal.id).set({
+          ...withdrawal,
+          adminId: authUserId,
+          userId: authUserId,
+          groupId: groupId,
+          amount: Math.floor(numericAmount),
+          net_amount: Math.floor(numericAmount),
+          type: 'admin_commission',
+          status: 'success',
+          createdAt: FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+      }
+    } catch {}
     syncWithdrawalToSupabase(withdrawal).catch(err => {
       console.warn('[Supabase Group Admin Withdrawal Sync Warn]:', err?.message || err);
     });

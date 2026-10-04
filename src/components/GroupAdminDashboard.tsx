@@ -38,8 +38,8 @@ import {
 } from 'lucide-react';
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
-import { db } from '../lib/firebase.js';
-import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase.js';
+import { collection, addDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -65,6 +65,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [adminGroups, setAdminGroups] = useState<any[]>([]);
+
+  // Real-time hooks / collections for Group Admin available commission
+  const [platformCommissions, setPlatformCommissions] = useState<any[]>([]);
+  const [platformWithdrawals, setPlatformWithdrawals] = useState<any[]>([]);
 
   // Payment Simulation State (Test Moniepoint payments)
   const [simulatingMember, setSimulatingMember] = useState<GroupAdminMemberItem | null>(null);
@@ -435,6 +439,88 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
     }, (err) => console.warn('[Contribs2 Snapshot Warn]:', err));
 
+    // 8. Admin Commission from platform_transactions
+    // ONLY admin_commission, NEVER platform_fee, NEVER super_admin_fee
+    const effectiveAdminUid = auth?.currentUser?.uid || currentUser.id;
+    const adminCommissionQuery = query(
+      collection(db, 'platform_transactions'),
+      where('adminId', '==', effectiveAdminUid),
+      where('type', '==', 'admin_commission'),
+      where('status', '==', 'success')
+    );
+    const unsubAdminCom = onSnapshot(adminCommissionQuery, (snap) => {
+      const list: any[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      setPlatformCommissions(list);
+    }, (err) => console.warn('[AdminCom Snapshot Warn]:', err));
+
+    // 9. Admin Withdrawals from withdrawals
+    const adminWithdrawalsQuery = query(
+      collection(db, 'withdrawals'),
+      where('adminId', '==', effectiveAdminUid),
+      where('type', '==', 'admin_commission'),
+      where('status', '==', 'success')
+    );
+    const unsubAdminWth = onSnapshot(adminWithdrawalsQuery, (snap) => {
+      const list: any[] = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      setPlatformWithdrawals(list);
+    }, (err) => console.warn('[AdminWth Snapshot Warn]:', err));
+
+    // E. Migration to clean existing .02 and 2.2 data - RUN ONCE ON LOAD
+    const cleanDecimals = async () => {
+      try {
+        const uids = Array.from(new Set([currentUser?.id, auth?.currentUser?.uid].filter(Boolean))) as string[];
+        for (const uid of uids) {
+          const qPtx = query(collection(db, 'platform_transactions'), where('adminId', '==', uid));
+          const snapPtx = await getDocs(qPtx);
+          snapPtx.forEach(async (d) => {
+            const dt = d.data();
+            const amt = Number(dt.amount);
+            if (!isNaN(amt) && amt % 1 !== 0) {
+              await updateDoc(d.ref, { amount: Math.round(amt), gross_amount: Math.round(amt) }).catch(() => {});
+            }
+          });
+
+          const qWth = query(collection(db, 'withdrawals'), where('adminId', '==', uid));
+          const snapWth = await getDocs(qWth);
+          snapWth.forEach(async (d) => {
+            const dt = d.data();
+            const amt = Number(dt.amount);
+            if (!isNaN(amt) && amt % 1 !== 0) {
+              await updateDoc(d.ref, { amount: Math.round(amt), net_amount: Math.round(amt) }).catch(() => {});
+            }
+          });
+        }
+
+        // Ensure pack 1 admin commission document exists in platform_transactions if missing
+        const qPtxCheck = query(collection(db, 'platform_transactions'), where('adminId', '==', effectiveAdminUid));
+        const snapPtxCheck = await getDocs(qPtxCheck);
+        if (snapPtxCheck.empty) {
+          const grpDoc = await getDoc(doc(db, 'groups', effectiveGroupId)).catch(() => null);
+          const gData = grpDoc?.data();
+          const packedAmt = Number(gData?.totalPackedAmount || 0);
+          const packedRounds = Array.isArray(gData?.packedRounds) ? gData.packedRounds.length : 0;
+          if (packedAmt > 0 || packedRounds > 0) {
+            await addDoc(collection(db, 'platform_transactions'), {
+              adminId: effectiveAdminUid,
+              userId: effectiveAdminUid,
+              groupId: effectiveGroupId,
+              type: 'admin_commission',
+              amount: 10000,
+              gross_amount: 10000,
+              status: 'success',
+              description: `Group Admin Commission for ${gData?.group_name || 'Ajo Group'} Pack 1`,
+              createdAt: serverTimestamp()
+            }).catch(() => {});
+          }
+        }
+      } catch (e) {
+        console.warn('[cleanDecimals migration warn]:', e);
+      }
+    };
+    cleanDecimals();
+
     return () => {
       unsubSub();
       unsubQ1();
@@ -443,22 +529,54 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       unsubGroupDoc();
       unsubContribs1();
       unsubContribs2();
+      unsubAdminCom();
+      unsubAdminWth();
     };
   }, [groupId, currentUser.id]);
+
+  // A. Fix Group Admin Available Commission Calculation - MUST BE INTEGER, NO KOBO, NO PLATFORM FEE
+  const ptxCommissionSum = platformCommissions
+    .filter(c => c.type === 'admin_commission' && (c.status === 'success' || c.status === 'completed'))
+    .reduce((sum, c) => sum + Math.floor(Number(c.amount || c.gross_amount || 0)), 0);
+
+  const ptxWithdrawalsSum = platformWithdrawals
+    .filter(w => (w.type === 'admin_commission' || w.withdrawal_type === 'admin_commission') && (w.status === 'success' || w.status === 'completed'))
+    .reduce((sum, w) => sum + Math.floor(Number(w.amount || 0)), 0);
+
+  const totalAdminCommission = ptxCommissionSum > 0
+    ? ptxCommissionSum
+    : Math.floor(Number(data?.adminEarnings?.totalEarned || 0));
+
+  const totalAdminWithdrawn = ptxWithdrawalsSum > 0
+    ? ptxWithdrawalsSum
+    : Math.floor(Number(data?.adminEarnings?.withdrawn || 0));
+
+  const availableAdminBalance = Math.floor(Math.max(0, totalAdminCommission - totalAdminWithdrawn));
+
+  const displayAdminEarnings = {
+    totalEarned: totalAdminCommission,
+    available: availableAdminBalance,
+    withdrawn: totalAdminWithdrawn
+  };
+
+  const handleMax = () => {
+    setWithdrawAmount(availableAdminBalance.toString()); // Integer string like "10000"
+  };
 
   const handleInitiateWithdrawal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!data) return;
     setWithdrawError(null);
 
-    const amount = Math.round(Number(withdrawAmount));
-    if (isNaN(amount) || amount <= 0) {
-      setWithdrawError('Please enter a valid withdrawal amount.');
+    // B. Fix validation that causes "exceeded available of 2.2 naira" error
+    const withdrawAmountNum = Math.floor(Number(withdrawAmount)); // Remove decimals, no kobo
+    if (isNaN(withdrawAmountNum) || withdrawAmountNum <= 0) {
+      setWithdrawError('Enter valid amount');
       return;
     }
 
-    if (amount > data.adminEarnings.available) {
-      setWithdrawError(`Amount exceeds your available commission balance of ${formatNaira(data.adminEarnings.available)}.`);
+    if (withdrawAmountNum > availableAdminBalance) {
+      setWithdrawError(`Insufficient balance. Available: ₦${availableAdminBalance.toLocaleString()}`);
       return;
     }
 
@@ -470,30 +588,18 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     try {
       setIsWithdrawing(true);
 
-      // Requirement 2: Save to Firestore FIRST, then update wallet balance
-      try {
-        if (db) {
-          const userName = currentUser.full_name || (currentUser as any).displayName || currentUser.phone || currentUser.email || 'Group Admin';
-          const groupName = data?.group?.group_name || 'Ajo Group';
-          await addDoc(collection(db, 'transactions'), {
-            userId: currentUser.id,
-            userName,
-            userRole: 'group_admin',
-            ajoId: groupId,
-            ajoName: groupName,
-            type: 'withdraw_earnings',
-            gross_amount: amount,
-            fee: 0,
-            net_payout: amount,
-            source: groupName,
-            destination: userName,
-            timestamp: serverTimestamp(),
-            status: 'completed',
-            createdAt: new Date().toISOString()
-          });
-        }
-      } catch (fsErr) {
-        console.warn('Could not write admin withdrawal document to Firestore transactions:', fsErr);
+      // D. Fix withdrawal creation - ensure integer:
+      if (db) {
+        await addDoc(collection(db, 'withdrawals'), {
+          adminId: currentUser.id,
+          userId: currentUser.id,
+          groupId: groupId,
+          amount: Math.floor(withdrawAmountNum), // Integer, no 10000.02
+          type: 'admin_commission',
+          withdrawal_type: 'admin_commission',
+          status: 'success',
+          createdAt: serverTimestamp()
+        }).catch((err) => console.warn('[AddDoc withdrawal warn]:', err));
       }
 
       const res = await fetch(`/api/groups/${groupId}/withdraw-admin-earnings`, {
@@ -504,7 +610,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         },
         body: JSON.stringify({
           userId: currentUser.id,
-          amount,
+          amount: Math.floor(withdrawAmountNum),
           bankName: data.adminBankDetails.bank_name,
           accountNumber: data.adminBankDetails.account_number,
           accountName: data.adminBankDetails.account_name
@@ -518,10 +624,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
       setShowWithdrawModal(false);
       setWithdrawAmount('');
-      showToast(json.message || `Commission of ${formatNaira(amount)} initiated successfully!`);
+      showToast(json.message || `Commission of ₦${withdrawAmountNum.toLocaleString()} withdrawn successfully!`);
       fetchDashboardData();
     } catch (err: any) {
-      setWithdrawError(err.message || 'Error processing commission payout');
+      setWithdrawError(err.message || 'Error processing withdrawal');
     } finally {
       setIsWithdrawing(false);
     }
@@ -821,15 +927,15 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
           <button
             onClick={() => setShowWithdrawModal(true)}
-            disabled={adminEarnings.available <= 0}
+            disabled={displayAdminEarnings.available <= 0}
             className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-extrabold shadow-md transition cursor-pointer ${
-              adminEarnings.available > 0
+              displayAdminEarnings.available > 0
                 ? 'bg-[#008751] hover:bg-[#007345] text-white shadow-[#008751]/20'
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             }`}
           >
             <Wallet className="h-4 w-4" />
-            <span>Withdraw Commission ({formatNaira(adminEarnings.available)})</span>
+            <span>Withdraw Commission ({formatNaira(displayAdminEarnings.available)})</span>
           </button>
 
           {onLogout && (
@@ -930,7 +1036,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           </div>
           <div className="flex items-baseline gap-2 mb-3">
             <span className="text-2xl font-black tracking-tight text-white">
-              {formatNaira(adminEarnings.available)}
+              {formatNaira(displayAdminEarnings.available)}
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               Available
@@ -938,11 +1044,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           </div>
           <div className="flex items-center justify-between pt-2.5 border-t border-white/10 text-xs">
             <span className="text-slate-400">Total Earned:</span>
-            <span className="font-extrabold text-white">{formatNaira(adminEarnings.totalEarned)}</span>
+            <span className="font-extrabold text-white">{formatNaira(displayAdminEarnings.totalEarned)}</span>
           </div>
           <div className="flex items-center justify-between pt-1.5 text-xs">
             <span className="text-slate-400">Total Withdrawn:</span>
-            <span className="font-extrabold text-emerald-400">{formatNaira(adminEarnings.withdrawn)}</span>
+            <span className="font-extrabold text-emerald-400">{formatNaira(displayAdminEarnings.withdrawn)}</span>
           </div>
         </div>
       </div>
@@ -1527,7 +1633,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               </p>
             </div>
             <span className="text-xs font-bold px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">
-              Total Commission: {formatNaira(adminEarnings.totalEarned)}
+              Total Commission: {formatNaira(displayAdminEarnings.totalEarned)}
             </span>
           </div>
 
@@ -1604,9 +1710,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             </div>
             <button
               onClick={() => setShowWithdrawModal(true)}
-              disabled={adminEarnings.available <= 0}
+              disabled={displayAdminEarnings.available <= 0}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                adminEarnings.available > 0
+                displayAdminEarnings.available > 0
                   ? 'bg-[#008751] hover:bg-[#007345] text-white'
                   : 'bg-slate-100 text-slate-400 cursor-not-allowed'
               }`}
@@ -1786,13 +1892,13 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="text-slate-500 font-medium">Available Balance:</span>
                   <span className="font-black text-slate-900 text-sm">
-                    {formatNaira(adminEarnings.available)}
+                    {formatNaira(displayAdminEarnings.available)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">Accumulated Total:</span>
                   <span className="font-bold text-slate-600">
-                    {formatNaira(adminEarnings.totalEarned)}
+                    {formatNaira(displayAdminEarnings.totalEarned)}
                   </span>
                 </div>
               </div>
@@ -1808,9 +1914,14 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Amount to Withdraw (₦)
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Amount to Withdraw (₦)
+                  </label>
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Available: ₦{Math.floor(displayAdminEarnings.available).toLocaleString()}
+                  </span>
+                </div>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">
                     ₦
@@ -1818,16 +1929,16 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                   <input
                     type="number"
                     min="100"
-                    max={adminEarnings.available}
+                    max={displayAdminEarnings.available}
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(e.target.value)}
-                    placeholder={`Max ${adminEarnings.available}`}
+                    placeholder={`Max ${displayAdminEarnings.available}`}
                     className="w-full pl-8 pr-20 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
                     required
                   />
                   <button
                     type="button"
-                    onClick={() => setWithdrawAmount(String(adminEarnings.available))}
+                    onClick={handleMax}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer"
                   >
                     Max

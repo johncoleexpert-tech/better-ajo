@@ -3203,96 +3203,72 @@ class Database {
       ? (group as any).withdrawalFee
       : (typeof group.packing_fee === 'number' ? group.packing_fee : 3000);
     const totalRounded = Math.round(totalFeeAmount);
-    const packerShare = Math.round(totalRounded * 0.6667); // Whole Naira: 2000 for 3000 fee, 1333 for 2000 fee, 3333 for 5000 fee
+    const packerShare = calculatePackingSplit(totalRounded).groupAdmin; // EXACT INTEGER: 10000 for 15000 fee, 2000 for 3000 fee
 
-    // 1. Commission documents for this group
+    // 1. Commission documents for this group (strictly admin_commission or packing share)
     const groupCommissions = (this.data.commissions || []).filter(
-      c => c.group_id === groupId || (c as any).groupId === groupId
+      c => (c.group_id === groupId || (c as any).groupId === groupId) &&
+           (c.type === 'admin_commission' || c.type === STREAM_PACKING || (c as any).stream === STREAM_PACKING || !c.type)
     );
     const commissionEarned = groupCommissions.reduce(
       (sum, c) => sum + Math.round(Number(c.admin_amount || (c as any).groupAdminShare || (c as any).group_admin_share || (c as any).commission || (c as any).amount || 0)),
       0
     );
 
-    // 2. Pack transactions for this group
+    // 2. Pack transactions for this group (completed packs)
     const packTxs = (this.data.pack_transactions || []).filter(
       t => (t.group_id === groupId || (t as any).groupId === groupId) && (t.status === 'completed' || (t as any).status === 'successful')
     );
     const packTxsEarned = packTxs.reduce((sum, t) => {
       const pFee = typeof (t as any).packing_fee === 'number' ? (t as any).packing_fee : totalRounded;
-      const share = Math.round(pFee * 0.6667);
-      return sum + Math.round(Number((t as any).admin_commission || (t as any).groupAdminShare || (t as any).group_admin_share || share));
+      const share = calculatePackingSplit(pFee).groupAdmin;
+      const itemShare = (t as any).admin_commission !== undefined
+        ? Math.floor(Number((t as any).admin_commission))
+        : ((t as any).groupAdminShare !== undefined
+            ? Math.floor(Number((t as any).groupAdminShare))
+            : share);
+      return sum + itemShare;
     }, 0);
 
-    // 3. Stored fields on group
-    const storedTotal = Math.max(
-      Number((group as any).totalEarnings || 0),
-      Number((group as any).total_earnings || 0),
-      Number((group as any).groupAdminRevenue || 0),
-      Number((group as any).group_admin_revenue || 0)
-    );
+    const totalPacks = packTxs.length;
+    const earnedFromPacks = totalPacks * packerShare;
+    let total = Math.max(earnedFromPacks, commissionEarned, packTxsEarned);
+    if (total === 0 && totalPacks > 0) {
+      total = totalPacks * 10000;
+    }
+    total = Math.floor(total);
 
-    // 4. Stored explicit positive available balance on group
-    const explicitAvailable = Math.max(
-      Number((group as any).availableBalance || 0),
-      Number((group as any).available_balance || 0),
-      Number((group as any).commissionBalance || 0),
-      Number((group as any).commission_balance || 0),
-      Number((group as any).withdrawableBalance || 0),
-      Number((group as any).withdrawable_balance || 0),
-      Number((group as any).admin_commission_balance || 0)
-    );
-
-    // 5. Total gross earned strictly from admin packing commissions
-    const earnedFromPacks = Math.max(commissionEarned, packTxsEarned);
-    let total = earnedFromPacks > 0
-      ? earnedFromPacks
-      : (packTxs.length > 0 ? packTxs.length * 10000 : 0);
-
-    // 6. Calculate withdrawals strictly for this group
+    // 3. Calculate withdrawals strictly for this group
     const withdrawals = (this.data.withdrawals || []).filter(
       w => (w.group_id === groupId || (w as any).groupId === groupId) &&
-        (w.status === 'completed' || w.status === 'successful' || w.status === 'processing')
+        (w.status === 'completed' || w.status === 'successful' || w.status === 'processing' || (w.status as any) === 'success')
     );
-    const calculatedWithdrawn = withdrawals.reduce((sum, w) => sum + Math.round(Number(w.amount || 0)), 0);
-    const storedWithdrawn = Math.max(
-      Number((group as any).groupAdminWithdrawn || 0),
-      Number((group as any).group_admin_withdrawn || 0)
-    );
+    const calculatedWithdrawn = withdrawals.reduce((sum, w) => sum + Math.floor(Number(w.amount || 0)), 0);
+    const storedWithdrawn = Math.floor(Number((group as any).groupAdminWithdrawn || (group as any).group_admin_withdrawn || 0));
     const withdrawn = Math.max(calculatedWithdrawn, storedWithdrawn);
 
-    // 7. Unified available balance: single source of truth
-    let available: number;
-    if (explicitAvailable > 0 && calculatedWithdrawn === 0 && storedWithdrawn === 0) {
-      available = explicitAvailable;
-    } else if (explicitAvailable > 0) {
-      available = Math.max(0, explicitAvailable - calculatedWithdrawn);
-      available = Math.max(available, Math.max(0, total - withdrawn));
-    } else {
-      available = Math.max(0, total - withdrawn);
-    }
+    // 4. Unified available balance: pure integer math, NO decimals, NO platform fees
+    const available = Math.floor(Math.max(0, total - withdrawn));
 
-    total = Math.max(total, available + withdrawn);
-
-    // Keep all fields unified on group
-    (group as any).availableBalance = Math.round(available);
-    (group as any).available_balance = Math.round(available);
-    (group as any).commissionBalance = Math.round(available);
-    (group as any).commission_balance = Math.round(available);
-    (group as any).withdrawableBalance = Math.round(available);
-    (group as any).withdrawable_balance = Math.round(available);
-    (group as any).admin_commission_balance = Math.round(available);
-    (group as any).totalEarnings = Math.round(total);
-    (group as any).total_earnings = Math.round(total);
-    (group as any).groupAdminRevenue = Math.round(total);
-    (group as any).group_admin_revenue = Math.round(total);
-    (group as any).groupAdminWithdrawn = Math.round(withdrawn);
-    (group as any).group_admin_withdrawn = Math.round(withdrawn);
+    // Keep all fields unified on group as clean integers
+    (group as any).availableBalance = available;
+    (group as any).available_balance = available;
+    (group as any).commissionBalance = available;
+    (group as any).commission_balance = available;
+    (group as any).withdrawableBalance = available;
+    (group as any).withdrawable_balance = available;
+    (group as any).admin_commission_balance = available;
+    (group as any).totalEarnings = total;
+    (group as any).total_earnings = total;
+    (group as any).groupAdminRevenue = total;
+    (group as any).group_admin_revenue = total;
+    (group as any).groupAdminWithdrawn = withdrawn;
+    (group as any).group_admin_withdrawn = withdrawn;
 
     return {
-      total: Math.round(total),
-      available: Math.round(available),
-      withdrawn: Math.round(withdrawn)
+      total,
+      available,
+      withdrawn
     };
   }
 
@@ -3550,10 +3526,10 @@ class Database {
       throw new Error('Unauthorized: You can only withdraw from groups you created.');
     }
 
-    const roundedAmount = Math.round(amount);
+    const roundedAmount = Math.floor(Number(amount));
     const balance = this.getAdminCommissionBalance(groupId);
-    if (roundedAmount <= 0 || roundedAmount > (balance.available + 0.001)) {
-      throw new Error(`Insufficient available earnings. Available: ₦${balance.available.toLocaleString()}`);
+    if (roundedAmount <= 0 || roundedAmount > balance.available) {
+      throw new Error(`Insufficient balance. Available: ₦${balance.available.toLocaleString()}`);
     }
 
     const admin = this.getProfileById(userId);
@@ -3612,10 +3588,10 @@ class Database {
       throw new Error('Unauthorized: You can only withdraw from groups you created.');
     }
 
-    const roundedAmount = Math.round(amount);
+    const roundedAmount = Math.floor(Number(amount));
     const balance = this.getAdminCommissionBalance(groupId);
-    if (roundedAmount <= 0 || roundedAmount > (balance.available + 0.001)) {
-      throw new Error(`Insufficient available earnings. Available: ₦${balance.available.toLocaleString()}`);
+    if (roundedAmount <= 0 || roundedAmount > balance.available) {
+      throw new Error(`Insufficient balance. Available: ₦${balance.available.toLocaleString()}`);
     }
 
     const admin = this.getProfileById(userId);
