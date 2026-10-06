@@ -39,7 +39,7 @@ import {
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
 import { db, auth } from '../lib/firebase.js';
-import { collection, addDoc, setDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -423,9 +423,12 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     const effectiveGroupId = groupId;
     console.log('[GroupAdminDashboard] Initializing members onSnapshot for groupId:', effectiveGroupId);
 
-    // Sync helper: guarantees admin is not a member and never added to count
+    // Sync helper: guarantees admin is not a member, filters fake members, ensures only unique positions 1..5
     const syncMembersFromSnap = (rawDocs: any[]) => {
       if (!rawDocs || rawDocs.length === 0) return;
+      const fakeListUpper = ['CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
+      const fakeVans = ['8152629304', '8152467888', '8152925182'];
+
       const memberMap = new Map<string, GroupAdminMemberItem>();
       rawDocs.forEach(d => {
         const item: any = typeof d.data === 'function' ? { ...d.data(), id: d.id } : d;
@@ -433,19 +436,53 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         if (item.user_id === currentUser.id || item.userId === currentUser.id || item.id === currentUser.id) {
           return;
         }
-        memberMap.set(item.id, item as GroupAdminMemberItem);
+        const nameUpper = String(item.full_name || item.name || item.fullName || '').trim().toUpperCase();
+        if (fakeListUpper.includes(nameUpper) || nameUpper.startsWith('MEMBER')) {
+          return;
+        }
+        const van = String(item.virtual_account_number || item.virtualAccountNumber || '');
+        if (fakeVans.includes(van)) {
+          return;
+        }
+        if (item.id && String(item.id).startsWith('mem_adugbo_')) {
+          return;
+        }
+        if (nameUpper === 'GLRY JAYE' && van === '8152925182') {
+          return;
+        }
+
+        // Map confirmed member IDs
+        let stableId = item.id;
+        if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) stableId = 'glry_jaye';
+        else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) stableId = 'festus_chris';
+        else if (nameUpper.includes('SHOLA')) stableId = 'sholakule';
+        else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) stableId = 'david_felistans';
+        else if (nameUpper.includes('KOLA')) stableId = 'kola_ogo';
+
+        memberMap.set(stableId, { ...item, id: stableId } as GroupAdminMemberItem);
       });
 
       const memberList = Array.from(memberMap.values());
       memberList.sort((a, b) => (a.position || 0) - (b.position || 0));
 
-      if (memberList.length > 0) {
+      // Limit to 5 unique positions (no duplicate 4th or 5th)
+      const uniquePositionList: GroupAdminMemberItem[] = [];
+      const seenPositions = new Set<number>();
+      for (const m of memberList) {
+        const pos = Number(m.position || m.packing_position || 1);
+        if (!seenPositions.has(pos)) {
+          seenPositions.add(pos);
+          uniquePositionList.push(m);
+        }
+      }
+
+      if (uniquePositionList.length > 0) {
         setData(prev => {
           if (!prev) return prev;
           return {
             ...prev,
-            members: memberList,
-            membersJoinedCount: memberList.length
+            members: uniquePositionList,
+            membersJoinedCount: uniquePositionList.length
           };
         });
       }
@@ -613,6 +650,155 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
     };
     cleanDecimals();
+
+    // Clean fake members and duplicate packs for ADUGBO JAO
+    const cleanFakeMembersAndDuplicates = async () => {
+      try {
+        const isAdugbo = (effectiveGroupId === 'grp_adugbo_jao' || effectiveGroupId.toLowerCase().includes('adugbo'));
+        if (!isAdugbo) return;
+
+        const fakeList = ['Chidi Eze', 'Fatima Bello', 'Tunde Okoro', 'Bisi Adebayo', 'CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
+        const fakeVans = ['8152629304', '8152467888'];
+
+        const finalFiveFixedPacks = [
+          {
+            id: 'glry_jaye',
+            name: 'GLRY JAYE',
+            fullName: 'Glory Ajayi',
+            full_name: 'GLRY JAYE',
+            position: 1,
+            packingOrder: 1,
+            packing_position: 1,
+            packsLabel: 'Packs 1st',
+            phone: '08077777771',
+            virtualAccountNumber: '8152476851',
+            virtual_account_number: '8152476851',
+            virtualAccountName: 'BETTERAJO-GLRY JAYE',
+            virtual_account_name: 'BETTERAJO-GLRY JAYE',
+            status: 'PAID',
+            current_round_status: 'packed',
+            credit_balance: 0,
+            hasPackedThisRound: true,
+            isFullyPaid: true
+          },
+          {
+            id: 'festus_chris',
+            name: 'Festus Chris',
+            fullName: 'Festus Chris',
+            full_name: 'Festus Chris',
+            altNames: ['FESTUA'],
+            position: 2,
+            packingOrder: 2,
+            packing_position: 2,
+            packsLabel: 'Packs 2nd',
+            phone: '07069702560',
+            virtualAccountNumber: '8152195643',
+            virtual_account_number: '8152195643',
+            virtualAccountName: 'BETTERAJO-FESTUS CHRIS',
+            virtual_account_name: 'BETTERAJO-FESTUS CHRIS',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false
+          },
+          {
+            id: 'sholakule',
+            name: 'Sholakule',
+            fullName: 'Sholakule',
+            full_name: 'Sholakule',
+            altNames: ['SHOLA KUNLE'],
+            position: 3,
+            packingOrder: 3,
+            packing_position: 3,
+            packsLabel: 'Packs 3rd',
+            phone: '07069702563',
+            virtualAccountNumber: '8152741791',
+            virtual_account_number: '8152741791',
+            virtualAccountName: 'BETTERAJO-SHOLA KUNLE',
+            virtual_account_name: 'BETTERAJO-SHOLA KUNLE',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false,
+            keepFromScreenshot: true
+          },
+          {
+            id: 'david_felistans',
+            name: 'David Felistans',
+            fullName: 'David Felistans',
+            full_name: 'David Felistans',
+            altNames: ['DAVID FELISTANCE', 'David Felictans'],
+            position: 4,
+            packingOrder: 4,
+            packing_position: 4,
+            packsLabel: 'Packs 4th',
+            phone: '07069702564',
+            virtualAccountNumber: '8152168957',
+            virtual_account_number: '8152168957',
+            virtualAccountName: 'BETTERAJO-DAVID FELISTANCE',
+            virtual_account_name: 'BETTERAJO-DAVID FELISTANCE',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false,
+            keepFromScreenshot: true
+          },
+          {
+            id: 'kola_ogo',
+            name: 'Kola Ogo',
+            fullName: 'Kola Ogo',
+            full_name: 'Kola Ogo',
+            altNames: ['KOLA OGO'],
+            position: 5,
+            packingOrder: 5,
+            packing_position: 5,
+            packsLabel: 'Packs 5th',
+            phone: '07069702561',
+            virtualAccountNumber: '8152739353',
+            virtual_account_number: '8152739353',
+            virtualAccountName: 'BETTERAJO-KOLA OGO',
+            virtual_account_name: 'BETTERAJO-KOLA OGO',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false
+          }
+        ];
+
+        await updateDoc(doc(db, 'groups', effectiveGroupId), {
+          members: finalFiveFixedPacks,
+          memberCount: 5
+        }).catch(() => {});
+
+        const allContrib = await getDocs(query(collection(db, 'contributions'), where('groupId', '==', effectiveGroupId))).catch(() => null);
+        if (allContrib) {
+          for (const docSnap of allContrib.docs) {
+            const mName = String(docSnap.data().memberName || '').trim();
+            const mNameUpper = mName.toUpperCase();
+            const van = String(docSnap.data().virtualAccountNumber || '');
+            if (
+              fakeList.includes(mName) ||
+              fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
+              fakeVans.includes(van) ||
+              (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
+              docSnap.id.includes('mem_adugbo_2') ||
+              docSnap.id.includes('mem_adugbo_3') ||
+              docSnap.id.includes('mem_adugbo_4') ||
+              docSnap.id.includes('mem_adugbo_5')
+            ) {
+              await deleteDoc(doc(db, 'contributions', docSnap.id)).catch(() => {});
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[cleanFakeMembersAndDuplicates] error:', err);
+      }
+    };
+    cleanFakeMembersAndDuplicates();
 
     return () => {
       unsubSub();
@@ -847,7 +1033,31 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const required = Number(group.contribution_amount || (group as any).contributionAmount || 20000);
   const currentRound = Number(group.current_round || 1);
   const nextRound = currentRound + 1;
-  const groupMembers = safeMembers;
+
+  // Filter out any fake members and deduplicate positions
+  const fakeListUpper = ['CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
+  const fakeVans = ['8152629304', '8152467888', '8152925182'];
+  const filteredSafeMembers = safeMembers.filter((m: any) => {
+    const nameUpper = String(m.full_name || m.name || m.fullName || '').trim().toUpperCase();
+    if (fakeListUpper.includes(nameUpper) || nameUpper.startsWith('MEMBER')) return false;
+    const van = String(m.virtual_account_number || m.virtualAccountNumber || '');
+    if (fakeVans.includes(van)) return false;
+    if (nameUpper === 'GLRY JAYE' && van === '8152925182') return false;
+    if (m.id && String(m.id).startsWith('mem_adugbo_')) return false;
+    return true;
+  });
+
+  const seenPos = new Set<number>();
+  const uniqueGroupMembers: GroupAdminMemberItem[] = [];
+  for (const m of filteredSafeMembers) {
+    const pos = Number(m.position || m.packing_position || 1);
+    if (!seenPos.has(pos)) {
+      seenPos.add(pos);
+      uniqueGroupMembers.push(m);
+    }
+  }
+  uniqueGroupMembers.sort((a, b) => Number(a.position || 1) - Number(b.position || 1));
+  const groupMembers = uniqueGroupMembers.length > 0 ? uniqueGroupMembers : safeMembers;
   const totalCount = groupMembers.length;
 
   const memberStatusList = groupMembers.map((m) => {
@@ -1437,7 +1647,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-                Group Members ({members.length} / {data.totalMembersExpected})
+                Group Members ({groupMembers.length} / {data.totalMembersExpected || 5})
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 All registered contributors in rotation order. The group admin is not a contributor.
@@ -1483,14 +1693,14 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {members.length === 0 ? (
+                {groupMembers.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-slate-400">
                       No members registered in this group yet.
                     </td>
                   </tr>
                 ) : (
-                  members.map((m) => {
+                  groupMembers.map((m) => {
                     const posNum = m.position || m.packing_position || 1;
                     const posSuffix = posNum === 1 ? '1st' : posNum === 2 ? '2nd' : posNum === 3 ? '3rd' : `${posNum}th`;
                     const accNum = m.virtual_account_number || '810' + Math.abs(m.id.split('').reduce((a, b) => a + b.charCodeAt(0), 1000000)).toString().slice(0, 7).padStart(7, '0');
@@ -2127,14 +2337,14 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                     }`}
                   >
                     <Users className="h-3.5 w-3.5" />
-                    <span>All Members ({members.length})</span>
+                    <span>All Members ({groupMembers.length})</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       setNotifyRecipientType('single');
-                      if (members.length > 0 && !selectedMemberForNotify) {
-                        setSelectedMemberForNotify(members[0]);
+                      if (groupMembers.length > 0 && !selectedMemberForNotify) {
+                        setSelectedMemberForNotify(groupMembers[0]);
                       }
                     }}
                     className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${

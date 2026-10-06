@@ -67,8 +67,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const activeUser = user || currentUser || null;
-  const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.role === 'superadmin' || activeUser?.email === 'realheavenict@gmail.com' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
-  const isGroupAdmin = hasAdminGroups || activeUser?.role === 'GROUP_ADMIN' || activeUser?.role === 'groupadmin';
+  const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.role === 'superadmin' || activeUser?.role === 'super_admin' || activeUser?.email === 'realheavenict@gmail.com' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
+  const isGroupAdmin = !isSuperAdmin && (hasAdminGroups || activeUser?.role === 'GROUP_ADMIN' || activeUser?.role === 'groupadmin' || activeUser?.role === 'group_admin');
   // Personal Ajo is strictly visible to role == 'user' only (hidden for superadmin & groupadmin)
   const isUserRole = Boolean(activeUser && !isSuperAdmin && !isGroupAdmin && (activeUser.role === 'user' || activeUser.role === 'MEMBER' || !activeUser.role));
 
@@ -174,8 +174,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             {activeUser ? (
               // AUTHENTICATED STATE: No Login, No Sign Up, No Create Account
               <div className="flex items-center gap-2 sm:gap-2.5">
-                {/* Group Admin Dashboard Link */}
-                {isGroupAdmin && onOpenGroupAdmin && (
+                {/* Group Admin Dashboard Link (Strictly shown only for non-superadmin group admins) */}
+                {!isSuperAdmin && isGroupAdmin && onOpenGroupAdmin && (
                   <button
                     onClick={onOpenGroupAdmin}
                     className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-colors ${
@@ -190,7 +190,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                 )}
 
-                {/* Super Admin Dashboard Link */}
+                {/* Super Admin Dashboard Link - Super Admin shows ONLY Super Admin button */}
                 {isSuperAdmin && onOpenSuperAdmin && (
                   <button
                     onClick={onOpenSuperAdmin}
@@ -321,6 +321,49 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               {/* Navigation Items */}
               <div className="py-4 space-y-1">
+                {/* Super Admin link strictly for Super Admin */}
+                {isSuperAdmin && onOpenSuperAdmin && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenSuperAdmin();
+                    }}
+                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/60 transition text-left cursor-pointer"
+                  >
+                    <Shield className="h-4 w-4 text-purple-700" />
+                    <span>Super Admin</span>
+                  </button>
+                )}
+
+                {/* Group Admin link strictly for non-superadmin group admin */}
+                {!isSuperAdmin && isGroupAdmin && onOpenGroupAdmin && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onOpenGroupAdmin();
+                    }}
+                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-bold text-[#008751] bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 transition text-left cursor-pointer"
+                  >
+                    <Shield className="h-4 w-4 text-[#008751]" />
+                    <span>Admin Dashboard</span>
+                  </button>
+                )}
+
+                {/* Personal Ajo link for user role */}
+                {isUserRole && personalAjo && (
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      if (onSelectPersonalDashboard) onSelectPersonalDashboard();
+                      else if (onOpenPersonal) onOpenPersonal();
+                    }}
+                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-bold text-[#008751] bg-[#E6F3ED] hover:bg-[#d8ece2] transition text-left cursor-pointer"
+                  >
+                    <Wallet className="h-4 w-4 text-[#008751]" />
+                    <span>Personal Ajo</span>
+                  </button>
+                )}
+
                 <button
                   onClick={handleHomeClick}
                   className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-bold text-slate-800 hover:text-[#008751] hover:bg-[#E6F3ED]/40 transition text-left cursor-pointer"

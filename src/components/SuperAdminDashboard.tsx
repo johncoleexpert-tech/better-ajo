@@ -378,69 +378,169 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       try {
         if (!db) return;
 
-        // 1. Ensure ADUGBO JAO group exists with exact name
-        const qAdugbo = query(collection(db, 'groups'), where('name', '==', 'ADUGBO JAO'));
-        const snapAdugbo = await getDocs(qAdugbo);
-        let adugboGroupId = snapAdugbo.docs[0]?.id;
-        if (!adugboGroupId) {
-          const qAdugbo2 = query(collection(db, 'groups'), where('group_name', '==', 'ADUGBO JAO'));
-          const snapAdugbo2 = await getDocs(qAdugbo2);
-          adugboGroupId = snapAdugbo2.docs[0]?.id;
-        }
+        // 1. Find or ensure ADUGBO JAO group exists
+        const groupsSnap = await getDocs(collection(db, 'groups')).catch(() => null);
+        let adugboGroupId = groupsSnap?.docs?.find(d => {
+          const n = String(d.data().name || d.data().group_name || '').toUpperCase();
+          return n.includes('ADUGBO') || n.includes('ADUBO');
+        })?.id || 'grp_adugbo_jao';
 
-        const realAdugboMembers = [
-          { id: 'mem_adugbo_1', name: 'GLRY JAYE', full_name: 'GLRY JAYE', position: 1 }, // EXACT
-          { id: 'mem_adugbo_2', name: 'Tunde Okoro', full_name: 'Tunde Okoro', position: 2 },
-          { id: 'mem_adugbo_3', name: 'Bisi Adebayo', full_name: 'Bisi Adebayo', position: 3 },
-          { id: 'mem_adugbo_4', name: 'Chidi Eze', full_name: 'Chidi Eze', position: 4 },
-          { id: 'mem_adugbo_5', name: 'Fatima Bello', full_name: 'Fatima Bello', position: 5 }
+        const finalFiveFixedPacks = [
+          {
+            id: 'glry_jaye',
+            name: 'GLRY JAYE',
+            fullName: 'Glory Ajayi',
+            full_name: 'GLRY JAYE',
+            position: 1,
+            packingOrder: 1,
+            packing_position: 1,
+            packsLabel: 'Packs 1st',
+            phone: '08077777771',
+            virtualAccountNumber: '8152476851',
+            virtual_account_number: '8152476851',
+            virtualAccountName: 'BETTERAJO-GLRY JAYE',
+            virtual_account_name: 'BETTERAJO-GLRY JAYE',
+            status: 'PAID',
+            current_round_status: 'packed',
+            credit_balance: 0,
+            hasPackedThisRound: true,
+            isFullyPaid: true
+          },
+          {
+            id: 'festus_chris',
+            name: 'Festus Chris',
+            fullName: 'Festus Chris',
+            full_name: 'Festus Chris',
+            altNames: ['FESTUA'],
+            position: 2,
+            packingOrder: 2,
+            packing_position: 2,
+            packsLabel: 'Packs 2nd',
+            phone: '07069702560',
+            virtualAccountNumber: '8152195643',
+            virtual_account_number: '8152195643',
+            virtualAccountName: 'BETTERAJO-FESTUS CHRIS',
+            virtual_account_name: 'BETTERAJO-FESTUS CHRIS',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false
+          },
+          {
+            id: 'sholakule',
+            name: 'Sholakule',
+            fullName: 'Sholakule',
+            full_name: 'Sholakule',
+            altNames: ['SHOLA KUNLE'],
+            position: 3,
+            packingOrder: 3,
+            packing_position: 3,
+            packsLabel: 'Packs 3rd',
+            phone: '07069702563',
+            virtualAccountNumber: '8152741791',
+            virtual_account_number: '8152741791',
+            virtualAccountName: 'BETTERAJO-SHOLA KUNLE',
+            virtual_account_name: 'BETTERAJO-SHOLA KUNLE',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false,
+            keepFromScreenshot: true
+          },
+          {
+            id: 'david_felistans',
+            name: 'David Felistans',
+            fullName: 'David Felistans',
+            full_name: 'David Felistans',
+            altNames: ['DAVID FELISTANCE', 'David Felictans'],
+            position: 4,
+            packingOrder: 4,
+            packing_position: 4,
+            packsLabel: 'Packs 4th',
+            phone: '07069702564',
+            virtualAccountNumber: '8152168957',
+            virtual_account_number: '8152168957',
+            virtualAccountName: 'BETTERAJO-DAVID FELISTANCE',
+            virtual_account_name: 'BETTERAJO-DAVID FELISTANCE',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false,
+            keepFromScreenshot: true
+          },
+          {
+            id: 'kola_ogo',
+            name: 'Kola Ogo',
+            fullName: 'Kola Ogo',
+            full_name: 'Kola Ogo',
+            altNames: ['KOLA OGO'],
+            position: 5,
+            packingOrder: 5,
+            packing_position: 5,
+            packsLabel: 'Packs 5th',
+            phone: '07069702561',
+            virtualAccountNumber: '8152739353',
+            virtual_account_number: '8152739353',
+            virtualAccountName: 'BETTERAJO-KOLA OGO',
+            virtual_account_name: 'BETTERAJO-KOLA OGO',
+            status: 'PENDING',
+            current_round_status: 'pending_contribution',
+            credit_balance: 0,
+            hasPackedThisRound: false,
+            isFullyPaid: false
+          }
         ];
 
-        if (!adugboGroupId) {
-          const newGroupRef = await addDoc(collection(db, 'groups'), {
-            name: 'ADUGBO JAO', // EXACT - keep as user typed
-            group_name: 'ADUGBO JAO',
-            contributionAmount: 50000,
-            contribution_amount: 50000,
-            platformFee: 60,
-            totalAmount: 50060,
-            packFee: 3000,
-            packing_fee: 3000,
-            packing_amount: 250000,
-            members: realAdugboMembers,
-            currentRound: 1,
-            current_round: 1,
-            createdAt: serverTimestamp()
-          });
-          adugboGroupId = newGroupRef.id;
-        } else {
-          // Update group doc to have exact real members
-          await updateDoc(doc(db, 'groups', adugboGroupId), {
-            name: 'ADUGBO JAO',
-            group_name: 'ADUGBO JAO',
-            contributionAmount: 50000,
-            contribution_amount: 50000,
-            platformFee: 60,
-            totalAmount: 50060,
-            packFee: 3000,
-            packing_fee: 3000,
-            packing_amount: 250000,
-            members: realAdugboMembers
-          }).catch(() => {});
-        }
+        // Overwrite group doc to 5 unique packs
+        await setDoc(doc(db, 'groups', adugboGroupId), {
+          id: adugboGroupId,
+          name: 'ADUGBO JAO',
+          group_name: 'ADUGBO JAO',
+          contributionAmount: 50000,
+          contribution_amount: 50000,
+          platformFee: 60,
+          totalAmount: 50060,
+          packFee: 3000,
+          packing_fee: 3000,
+          packing_amount: 250000,
+          members: finalFiveFixedPacks,
+          memberCount: 5,
+          member_limit: 5,
+          currentRound: 1,
+          current_round: 1
+        }, { merge: true }).catch(() => {});
 
-        // 2. Delete corrupted test rows at 14:12 with 50000 or 250000 under OLOPA AJO
-        // Also delete any placeholder MEMBER2, MEMBER3 rows
+        // 2. Delete fake Chidi Eze, Fatima Bello, Tunde Okoro, Bisi Adebayo and duplicate GLRY JAYE
+        const fakeList = ['Chidi Eze', 'Fatima Bello', 'Tunde Okoro', 'Bisi Adebayo', 'CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
+        const fakeVans = ['8152629304', '8152467888'];
+
         const snapContrib = await getDocs(collection(db, 'contributions'));
         for (const d of snapContrib.docs) {
           const dt = d.data();
           const amt = Number(dt.amount || dt.gross_amount || 0);
           const gName = String(dt.groupName || dt.ajoName || '');
-          const mName = String(dt.memberName || dt.userName || '');
+          const mName = String(dt.memberName || dt.userName || dt.full_name || '').trim();
+          const mNameUpper = mName.toUpperCase();
+          const van = String(dt.virtualAccountNumber || dt.virtual_account_number || '');
+          const docId = d.id;
 
-          if ((amt === 50000 || amt === 250000 || amt === 50060) && (gName.includes('OLOPA') || mName.includes('AJAYI OKE'))) {
+          if (
+            fakeList.includes(mName) ||
+            fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
+            fakeVans.includes(van) ||
+            docId.includes('mem_adugbo_2') ||
+            docId.includes('mem_adugbo_3') ||
+            docId.includes('mem_adugbo_4') ||
+            docId.includes('mem_adugbo_5') ||
+            (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
+            (mNameUpper === 'GLRY JAYE' && docId.includes('8152925182')) ||
+            mNameUpper.startsWith('MEMBER')
+          ) {
             await deleteDoc(d.ref).catch(() => {});
-          } else if (mName.toUpperCase().includes('MEMBER')) {
+          } else if ((amt === 50000 || amt === 250000 || amt === 50060) && (gName.includes('OLOPA') || mName.includes('AJAYI OKE'))) {
             await deleteDoc(d.ref).catch(() => {});
           } else if (amt <= 0) {
             // Fix existing rows with ₦0
@@ -462,76 +562,124 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           const dt = d.data();
           const amt = Number(dt.amount || 0);
           const gName = String(dt.groupName || dt.ajoName || '');
-          const mName = String(dt.memberName || dt.userName || '');
+          const mName = String(dt.memberName || dt.userName || '').trim();
+          const mNameUpper = mName.toUpperCase();
+          const van = String(dt.virtualAccountNumber || dt.virtual_account_number || '');
+          const docId = d.id;
 
-          if ((amt === 50000 || amt === 250000 || amt === 50060) && (gName.includes('OLOPA') || mName.includes('AJAYI OKE'))) {
+          if (
+            fakeList.includes(mName) ||
+            fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
+            fakeVans.includes(van) ||
+            docId.includes('mem_adugbo_2') ||
+            docId.includes('mem_adugbo_3') ||
+            docId.includes('mem_adugbo_4') ||
+            docId.includes('mem_adugbo_5') ||
+            (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
+            (mNameUpper === 'GLRY JAYE' && docId.includes('8152925182')) ||
+            mNameUpper.startsWith('MEMBER')
+          ) {
             await deleteDoc(d.ref).catch(() => {});
-          } else if (mName.toUpperCase().includes('MEMBER')) {
+          } else if ((amt === 50000 || amt === 250000 || amt === 50060) && (gName.includes('OLOPA') || mName.includes('AJAYI OKE'))) {
             await deleteDoc(d.ref).catch(() => {});
           }
         }
 
-        // 3. Recreate ADUGBO JAO 5 contributions correctly with exact real names
-        for (const m of realAdugboMembers) {
-          const cId = `adugbo_${m.id}_round1`;
-          await setDoc(doc(db, 'contributions', cId), {
-            groupId: adugboGroupId,
-            group_id: adugboGroupId,
-            groupName: 'ADUGBO JAO',
-            ajoName: 'ADUGBO JAO',
-            memberId: m.id,
-            member_id: m.id,
-            memberName: m.name,
-            userName: m.name,
-            contributionAmount: 50000,
-            fee: 60,
-            total: 50060,
-            amount: 50060, // ₦50,060 single amount
-            gross_amount: 50060,
-            round: 1,
-            round_number: 1,
-            type: 'group_contribution',
-            source: 'group_contribution',
-            status: 'COMPLETED',
-            createdAt: serverTimestamp(),
-            timestamp: serverTimestamp()
-          }, { merge: true }).catch(() => {});
-
-          const ptxId = `ptx_adugbo_${m.id}_round1`;
-          await setDoc(doc(db, 'platform_transactions', ptxId), {
-            type: 'group_contribution',
-            displayType: 'GROUP CONTRIBUTION',
-            amount: 50060,
-            gross_amount: 50060,
-            displayAmount: '₦50,060',
-            groupId: adugboGroupId,
-            group_id: adugboGroupId,
-            memberId: m.id,
-            member_id: m.id,
-            memberName: m.name,
-            userName: m.name,
-            groupName: 'ADUGBO JAO',
-            ajoName: 'ADUGBO JAO',
-            round: 1,
-            source: 'group_contribution',
-            status: 'COMPLETED',
-            createdAt: serverTimestamp(),
-            timestamp: serverTimestamp()
-          }, { merge: true }).catch(() => {});
-
-          // Internal fee to Super Admin
-          await setDoc(doc(db, 'platform_transactions', `${ptxId}_fee`), {
-            type: 'platform_fee',
-            amount: 60,
-            gross_amount: 60,
-            groupId: adugboGroupId,
-            group_id: adugboGroupId,
-            internal: true,
-            status: 'success',
-            createdAt: serverTimestamp(),
-            timestamp: serverTimestamp()
-          }, { merge: true }).catch(() => {});
+        // Delete from group_members collection
+        const snapGm = await getDocs(collection(db, 'group_members')).catch(() => null);
+        if (snapGm) {
+          for (const d of snapGm.docs) {
+            const dt = d.data();
+            const mNameUpper = String(dt.full_name || dt.name || '').trim().toUpperCase();
+            const van = String(dt.virtual_account_number || dt.virtualAccountNumber || '');
+            if (
+              fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
+              fakeVans.includes(van) ||
+              (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
+              d.id.startsWith('mem_adugbo_')
+            ) {
+              await deleteDoc(d.ref).catch(() => {});
+            }
+          }
         }
+
+        // Delete from subcollection groups/{adugboGroupId}/members
+        const snapSub = await getDocs(collection(db, 'groups', adugboGroupId, 'members')).catch(() => null);
+        if (snapSub) {
+          for (const d of snapSub.docs) {
+            const dt = d.data();
+            const mNameUpper = String(dt.full_name || dt.name || '').trim().toUpperCase();
+            const van = String(dt.virtual_account_number || dt.virtualAccountNumber || '');
+            if (
+              fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
+              fakeVans.includes(van) ||
+              (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
+              d.id.startsWith('mem_adugbo_')
+            ) {
+              await deleteDoc(d.ref).catch(() => {});
+            }
+          }
+        }
+
+        // 3. Set ADUGBO JAO contribution for GLRY JAYE (₦50,060 single amount)
+        const glryCId = `adugbo_glry_jaye_round1`;
+        await setDoc(doc(db, 'contributions', glryCId), {
+          groupId: adugboGroupId,
+          group_id: adugboGroupId,
+          groupName: 'ADUGBO JAO',
+          ajoName: 'ADUGBO JAO',
+          memberId: 'glry_jaye',
+          member_id: 'glry_jaye',
+          memberName: 'GLRY JAYE',
+          userName: 'GLRY JAYE',
+          contributionAmount: 50000,
+          fee: 60,
+          total: 50060,
+          amount: 50060, // ₦50,060 single amount
+          gross_amount: 50060,
+          round: 1,
+          round_number: 1,
+          type: 'group_contribution',
+          source: 'group_contribution',
+          status: 'COMPLETED',
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp()
+        }, { merge: true }).catch(() => {});
+
+        const glryPtxId = `ptx_adugbo_glry_jaye_round1`;
+        await setDoc(doc(db, 'platform_transactions', glryPtxId), {
+          type: 'group_contribution',
+          displayType: 'GROUP CONTRIBUTION',
+          amount: 50060,
+          gross_amount: 50060,
+          displayAmount: '₦50,060',
+          groupId: adugboGroupId,
+          group_id: adugboGroupId,
+          memberId: 'glry_jaye',
+          member_id: 'glry_jaye',
+          memberName: 'GLRY JAYE',
+          userName: 'GLRY JAYE',
+          groupName: 'ADUGBO JAO',
+          ajoName: 'ADUGBO JAO',
+          round: 1,
+          source: 'group_contribution',
+          status: 'COMPLETED',
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp()
+        }, { merge: true }).catch(() => {});
+
+        // Internal fee to Super Admin - not shown as +60 in main table
+        await setDoc(doc(db, 'platform_transactions', `${glryPtxId}_fee`), {
+          type: 'platform_fee',
+          amount: 60,
+          gross_amount: 60,
+          groupId: adugboGroupId,
+          group_id: adugboGroupId,
+          internal: true,
+          status: 'success',
+          createdAt: serverTimestamp(),
+          timestamp: serverTimestamp()
+        }, { merge: true }).catch(() => {});
 
         // 4. ADUGBO JAO pack fee ₦3,000 calculation:
         // Total collected = 5 * 50000 = 250000
