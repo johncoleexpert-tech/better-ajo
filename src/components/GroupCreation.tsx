@@ -264,6 +264,11 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
                 status: 'active'
               }));
 
+          const cycleDays = cycleType ? (parseInt(cycleType.replace(/\D/g, ''), 10) || (cycleType.toLowerCase().includes('month') ? 30 : 1)) : 7;
+          const cycleLabel = `${cycleDays} days`;
+          const numMembers = Number(memberLimit);
+          const contribAmt = Number(contributionAmount);
+
           const batch = writeBatch(db);
           // Save members as array field inside group doc
           batch.set(groupRef, {
@@ -273,10 +278,22 @@ export const GroupCreation: React.FC<GroupCreationProps> = ({
             group_id: groupRef.id,
             name: groupName.trim(),
             group_name: groupName.trim(),
-            contributionAmount: Number(contributionAmount),
-            contribution_amount: Number(contributionAmount),
+            nameLower: groupName.trim().toLowerCase(),
+            contributionAmount: contribAmt,
+            contribution_amount: contribAmt,
+            platformFeePerMember: 60,
             platformFee: 60,
-            totalAmount: Number(contributionAmount) + 60,
+            platformFeeTotal: numMembers * 60,
+            totalWithFeePerMember: contribAmt + 60,
+            totalAmount: contribAmt + 60,
+            totalPackAmount: contribAmt * numMembers,
+            packing_amount: contribAmt * numMembers,
+            memberCount: numMembers,
+            member_limit: numMembers,
+            packingIntervalDays: cycleDays,
+            packingInterval: cycleLabel,
+            contributionFrequencyDays: cycleDays,
+            contributionFrequency: cycleLabel,
             currentRound: 1,
             current_round: 1,
             members: membersArray

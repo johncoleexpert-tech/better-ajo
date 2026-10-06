@@ -93,7 +93,16 @@ export default function App() {
           setUser(parsed.profile);
           if (parsed.personalAjo) setPersonalAjo(parsed.personalAjo);
           // Groups are loaded fresh from Firestore, NOT from localStorage
-          if (parsed.activeGroupId) {
+          const r = parsed.profile.role;
+          const isSA = parsed.profile.phone === '08154267469' || r === 'SUPER_ADMIN' || r === 'superadmin' || r === 'super_admin' || parsed.profile.email === 'realheavenict@gmail.com' || parsed.profile.email === 'superadmin@packajo.ng' || parsed.profile.email === 'paulakinyele54@gmail.com';
+          const isGA = !isSA && (r === 'GROUP_ADMIN' || r === 'groupadmin' || r === 'group_admin');
+
+          if (isSA) {
+            setCurrentView('super_admin');
+          } else if (isGA) {
+            if (parsed.activeGroupId) setActiveGroupId(parsed.activeGroupId);
+            setCurrentView('group_admin_dashboard');
+          } else if (parsed.activeGroupId) {
             setActiveGroupId(parsed.activeGroupId);
             setCurrentView('group_dashboard');
           } else if (parsed.personalAjo) {

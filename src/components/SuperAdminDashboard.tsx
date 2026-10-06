@@ -24,6 +24,7 @@ import {
   ChevronRight,
   Download,
   LogOut,
+  PlusCircle,
   X
 } from 'lucide-react';
 import { SuperAdminFullData } from '../types/index.js';
@@ -83,6 +84,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [accountName, setAccountName] = useState('Super Administrator');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
+
+  // Group creation modal state
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupAmount, setNewGroupAmount] = useState('50000');
+  const [newGroupMemberCount, setNewGroupMemberCount] = useState('5');
+  const [newGroupCycle, setNewGroupCycle] = useState('3');
+  const [newGroupCustomDays, setNewGroupCustomDays] = useState('4');
+  const [newGroupPackingFee, setNewGroupPackingFee] = useState('3000');
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
   // Real-time live collections state for instant Super Admin calculation (STEP 4)
   const [allContributions, setAllContributions] = useState<any[]>([]);
@@ -1005,6 +1016,110 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
   };
 
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGroupName.trim()) {
+      showToast('Please enter a group name');
+      return;
+    }
+    try {
+      setIsCreatingGroup(true);
+      const name = newGroupName.trim().toUpperCase();
+      const memberCount = parseInt(newGroupMemberCount, 10) || 5;
+      const contributionAmount = parseInt(newGroupAmount, 10) || 50000;
+      const cycleDays = newGroupCycle === 'custom' ? (parseInt(newGroupCustomDays, 10) || 4) : (parseInt(newGroupCycle, 10) || 3);
+      const cycleLabel = `${cycleDays} days`;
+
+      const newRef = doc(collection(db, 'groups'));
+      const newGroupId = newRef.id;
+
+      const membersList = Array.from({ length: memberCount }, (_, i) => {
+        const pos = i + 1;
+        const posSuffix = pos === 1 ? '1st' : pos === 2 ? '2nd' : pos === 3 ? '3rd' : `${pos}th`;
+        return {
+          id: `mem_${newGroupId}_${pos}`,
+          name: `Member ${pos}`,
+          fullName: `Member ${pos}`,
+          full_name: `Member ${pos}`,
+          position: pos,
+          packingOrder: pos,
+          packing_position: pos,
+          packsLabel: `Packs ${posSuffix}`,
+          phone: `0800000000${pos}`,
+          virtualAccountNumber: `815${Math.floor(1000000 + Math.random() * 9000000)}`,
+          virtual_account_number: `815${Math.floor(1000000 + Math.random() * 9000000)}`,
+          virtualAccountName: `BETTERAJO-${name}-MEMBER${pos}`,
+          virtual_account_name: `BETTERAJO-${name}-MEMBER${pos}`,
+          status: 'PENDING',
+          current_round_status: 'pending_contribution',
+          credit_balance: 0,
+          hasPackedThisRound: false,
+          isFullyPaid: false
+        };
+      });
+
+      await setDoc(newRef, {
+        id: newGroupId,
+        groupId: newGroupId,
+        name: name,
+        group_name: name,
+        nameLower: name.toLowerCase(),
+        contributionAmount: contributionAmount,
+        contribution_amount: contributionAmount,
+        platformFeePerMember: 60,
+        platformFee: 60,
+        platformFeeTotal: memberCount * 60,
+        totalWithFeePerMember: contributionAmount + 60,
+        totalAmount: contributionAmount + 60,
+        totalPackAmount: contributionAmount * memberCount,
+        packing_amount: contributionAmount * memberCount,
+        packingFee: parseInt(newGroupPackingFee, 10) || 3000,
+        packing_fee: parseInt(newGroupPackingFee, 10) || 3000,
+        memberCount: memberCount,
+        member_limit: memberCount,
+        packingIntervalDays: cycleDays,
+        packingInterval: cycleLabel,
+        cycle_type: `Every ${cycleDays} Days`,
+        contributionFrequencyDays: cycleDays,
+        contributionFrequency: cycleLabel,
+        currentRound: 1,
+        current_round: 1,
+        status: 'active',
+        owner_id: userId || 'super_admin',
+        admin_id: userId || 'super_admin',
+        admin_name: 'Super Administrator',
+        members: membersList,
+        createdAt: serverTimestamp(),
+        created_at: new Date().toISOString()
+      });
+
+      // Save subcollection members and group_members
+      for (const m of membersList) {
+        await setDoc(doc(db, 'groups', newGroupId, 'members', m.id), {
+          ...m,
+          groupId: newGroupId,
+          group_id: newGroupId
+        }).catch(() => {});
+        await setDoc(doc(db, 'group_members', `${newGroupId}_${m.id}`), {
+          ...m,
+          groupId: newGroupId,
+          group_id: newGroupId,
+          user_id: `usr_${m.id}`,
+          status: 'active'
+        }).catch(() => {});
+      }
+
+      showToast(`Group "${name}" created successfully with ${cycleDays}-day cycle!`);
+      setShowCreateGroupModal(false);
+      setNewGroupName('');
+      fetchSuperAdminData();
+    } catch (err: any) {
+      showToast(err.message || 'Error creating group');
+    } finally {
+      setIsCreatingGroup(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] text-slate-500">
@@ -1716,15 +1831,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {/* Tab: Groups */}
       {activeTab === 'groups' && (
         <div className="rounded-3xl bg-white border border-slate-200/80 overflow-hidden shadow-sm">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
                 All Groups Platform-Wide ({groups.length})
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Every Group Better Ajo created, rotation state, and admin details.
+                Every Group Better Ajo created, rotation state, dynamic cycle interval, and admin details.
               </p>
             </div>
+            <button
+              onClick={() => setShowCreateGroupModal(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#008751] hover:bg-[#007345] text-white shadow-sm transition cursor-pointer"
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span>+ Create New Group</span>
+            </button>
           </div>
 
           <div className="overflow-x-auto">
@@ -2821,6 +2943,184 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     </>
                   ) : (
                     <span>Disburse Revenue</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Create Group with Dynamic Cycle */}
+      {showCreateGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-50 text-[#008751]">
+                  <PlusCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                    Create New Group Ajo
+                  </h3>
+                  <p className="text-[11px] text-slate-500">Configure dynamic cycle, members & contributions</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreateGroupModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGroup} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Group Name
+                </label>
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="e.g. ADUGBO JAO, KARILE AJO"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Contribution (₦)
+                  </label>
+                  <input
+                    type="number"
+                    value={newGroupAmount}
+                    onChange={(e) => setNewGroupAmount(e.target.value)}
+                    placeholder="50000"
+                    min="1000"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Member Count
+                  </label>
+                  <select
+                    value={newGroupMemberCount}
+                    onChange={(e) => setNewGroupMemberCount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
+                  >
+                    <option value="5">5 Members</option>
+                    <option value="10">10 Members</option>
+                    <option value="15">15 Members</option>
+                    <option value="20">20 Members</option>
+                    <option value="30">30 Members</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Rotation Cycle (Dynamic)
+                </label>
+                <select
+                  name="cycle"
+                  value={newGroupCycle}
+                  onChange={(e) => setNewGroupCycle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
+                >
+                  <option value="3">3 Days</option>
+                  <option value="4">4 Days</option>
+                  <option value="7">7 Days</option>
+                  <option value="15">15 Days</option>
+                  <option value="30">30 Days</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </div>
+
+              {newGroupCycle === 'custom' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Custom Cycle Interval (in Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={newGroupCustomDays}
+                    onChange={(e) => setNewGroupCustomDays(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
+                    required
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Packing Commission Fee (₦)
+                </label>
+                <input
+                  type="number"
+                  value={newGroupPackingFee}
+                  onChange={(e) => setNewGroupPackingFee(e.target.value)}
+                  placeholder="3000"
+                  min="0"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-[#008751]"
+                />
+              </div>
+
+              {/* Dynamic Financial Overview */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs space-y-1.5">
+                <div className="flex justify-between text-slate-600">
+                  <span>Per Member Payment:</span>
+                  <span className="font-extrabold text-slate-900">
+                    ₦{(Number(newGroupAmount || 0) + 60).toLocaleString()} (₦{Number(newGroupAmount || 0).toLocaleString()} + ₦60 fee)
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Platform Fee Total:</span>
+                  <span className="font-extrabold text-emerald-700">
+                    ₦{(Number(newGroupMemberCount || 5) * 60).toLocaleString()} (₦60 × {newGroupMemberCount})
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Total Pot Per Round:</span>
+                  <span className="font-extrabold text-slate-900">
+                    ₦{(Number(newGroupAmount || 0) * Number(newGroupMemberCount || 5)).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Cycle Interval:</span>
+                  <span className="font-extrabold text-blue-700">
+                    Every {newGroupCycle === 'custom' ? newGroupCustomDays : newGroupCycle} days
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateGroupModal(false)}
+                  className="flex-1 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingGroup}
+                  className="flex-1 py-3 rounded-xl bg-[#008751] hover:bg-[#007345] text-white font-extrabold text-xs shadow-md transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isCreatingGroup ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <span>Create Group</span>
                   )}
                 </button>
               </div>

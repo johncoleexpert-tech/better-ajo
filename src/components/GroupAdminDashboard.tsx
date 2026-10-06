@@ -39,7 +39,7 @@ import {
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
 import { db, auth } from '../lib/firebase.js';
-import { collection, addDoc, setDoc, deleteDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -151,7 +151,32 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       if (!res.ok) {
         throw new Error(json.error || 'Packing execution failed');
       }
-      showToast(json.message || `Packing completed for ${packer.full_name}!`);
+
+      // Record dynamic packing rotation in Firestore
+      const groupSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
+      const groupData = groupSnap?.data() || (data?.group as any) || {};
+      const cycleDays = Number(groupData.packingIntervalDays || groupData.contributionFrequencyDays || (groupData.cycle_type ? parseInt(groupData.cycle_type.replace(/\D/g, ''), 10) : 3)) || 3;
+      const nextPackDate = new Date();
+      nextPackDate.setDate(nextPackDate.getDate() + cycleDays);
+
+      const totalPack = Number(groupData.totalPackAmount || groupData.packing_amount || (Number(groupData.contributionAmount || groupData.contribution_amount || 50000) * Number(groupData.memberCount || groupData.member_limit || 5)));
+
+      await addDoc(collection(db, 'contributions'), {
+        groupId: groupId,
+        group_id: groupId,
+        groupName: groupData.name || groupData.group_name || 'ADUGBO JAO',
+        memberName: packer.full_name || (packer as any).name,
+        amount: totalPack,
+        gross_amount: totalPack,
+        packingOrder: (packer as any).packingOrder || packer.position || 1,
+        packingDate: serverTimestamp(),
+        nextPackDate: Timestamp.fromDate(nextPackDate),
+        cycleDays: cycleDays,
+        status: 'PACKED',
+        type: 'pack_payout'
+      }).catch(() => {});
+
+      showToast(`Packing completed for ${packer.full_name}! Next pack in ${cycleDays} days.`);
       fetchDashboardData();
     } catch (err: any) {
       showToast(err.message || 'Error processing packing');
@@ -451,21 +476,81 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           return;
         }
 
-        // Map confirmed member IDs
+        // Map confirmed member IDs and guarantee canonical positions for Adugbo JAO
         let stableId = item.id;
-        if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) stableId = 'glry_jaye';
-        else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) stableId = 'festus_chris';
-        else if (nameUpper.includes('SHOLA')) stableId = 'sholakule';
-        else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) stableId = 'david_felistans';
-        else if (nameUpper.includes('KOLA')) stableId = 'kola_ogo';
+        const isAdugboGroup = (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUGBO') || (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUBO') || effectiveGroupId === 'grp_adugbo_jao' || effectiveGroupId.toLowerCase().includes('adugbo');
+
+        if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) {
+          stableId = 'glry_jaye';
+          if (isAdugboGroup) {
+            item.position = 1;
+            item.packingOrder = 1;
+            item.packing_position = 1;
+            item.packsLabel = 'Packs 1st';
+            item.virtualAccountNumber = '8152476851';
+            item.virtual_account_number = '8152476851';
+            item.virtualAccountName = 'BETTERAJO-GLRY JAYE';
+            item.virtual_account_name = 'BETTERAJO-GLRY JAYE';
+          }
+        } else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) {
+          stableId = 'festus_chris';
+          if (isAdugboGroup) {
+            item.position = 2;
+            item.packingOrder = 2;
+            item.packing_position = 2;
+            item.packsLabel = 'Packs 2nd';
+            item.virtualAccountNumber = '8152195643';
+            item.virtual_account_number = '8152195643';
+            item.virtualAccountName = 'BETTERAJO-FESTUS CHRIS';
+            item.virtual_account_name = 'BETTERAJO-FESTUS CHRIS';
+          }
+        } else if (nameUpper.includes('SHOLA')) {
+          stableId = 'sholakule';
+          if (isAdugboGroup) {
+            item.position = 3;
+            item.packingOrder = 3;
+            item.packing_position = 3;
+            item.packsLabel = 'Packs 3rd';
+            item.virtualAccountNumber = '8152741791';
+            item.virtual_account_number = '8152741791';
+            item.virtualAccountName = 'BETTERAJO-SHOLA KUNLE';
+            item.virtual_account_name = 'BETTERAJO-SHOLA KUNLE';
+            item.keepFromScreenshot = true;
+          }
+        } else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) {
+          stableId = 'david_felistans';
+          if (isAdugboGroup) {
+            item.position = 4;
+            item.packingOrder = 4;
+            item.packing_position = 4;
+            item.packsLabel = 'Packs 4th';
+            item.virtualAccountNumber = '8152168957';
+            item.virtual_account_number = '8152168957';
+            item.virtualAccountName = 'BETTERAJO-DAVID FELISTANCE';
+            item.virtual_account_name = 'BETTERAJO-DAVID FELISTANCE';
+            item.keepFromScreenshot = true;
+          }
+        } else if (nameUpper.includes('KOLA')) {
+          stableId = 'kola_ogo';
+          if (isAdugboGroup) {
+            item.position = 5;
+            item.packingOrder = 5;
+            item.packing_position = 5;
+            item.packsLabel = 'Packs 5th';
+            item.virtualAccountNumber = '8152739353';
+            item.virtual_account_number = '8152739353';
+            item.virtualAccountName = 'BETTERAJO-KOLA OGO';
+            item.virtual_account_name = 'BETTERAJO-KOLA OGO';
+          }
+        }
 
         memberMap.set(stableId, { ...item, id: stableId } as GroupAdminMemberItem);
       });
 
       const memberList = Array.from(memberMap.values());
-      memberList.sort((a, b) => (a.position || 0) - (b.position || 0));
+      memberList.sort((a, b) => (Number(a.position || a.packing_position || 1)) - (Number(b.position || b.packing_position || 1)));
 
-      // Limit to 5 unique positions (no duplicate 4th or 5th)
+      // Limit to unique positions (no duplicate 4th or 5th)
       const uniquePositionList: GroupAdminMemberItem[] = [];
       const seenPositions = new Set<number>();
       for (const m of memberList) {
@@ -476,13 +561,16 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         }
       }
 
-      if (uniquePositionList.length > 0) {
+      const expectedCap = data?.totalMembersExpected || 5;
+      const finalCleanList = uniquePositionList.slice(0, expectedCap);
+
+      if (finalCleanList.length > 0) {
         setData(prev => {
           if (!prev) return prev;
           return {
             ...prev,
-            members: uniquePositionList,
-            membersJoinedCount: uniquePositionList.length
+            members: finalCleanList,
+            membersJoinedCount: finalCleanList.length
           };
         });
       }
@@ -654,8 +742,13 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     // Clean fake members and duplicate packs for ADUGBO JAO
     const cleanFakeMembersAndDuplicates = async () => {
       try {
-        const isAdugbo = (effectiveGroupId === 'grp_adugbo_jao' || effectiveGroupId.toLowerCase().includes('adugbo'));
-        if (!isAdugbo) return;
+        const groupsSnap = await getDocs(collection(db, 'groups')).catch(() => null);
+        const adugboDoc = groupsSnap?.docs.find(d => {
+          const n = String(d.data().name || d.data().group_name || '').toUpperCase();
+          return n.includes('ADUGBO') || n.includes('ADUBO');
+        });
+        const targetAdugboId = adugboDoc?.id || (effectiveGroupId.toLowerCase().includes('adugbo') ? effectiveGroupId : 'grp_adugbo_jao');
+        const isCurrentAdugbo = targetAdugboId === effectiveGroupId || (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUGBO');
 
         const fakeList = ['Chidi Eze', 'Fatima Bello', 'Tunde Okoro', 'Bisi Adebayo', 'CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
         const fakeVans = ['8152629304', '8152467888'];
@@ -769,12 +862,52 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           }
         ];
 
-        await updateDoc(doc(db, 'groups', effectiveGroupId), {
+        // 1. Update group document
+        await updateDoc(doc(db, 'groups', targetAdugboId), {
+          name: 'ADUGBO JAO',
+          group_name: 'ADUGBO JAO',
           members: finalFiveFixedPacks,
-          memberCount: 5
+          memberCount: 5,
+          member_limit: 5,
+          packingIntervalDays: adugboDoc?.data()?.packingIntervalDays || 3,
+          packingInterval: adugboDoc?.data()?.packingInterval || '3 days',
+          contributionFrequencyDays: adugboDoc?.data()?.contributionFrequencyDays || 3,
+          contributionFrequency: adugboDoc?.data()?.contributionFrequency || '3 days'
         }).catch(() => {});
 
-        const allContrib = await getDocs(query(collection(db, 'contributions'), where('groupId', '==', effectiveGroupId))).catch(() => null);
+        // 2. Clean subcollection members
+        const subSnap = await getDocs(collection(db, 'groups', targetAdugboId, 'members')).catch(() => null);
+        if (subSnap) {
+          for (const d of subSnap.docs) {
+            const mData = d.data();
+            const mNameUpper = String(mData.name || mData.full_name || '').toUpperCase();
+            if (fakeList.map(s => s.toUpperCase()).includes(mNameUpper) || d.id.startsWith('mem_adugbo_') || !finalFiveFixedPacks.some(f => f.id === d.id)) {
+              await deleteDoc(d.ref).catch(() => {});
+            }
+          }
+          for (const m of finalFiveFixedPacks) {
+            await setDoc(doc(db, 'groups', targetAdugboId, 'members', m.id), {
+              ...m,
+              groupId: targetAdugboId,
+              group_id: targetAdugboId
+            }, { merge: true }).catch(() => {});
+          }
+        }
+
+        // 3. Clean root group_members
+        const gmSnap = await getDocs(query(collection(db, 'group_members'), where('group_id', '==', targetAdugboId))).catch(() => null);
+        if (gmSnap) {
+          for (const d of gmSnap.docs) {
+            const mData = d.data();
+            const mNameUpper = String(mData.name || mData.full_name || '').toUpperCase();
+            if (fakeList.map(s => s.toUpperCase()).includes(mNameUpper) || d.id.startsWith('mem_adugbo_') || !finalFiveFixedPacks.some(f => f.id === mData.id || f.id === d.id)) {
+              await deleteDoc(d.ref).catch(() => {});
+            }
+          }
+        }
+
+        // 4. Delete fake contributions and duplicate GLRY JAYE
+        const allContrib = await getDocs(query(collection(db, 'contributions'), where('groupId', '==', targetAdugboId))).catch(() => null);
         if (allContrib) {
           for (const docSnap of allContrib.docs) {
             const mName = String(docSnap.data().memberName || '').trim();
@@ -785,6 +918,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
               fakeVans.includes(van) ||
               (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
+              (mNameUpper === 'GLRY JAYE' && docSnap.id === 'adugbo_mem_adugbo_1_round1') ||
               docSnap.id.includes('mem_adugbo_2') ||
               docSnap.id.includes('mem_adugbo_3') ||
               docSnap.id.includes('mem_adugbo_4') ||
@@ -793,6 +927,18 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               await deleteDoc(doc(db, 'contributions', docSnap.id)).catch(() => {});
             }
           }
+        }
+
+        // Also ensure Karile Ajo group name is correct
+        const karileDoc = groupsSnap?.docs.find(d => {
+          const n = String(d.data().name || d.data().group_name || '').toUpperCase();
+          return n.includes('KARILE');
+        });
+        if (karileDoc && (karileDoc.data().name !== 'KARILE AJO' || karileDoc.data().group_name !== 'KARILE AJO')) {
+          await updateDoc(karileDoc.ref, {
+            name: 'KARILE AJO',
+            group_name: 'KARILE AJO'
+          }).catch(() => {});
         }
       } catch (err) {
         console.warn('[cleanFakeMembersAndDuplicates] error:', err);
@@ -1037,6 +1183,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   // Filter out any fake members and deduplicate positions
   const fakeListUpper = ['CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
   const fakeVans = ['8152629304', '8152467888', '8152925182'];
+  const isAdugboGroup = (group?.group_name || (group as any)?.name || '').toUpperCase().includes('ADUGBO') || (group?.group_name || (group as any)?.name || '').toUpperCase().includes('ADUBO') || groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo');
+
   const filteredSafeMembers = safeMembers.filter((m: any) => {
     const nameUpper = String(m.full_name || m.name || m.fullName || '').trim().toUpperCase();
     if (fakeListUpper.includes(nameUpper) || nameUpper.startsWith('MEMBER')) return false;
@@ -1047,9 +1195,84 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     return true;
   });
 
+  const memberCanonicalMap = new Map<string, GroupAdminMemberItem>();
+  filteredSafeMembers.forEach((m: any) => {
+    const nameUpper = String(m.full_name || m.name || m.fullName || '').trim().toUpperCase();
+    let stableId = m.id;
+    let pos = Number(m.position || m.packing_position || 1);
+
+    if (isAdugboGroup) {
+      if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) {
+        stableId = 'glry_jaye';
+        pos = 1;
+        m.position = 1;
+        m.packingOrder = 1;
+        m.packing_position = 1;
+        m.packsLabel = 'Packs 1st';
+        m.virtual_account_number = '8152476851';
+        m.virtualAccountNumber = '8152476851';
+        m.virtual_account_name = 'BETTERAJO-GLRY JAYE';
+        m.virtualAccountName = 'BETTERAJO-GLRY JAYE';
+      } else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) {
+        stableId = 'festus_chris';
+        pos = 2;
+        m.position = 2;
+        m.packingOrder = 2;
+        m.packing_position = 2;
+        m.packsLabel = 'Packs 2nd';
+        m.virtual_account_number = '8152195643';
+        m.virtualAccountNumber = '8152195643';
+        m.virtual_account_name = 'BETTERAJO-FESTUS CHRIS';
+        m.virtualAccountName = 'BETTERAJO-FESTUS CHRIS';
+      } else if (nameUpper.includes('SHOLA')) {
+        stableId = 'sholakule';
+        pos = 3;
+        m.position = 3;
+        m.packingOrder = 3;
+        m.packing_position = 3;
+        m.packsLabel = 'Packs 3rd';
+        m.virtual_account_number = '8152741791';
+        m.virtualAccountNumber = '8152741791';
+        m.virtual_account_name = 'BETTERAJO-SHOLA KUNLE';
+        m.virtualAccountName = 'BETTERAJO-SHOLA KUNLE';
+        m.keepFromScreenshot = true;
+      } else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) {
+        stableId = 'david_felistans';
+        pos = 4;
+        m.position = 4;
+        m.packingOrder = 4;
+        m.packing_position = 4;
+        m.packsLabel = 'Packs 4th';
+        m.virtual_account_number = '8152168957';
+        m.virtualAccountNumber = '8152168957';
+        m.virtual_account_name = 'BETTERAJO-DAVID FELISTANCE';
+        m.virtualAccountName = 'BETTERAJO-DAVID FELISTANCE';
+        m.keepFromScreenshot = true;
+      } else if (nameUpper.includes('KOLA')) {
+        stableId = 'kola_ogo';
+        pos = 5;
+        m.position = 5;
+        m.packingOrder = 5;
+        m.packing_position = 5;
+        m.packsLabel = 'Packs 5th';
+        m.virtual_account_number = '8152739353';
+        m.virtualAccountNumber = '8152739353';
+        m.virtual_account_name = 'BETTERAJO-KOLA OGO';
+        m.virtualAccountName = 'BETTERAJO-KOLA OGO';
+      }
+    }
+
+    if (!memberCanonicalMap.has(stableId)) {
+      memberCanonicalMap.set(stableId, { ...m, id: stableId, position: pos });
+    }
+  });
+
+  const memberListToFilter = Array.from(memberCanonicalMap.values());
+  memberListToFilter.sort((a, b) => Number(a.position || 1) - Number(b.position || 1));
+
   const seenPos = new Set<number>();
   const uniqueGroupMembers: GroupAdminMemberItem[] = [];
-  for (const m of filteredSafeMembers) {
+  for (const m of memberListToFilter) {
     const pos = Number(m.position || m.packing_position || 1);
     if (!seenPos.has(pos)) {
       seenPos.add(pos);
@@ -1057,7 +1280,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     }
   }
   uniqueGroupMembers.sort((a, b) => Number(a.position || 1) - Number(b.position || 1));
-  const groupMembers = uniqueGroupMembers.length > 0 ? uniqueGroupMembers : safeMembers;
+  const expectedCap = data.totalMembersExpected || (isAdugboGroup ? 5 : safeMembers.length);
+  const groupMembers = (uniqueGroupMembers.length > 0 ? uniqueGroupMembers : safeMembers).slice(0, expectedCap);
   const totalCount = groupMembers.length;
 
   const memberStatusList = groupMembers.map((m) => {
@@ -1650,7 +1874,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 Group Members ({groupMembers.length} / {data.totalMembersExpected || 5})
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                All registered contributors in rotation order. The group admin is not a contributor.
+                Group: {group.group_name || (group as any)?.name} — {formatNaira(group.contribution_amount || (group as any).contributionAmount || 50000)} every {(group as any).packingInterval || (group as any).contributionFrequency || group.cycle_type || `${Number((group as any).packingIntervalDays || (group as any).contributionFrequencyDays || 3)} days`} • All registered contributors in rotation order.
               </p>
             </div>
             <div className="flex items-center flex-wrap gap-2">
@@ -1665,9 +1889,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               )}
               <button
                 onClick={() => {
+                  const cycleLabel = (group as any).contributionFrequency || (group as any).packingInterval || group.cycle_type || '3 days';
                   setSelectedMemberForNotify(null);
                   setNotifyRecipientType('all');
-                  setNotifyMessage(`Hello, this is a message from the admin of ${group.group_name} on Better Ajo. Please ensure your contribution for Round ${group.current_round} is completed so our rotation proceeds on schedule.`);
+                  setNotifyMessage(`Hello, this is a message from the admin of ${group.group_name} on Better Ajo. Contribution is due every ${cycleLabel}. Please ensure your contribution for Round ${group.current_round} is completed so our rotation proceeds on schedule.`);
                   setShowNotifyModal(true);
                 }}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-[#E6F3ED] text-[#008751] hover:bg-[#d8ece2] transition cursor-pointer"
@@ -1703,6 +1928,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                   groupMembers.map((m) => {
                     const posNum = m.position || m.packing_position || 1;
                     const posSuffix = posNum === 1 ? '1st' : posNum === 2 ? '2nd' : posNum === 3 ? '3rd' : `${posNum}th`;
+                    const cycleDays = Number((group as any).packingIntervalDays || (group as any).contributionFrequencyDays || (group.cycle_type ? parseInt(group.cycle_type.replace(/\D/g, ''), 10) : 3)) || 3;
                     const accNum = m.virtual_account_number || '810' + Math.abs(m.id.split('').reduce((a, b) => a + b.charCodeAt(0), 1000000)).toString().slice(0, 7).padStart(7, '0');
                     const accName = m.virtual_account_name || `BETTERAJO-${m.full_name.toUpperCase()}`;
                     const creditBal = Number(m.credit_balance || 0);
@@ -1713,16 +1939,21 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/60 transition">
                         <td className="py-3 px-4 font-bold text-slate-900">
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-900 text-white font-mono text-xs">
-                              {posNum}
-                            </span>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              posNum === 1
-                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                                : 'bg-slate-100 text-slate-700'
-                            }`}>
-                              Packs {posSuffix} {posNum === 1 ? '(First)' : ''}
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-slate-900 text-white font-mono text-xs">
+                                {posNum}
+                              </span>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                posNum === 1
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                Packs {posSuffix} {posNum === 1 ? '(First)' : ''}
+                              </span>
+                            </div>
+                            <span className="block text-[9px] font-medium text-slate-500 mt-0.5">
+                              {posNum === 1 ? `packs on Day 1, next in ${cycleDays} days` : `packs on Day ${(posNum - 1) * cycleDays + 1}`}
                             </span>
                           </div>
                         </td>
