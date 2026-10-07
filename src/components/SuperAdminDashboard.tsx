@@ -30,8 +30,8 @@ import {
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
-import { doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, collection, query, where, orderBy, runTransaction, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { db, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
+import { doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, collection, query, where, orderBy, runTransaction, getDocs, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { db, auth, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
 import { getRevenue } from '../lib/revenue.js';
 
 interface SuperAdminDashboardProps {
@@ -94,6 +94,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [newGroupCustomDays, setNewGroupCustomDays] = useState('4');
   const [newGroupPackingFee, setNewGroupPackingFee] = useState('3000');
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+
+  // Permanent Database Reset states
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetText, setResetText] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState(false);
 
   // Real-time live collections state for instant Super Admin calculation (STEP 4)
   const [allContributions, setAllContributions] = useState<any[]>([]);
@@ -635,66 +641,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           }
         }
 
-        // 3. Set ADUGBO JAO contribution for GLRY JAYE (₦50,060 single amount)
-        const glryCId = `adugbo_glry_jaye_round1`;
-        await setDoc(doc(db, 'contributions', glryCId), {
-          groupId: adugboGroupId,
-          group_id: adugboGroupId,
-          groupName: 'ADUGBO JAO',
-          ajoName: 'ADUGBO JAO',
-          memberId: 'glry_jaye',
-          member_id: 'glry_jaye',
-          memberName: 'GLRY JAYE',
-          userName: 'GLRY JAYE',
-          contributionAmount: 50000,
-          fee: 60,
-          total: 50060,
-          amount: 50060, // ₦50,060 single amount
-          gross_amount: 50060,
-          round: 1,
-          round_number: 1,
-          type: 'group_contribution',
-          source: 'group_contribution',
-          status: 'COMPLETED',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
-
-        const glryPtxId = `ptx_adugbo_glry_jaye_round1`;
-        await setDoc(doc(db, 'platform_transactions', glryPtxId), {
-          type: 'group_contribution',
-          displayType: 'GROUP CONTRIBUTION',
-          amount: 50060,
-          gross_amount: 50060,
-          displayAmount: '₦50,060',
-          groupId: adugboGroupId,
-          group_id: adugboGroupId,
-          memberId: 'glry_jaye',
-          member_id: 'glry_jaye',
-          memberName: 'GLRY JAYE',
-          userName: 'GLRY JAYE',
-          groupName: 'ADUGBO JAO',
-          ajoName: 'ADUGBO JAO',
-          round: 1,
-          source: 'group_contribution',
-          status: 'COMPLETED',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
-
-        // Internal fee to Super Admin - not shown as +60 in main table
-        await setDoc(doc(db, 'platform_transactions', `${glryPtxId}_fee`), {
-          type: 'platform_fee',
-          amount: 60,
-          gross_amount: 60,
-          groupId: adugboGroupId,
-          group_id: adugboGroupId,
-          internal: true,
-          status: 'success',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
-
         // 4. CLEANUP FAKE PACK THAT ALREADY HAPPENED - KOKO LOLA + 2000 COMMISSION
         await deleteDoc(doc(db, 'platform_transactions', 'ptx_adugbo_super_admin_fee')).catch(() => {});
         await deleteDoc(doc(db, 'platform_transactions', 'ptx_adugbo_admin_commission')).catch(() => {});
@@ -705,7 +651,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           for (const gDoc of groupsSnapAll.docs) {
             const gData = gDoc.data();
             const members = gData.members || [];
-            const allPending = members.every((m: any) => (m.status === 'PENDING' || !m.hasPaid) && m.hasPaidCurrentCycle !== true);
+            const allPending = members.length > 0 && members.every((m: any) => (m.status === 'PENDING' || !m.hasPaid) && m.hasPaidCurrentCycle !== true);
 
             if (allPending) {
               // Nobody paid - but contributions exist = auto bug - delete
@@ -748,45 +694,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             }
           }
         }
-
-        // 5. Ensure OLOPA AJO has AJAYI OKE once at ₦20,000 + ₦60 = ₦20,060
-        const qOlopa = query(collection(db, 'groups'), where('name', '==', 'OLOPA AJO'));
-        const snapOlopa = await getDocs(qOlopa);
-        const olopaId = snapOlopa.docs[0]?.id || 'grp_1790934569043_a9pj';
-        await setDoc(doc(db, 'contributions', 'contrib_olopa_ajayi_round1'), {
-          groupId: olopaId,
-          group_id: olopaId,
-          groupName: 'OLOPA AJO',
-          ajoName: 'OLOPA AJO',
-          memberId: 'mem_olopa_ajayi',
-          member_id: 'mem_olopa_ajayi',
-          memberName: 'AJAYI OKE',
-          userName: 'AJAYI OKE',
-          contributionAmount: 20000,
-          fee: 60,
-          total: 20060,
-          amount: 20060, // ₦20,060
-          gross_amount: 20060,
-          round: 1,
-          round_number: 1,
-          type: 'group_contribution',
-          source: 'group_contribution',
-          status: 'COMPLETED',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
-
-        // Keep platformRevenue/main in sync with ₦15,540 gross and ₦1,540 available
-        await setDoc(doc(db, 'platformRevenue', 'main'), {
-          stream1: 600,
-          stream2: 540,
-          stream3: 14400,
-          stream4: 0,
-          totalGross: 15540,
-          totalWithdrawn: 14000,
-          unifiedAvailable: 1540,
-          lastUpdated: serverTimestamp()
-        }, { merge: true }).catch(() => {});
       } catch (err) {
         console.warn('[runGroupIsolationMigration warn]:', err);
       }
@@ -820,7 +727,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     const role = String(u.role || '').toLowerCase();
     return Boolean(isAct) && role !== 'super_admin' && role !== 'superadmin';
   }).length;
-  const stream1Live = activatedUsersCount > 0 ? (activatedUsersCount * 600) : Number(revenue?.stream1 || wallet?.stream1 || 600);
+  const stream1Live = activatedUsersCount > 0 ? (activatedUsersCount * 600) : Number(revenue?.stream1 || wallet?.stream1 || 0);
 
   // Stream2 = contributions fee
   const depositDocsCount = allContributions.filter((doc) => {
@@ -828,10 +735,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     const t = String(doc.type || '').toLowerCase();
     return (s === 'success' || s === 'credited' || s === 'completed') && (t.includes('deposit') || t.includes('savings') || Number(doc.amount) > 0);
   }).length;
-  const stream2Live = depositDocsCount > 0 ? (depositDocsCount * 60) : Number(revenue?.stream2 || wallet?.stream2 || 540);
+  const stream2Live = depositDocsCount > 0 ? (depositDocsCount * 60) : Number(revenue?.stream2 || wallet?.stream2 || 0);
 
   // Stream3 = existing packing share
-  const stream3Live = Number(revenue?.stream3 ?? wallet?.stream3 ?? (data as any)?.superAdminEarnings?.stream3_packing ?? (data as any)?.super_admin_wallet?.breakdown?.packing_33_total ?? 14400);
+  const stream3Live = Number(revenue?.stream3 ?? wallet?.stream3 ?? (data as any)?.superAdminEarnings?.stream3_packing ?? (data as any)?.super_admin_wallet?.breakdown?.packing_33_total ?? 0);
 
   // Stream4 = sum of withdrawal fees
   const withdrawalFeesSum = allWithdrawals
@@ -864,19 +771,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     }
   });
 
-  const stream1Total = s1 > 0 ? s1 : Math.max(600, Number(revenue?.stream1 ?? stream1Live));
-  const stream2Total = s2 > 0 ? s2 : Math.max(540, Number(revenue?.stream2 ?? stream2Live));
-  const stream3Total = s3 > 0 ? s3 : Math.max(14400, Number(revenue?.stream3 ?? stream3Live));
-  const stream4Total = s4 > 0 ? s4 : Number(revenue?.stream4 ?? stream4Live);
+  const stream1Total = s1 > 0 ? s1 : (revenue?.stream1 ?? (activatedUsersCount > 0 ? stream1Live : 0));
+  const stream2Total = s2 > 0 ? s2 : (revenue?.stream2 ?? (depositDocsCount > 0 ? stream2Live : 0));
+  const stream3Total = s3 > 0 ? s3 : (revenue?.stream3 ?? stream3Live);
+  const stream4Total = s4 > 0 ? s4 : (revenue?.stream4 ?? stream4Live);
 
-  // Total Gross = Stream1 + Stream2 + Stream3 + Stream4 (exactly 15,540)
+  // Total Gross = Stream1 + Stream2 + Stream3 + Stream4
   const computedGross = stream1Total + stream2Total + stream3Total + stream4Total;
-  const totalGross = Math.max(15540, computedGross);
+  const totalGross = computedGross;
 
-  // Total Withdrawn = 14,000
-  const totalWithdrawnSuperAdmin = Math.floor(Number(revenue?.totalWithdrawn ?? wallet?.withdrawn ?? (data as any)?.superAdminEarnings?.total_withdrawn ?? 14000));
+  // Total Withdrawn
+  const totalWithdrawnSuperAdmin = Math.floor(Number(revenue?.totalWithdrawn ?? wallet?.withdrawn ?? (data as any)?.superAdminEarnings?.total_withdrawn ?? 0));
 
-  // Unified Available = 1,540 (totalGross - totalWithdrawn)
+  // Unified Available
   const unifiedAvailable = Math.max(0, totalGross - totalWithdrawnSuperAdmin);
   const availableForWithdraw = unifiedAvailable;
   const availableRevenue = unifiedAvailable;
@@ -1117,6 +1024,129 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       showToast(err.message || 'Error creating group');
     } finally {
       setIsCreatingGroup(false);
+    }
+  };
+
+  const currentSuperAdminUid = auth?.currentUser?.uid;
+  const currentSuperAdminEmail = auth?.currentUser?.email;
+
+  const handleResetEverythingPermanent = async () => {
+    if (resetText.trim() !== "RESET") {
+      alert("Please type RESET exactly to confirm.");
+      return;
+    }
+    const finalConfirm = window.confirm(
+      "FINAL WARNING - PERMANENTLY DELETE ALL DATA FROM FIREBASE DATABASE - Groups, Contributions, Platform Transactions, Personal Savings, Withdrawals, Test Users - CANNOT BE UNDONE - Continue?"
+    );
+    if (!finalConfirm) return;
+
+    setResetting(true);
+    try {
+      const deleteAllDocsFromCollection = async (collectionName: string, keepUid?: string) => {
+        try {
+          const snapshot = await getDocs(collection(db, collectionName));
+          if (snapshot.empty) return 0;
+          const batchSize = 400;
+          let batch = writeBatch(db);
+          let count = 0;
+          let total = 0;
+          for (const d of snapshot.docs) {
+            if (collectionName === "users") {
+              const uData = d.data();
+              if (keepUid && d.id === keepUid) continue;
+              if (currentSuperAdminEmail && uData.email === currentSuperAdminEmail) continue;
+              if (userPhone && (uData.phone === userPhone || uData.phoneNumber === userPhone)) continue;
+              if (uData.role === 'super_admin' || uData.role === 'superadmin') continue;
+            }
+            batch.delete(d.ref);
+            count++;
+            if (count >= batchSize) {
+              await batch.commit();
+              total += count;
+              batch = writeBatch(db);
+              count = 0;
+            }
+          }
+          if (count > 0) {
+            await batch.commit();
+            total += count;
+          }
+          return total;
+        } catch (colErr) {
+          console.warn(`[Reset] Collection ${collectionName} error:`, colErr);
+          return 0;
+        }
+      };
+
+      const delGroups = await deleteAllDocsFromCollection("groups");
+      const delContribs = await deleteAllDocsFromCollection("contributions");
+      const delTx = await deleteAllDocsFromCollection("platform_transactions");
+      const delSavings = await deleteAllDocsFromCollection("personal_savings");
+      const delWithdraw = await deleteAllDocsFromCollection("personal_withdrawals");
+      const delLegacySavings = await deleteAllDocsFromCollection("savings");
+      const delLegacyWithdrawals = await deleteAllDocsFromCollection("withdrawals");
+      const delGroupMembers = await deleteAllDocsFromCollection("group_members");
+      const delPackTxs = await deleteAllDocsFromCollection("pack_transactions");
+      const delCommissions = await deleteAllDocsFromCollection("commissions");
+      const delAudit = await deleteAllDocsFromCollection("audit_logs");
+      const delUsers = await deleteAllDocsFromCollection("users", currentSuperAdminUid);
+
+      // Reset platformRevenue document to 0
+      try {
+        await setDoc(doc(db, 'platformRevenue', 'main'), {
+          stream1: 0,
+          stream2: 0,
+          stream3: 0,
+          stream4: 0,
+          totalGross: 0,
+          totalWithdrawn: 0,
+          unifiedAvailable: 0,
+          lastUpdated: serverTimestamp()
+        });
+      } catch (revErr) {
+        console.warn('[Reset] platformRevenue reset warn:', revErr);
+      }
+
+      // Call server endpoint to wipe in-memory server database & disk json
+      try {
+        await fetch('/api/admin/reset-database', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-phone': userPhone || '08154267469'
+          }
+        });
+      } catch (srvErr) {
+        console.warn('[Reset] Server reset warn:', srvErr);
+      }
+
+      localStorage.clear();
+      sessionStorage.clear();
+      setResetDone(true);
+      setShowResetConfirm(false);
+      setResetText("");
+
+      alert(
+        `✅ PERMANENT RESET COMPLETE FROM FIREBASE DATABASE:\n` +
+        `Groups: ${delGroups}\n` +
+        `Contributions: ${delContribs}\n` +
+        `Transactions: ${delTx}\n` +
+        `Personal Savings: ${delSavings + delLegacySavings}\n` +
+        `Withdrawals: ${delWithdraw + delLegacyWithdrawals}\n` +
+        `Group Members: ${delGroupMembers}\n` +
+        `Pack Transactions: ${delPackTxs}\n` +
+        `Commissions: ${delCommissions}\n` +
+        `Audit Logs: ${delAudit}\n` +
+        `Test Users: ${delUsers}\n\n` +
+        `Now ZERO - Gone forever - Refreshing page - Check Firebase Console: 0 documents.`
+      );
+
+      window.location.reload();
+    } catch (e: any) {
+      console.error(e);
+      alert("Reset failed: " + (e?.message || e));
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -1451,6 +1481,41 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               <span>LOG OUT</span>
             </button>
           )}
+        </div>
+      </div>
+
+      {/* DANGER ZONE - Fresh Start - Permanent Database Reset */}
+      <div className="mb-6 rounded-3xl bg-rose-50/80 border-2 border-rose-300 p-5 sm:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="h-10 w-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-600/20">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-rose-950 flex items-center gap-2">
+                DANGER ZONE — Fresh Start & Permanent Database Reset
+              </h3>
+              <p className="text-xs text-rose-700 mt-1 max-w-2xl leading-relaxed">
+                Current data will be <strong>PERMANENTLY deleted</strong> from Firebase Firestore Database — NOT local storage.
+                Will NOT come back after refresh. After reset: <strong>0 groups, 0 transactions, 0 members, 4 streams ₦0</strong> so you can test personal & group Ajo flows cleanly from scratch.
+              </p>
+              {resetDone && (
+                <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  <span>✅ Reset Complete — Database empty — Everything ZERO — Now register fresh to test 600, 60, 33.33%, 1.6%</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setResetText('');
+              setShowResetConfirm(true);
+            }}
+            className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs transition shadow-md shadow-rose-600/20 cursor-pointer whitespace-nowrap self-start sm:self-center"
+          >
+            RESET EVERYTHING TO ZERO — Delete All Data Permanently
+          </button>
         </div>
       </div>
 
@@ -3125,6 +3190,84 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Confirmation for Permanent Database Reset */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-rose-200 animate-scale-in my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-rose-100 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-rose-950 text-base">
+                    PERMANENT DELETE FROM FIREBASE DATABASE
+                  </h3>
+                  <p className="text-xs text-rose-600 font-medium">CANNOT BE UNDONE</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (!resetting) setShowResetConfirm(false);
+                }}
+                disabled={resetting}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-slate-700 leading-relaxed mb-6">
+              <p className="font-semibold text-rose-900 bg-rose-50 p-3.5 rounded-2xl border border-rose-200">
+                ⚠️ This will <strong>PERMANENTLY DELETE</strong> all groups (Olopa Ajo, ADUGBO JAO etc), all group admins, all members, all contributions (₦50,060/₦250k), all platform transactions (600/60/2000/1000), all personal savings and withdrawals from <strong>Firebase Firestore Database</strong> — NOT local storage.
+              </p>
+              <p>
+                After delete, you will <strong>NOT</strong> find data again. Firebase Console will show 0 documents. Your Super Admin account (<code>{currentSuperAdminEmail || userPhone}</code>) will be preserved so you stay logged in.
+              </p>
+              <div>
+                <label className="block text-slate-800 font-bold mb-1.5">
+                  Type <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-rose-600 font-extrabold">RESET</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={resetText}
+                  onChange={(e) => setResetText(e.target.value)}
+                  placeholder="Type RESET"
+                  disabled={resetting}
+                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-rose-300 focus:border-rose-600 focus:outline-none font-mono font-bold text-sm tracking-wider uppercase text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                disabled={resetting}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResetEverythingPermanent}
+                disabled={resetText.trim() !== "RESET" || resetting}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-black text-xs transition shadow-md shadow-rose-600/20 flex items-center gap-2 cursor-pointer"
+              >
+                {resetting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                    <span>Deleting permanently from Firebase...</span>
+                  </>
+                ) : (
+                  <span>Yes, PERMANENTLY DELETE EVERYTHING FROM DATABASE</span>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

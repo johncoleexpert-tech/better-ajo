@@ -3624,6 +3624,12 @@ async function syncGroupFinancialsFromFirestore(groupId: string): Promise<void> 
     const fsDb = getFirestoreDb();
     if (!fsDb) return;
 
+    // Reset this group's in-memory records so Firestore is the strict single source of truth
+    db.data.commissions = (db.data.commissions || []).filter(c => c.group_id !== groupId && (c as any).groupId !== groupId);
+    db.data.pack_transactions = (db.data.pack_transactions || []).filter(p => p.group_id !== groupId && (p as any).groupId !== groupId);
+    db.data.withdrawals = (db.data.withdrawals || []).filter(w => w.group_id !== groupId && (w as any).groupId !== groupId);
+    db.data.contributions = (db.data.contributions || []).filter(c => c.group_id !== groupId && (c as any).groupId !== groupId);
+
     // 1. Stream 3: Query packing commissions explicitly by STREAM_PACKING type
     const comSnap = await fsDb.collection('commissions')
       .where('group_id', '==', groupId)
@@ -5174,6 +5180,56 @@ apiRouter.post('/support/mark-read', (req: Request, res: Response) => {
       db.markSupportConversationRead(cleanSessionId);
     }
     return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
+  try {
+    // Wipe server in-memory database completely
+    db.data.groups = [];
+    db.data.group_members = [];
+    db.data.contributions = [];
+    db.data.pack_transactions = [];
+    db.data.commissions = [];
+    db.data.withdrawals = [];
+    db.data.personal_ajo = [];
+    db.data.payments = [];
+    db.data.personal_transactions = [];
+    db.data.super_admin_transactions = [];
+    db.data.audit_logs = [];
+    db.data.admin_revenue_ledger = [];
+    db.data.super_admin_wallet = {
+      available_balance: 0,
+      total_gross_earnings: 0,
+      total_withdrawn: 0,
+      breakdown: {
+        reg_600_total: 0,
+        contrib_60_total: 0,
+        packing_33_total: 0,
+        withdrawal_1_6_total: 0
+      },
+      updated_at: new Date().toISOString()
+    };
+    db.data.superAdminEarnings = {
+      totalEarnings: 0,
+      available_balance: 0,
+      total_earned: 0,
+      total_withdrawn: 0,
+      totalWithdrawn: 0,
+      lifetimeEarned: 0,
+      personalPlatformFeesMerged: true,
+      pending_withdrawals: 0,
+      breakdown: [],
+      history: [],
+      updated_at: new Date().toISOString()
+    };
+
+    // Save empty state to packajo_db.json
+    db.save();
+
+    return res.json({ success: true, message: 'Server database reset successfully to ZERO.' });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

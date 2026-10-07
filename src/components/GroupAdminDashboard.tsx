@@ -147,7 +147,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
 
       const packingMemberName = packingMember.full_name || packingMember.name || 'Member';
-      const grpName = groupData.name || groupData.group_name || 'ADUGBO JAO';
+      const grpName = groupData.name || groupData.group_name || (data?.group as any)?.name || data?.group?.group_name || 'AJO GROUP';
       const totalPack = Number(groupData.totalPackAmount || groupData.packing_amount || (Number(groupData.contributionAmount || groupData.contribution_amount || 50000) * (currentMems.length || 5)));
       const cycleDays = Number(groupData.packingIntervalDays || groupData.contributionFrequencyDays || (groupData.cycle_type ? parseInt(groupData.cycle_type.replace(/\D/g, ''), 10) : 3)) || 3;
       const nextPackDate = new Date();
@@ -223,13 +223,13 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     try {
       const groupDocSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
       const groupData = groupDocSnap?.data();
-      const groupName = groupData?.name || groupData?.group_name || data?.group?.group_name || (groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo') ? 'ADUGBO JAO' : 'OLOPA AJO');
+      const groupName = groupData?.name || groupData?.group_name || (data?.group as any)?.name || data?.group?.group_name || (groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo') ? 'ADUGBO JAO' : 'AJO GROUP');
       const isAdugbo = groupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
-      const defaultContrib = isAdugbo ? 50000 : 20000;
+      const defaultContrib = isAdugbo ? 50000 : (Number(groupData?.contributionAmount || groupData?.contribution_amount || data?.group?.contribution_amount) || 50000);
       const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || defaultContrib;
       const platformFee = 60;
       const totalAmount = contributionAmount + platformFee;
-      const memberName = member.full_name || (member as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
+      const memberName = member.full_name || (member as any).name || (isAdugbo ? 'GLRY JAYE' : 'MEMBER');
       const curRound = Number(groupData?.current_round || groupData?.currentRound || data?.group?.current_round || 1);
 
       const contributionId = `${groupId}_${member.id}_round${curRound}`;
@@ -310,10 +310,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     e.preventDefault();
     if (!simulatingMember) return;
 
-    const isAdugbo = (data?.group?.group_name === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo'));
-    const baseContrib = isAdugbo ? 50000 : Number(data?.group?.contribution_amount || 20000);
+    const currentGroupName = (data?.group as any)?.name || data?.group?.group_name || 'AJO GROUP';
+    const isAdugbo = (currentGroupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo'));
+    const baseContrib = isAdugbo ? 50000 : Number((data?.group as any)?.contributionAmount || data?.group?.contribution_amount || 50000);
     const totalToPay = baseContrib + 60;
-    const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
+    const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'Member');
 
     if (!confirm(`Pay ₦${totalToPay.toLocaleString()} for ${memberName}?`)) return;
 
@@ -546,9 +547,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         let stableId = item.id;
         const isAdugboGroup = (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUGBO') || (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUBO') || effectiveGroupId === 'grp_adugbo_jao' || effectiveGroupId.toLowerCase().includes('adugbo');
 
-        if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) {
-          stableId = 'glry_jaye';
-          if (isAdugboGroup) {
+        if (isAdugboGroup) {
+          if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) {
+            stableId = 'glry_jaye';
             item.position = 1;
             item.packingOrder = 1;
             item.packing_position = 1;
@@ -557,10 +558,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             item.virtual_account_number = '8152476851';
             item.virtualAccountName = 'BETTERAJO-GLRY JAYE';
             item.virtual_account_name = 'BETTERAJO-GLRY JAYE';
-          }
-        } else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) {
-          stableId = 'festus_chris';
-          if (isAdugboGroup) {
+          } else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) {
+            stableId = 'festus_chris';
             item.position = 2;
             item.packingOrder = 2;
             item.packing_position = 2;
@@ -569,10 +568,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             item.virtual_account_number = '8152195643';
             item.virtualAccountName = 'BETTERAJO-FESTUS CHRIS';
             item.virtual_account_name = 'BETTERAJO-FESTUS CHRIS';
-          }
-        } else if (nameUpper.includes('SHOLA')) {
-          stableId = 'sholakule';
-          if (isAdugboGroup) {
+          } else if (nameUpper.includes('SHOLA')) {
+            stableId = 'sholakule';
             item.position = 3;
             item.packingOrder = 3;
             item.packing_position = 3;
@@ -582,10 +579,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             item.virtualAccountName = 'BETTERAJO-SHOLA KUNLE';
             item.virtual_account_name = 'BETTERAJO-SHOLA KUNLE';
             item.keepFromScreenshot = true;
-          }
-        } else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) {
-          stableId = 'david_felistans';
-          if (isAdugboGroup) {
+          } else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) {
+            stableId = 'david_felistans';
             item.position = 4;
             item.packingOrder = 4;
             item.packing_position = 4;
@@ -595,10 +590,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             item.virtualAccountName = 'BETTERAJO-DAVID FELISTANCE';
             item.virtual_account_name = 'BETTERAJO-DAVID FELISTANCE';
             item.keepFromScreenshot = true;
-          }
-        } else if (nameUpper.includes('KOLA')) {
-          stableId = 'kola_ogo';
-          if (isAdugboGroup) {
+          } else if (nameUpper.includes('KOLA')) {
+            stableId = 'kola_ogo';
             item.position = 5;
             item.packingOrder = 5;
             item.packing_position = 5;
@@ -792,6 +785,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         });
         const targetAdugboId = adugboDoc?.id || (effectiveGroupId.toLowerCase().includes('adugbo') ? effectiveGroupId : 'grp_adugbo_jao');
         const isCurrentAdugbo = targetAdugboId === effectiveGroupId || (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUGBO');
+        if (!isCurrentAdugbo) return;
 
         const fakeList = ['Chidi Eze', 'Fatima Bello', 'Tunde Okoro', 'Bisi Adebayo', 'CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
         const fakeVans = ['8152629304', '8152467888'];
@@ -3008,11 +3002,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
             {(() => {
-              const currentGroupName = data?.group?.group_name || 'ADUGBO JAO';
+              const currentGroupName = (data?.group as any)?.name || data?.group?.group_name || 'AJO GROUP';
               const isAdugbo = currentGroupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
               const baseContrib = isAdugbo ? 50000 : required;
               const totalToPay = baseContrib + 60;
-              const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
+              const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'Member');
 
               return (
                 <div>
