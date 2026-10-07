@@ -412,9 +412,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             virtualAccountName: 'BETTERAJO-GLRY JAYE',
             virtual_account_name: 'BETTERAJO-GLRY JAYE',
             status: 'PAID',
-            current_round_status: 'packed',
+            current_round_status: 'contributed',
             credit_balance: 0,
-            hasPackedThisRound: true,
+            hasPackedThisRound: false,
+            hasPacked: false,
+            hasPaid: true,
+            hasPaidCurrentCycle: true,
             isFullyPaid: true
           },
           {
@@ -692,68 +695,59 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           timestamp: serverTimestamp()
         }, { merge: true }).catch(() => {});
 
-        // 4. ADUGBO JAO pack fee ₦3,000 calculation:
-        // Total collected = 5 * 50000 = 250000
-        // Platform fee = 5 * 60 = 300
-        // Pack fee = 3000
-        // Super Admin share = Math.floor(3000 * 0.3333) = 1000
-        // Group Admin share = 2000
-        // Pack payout to GLRY JAYE = 250000
-        await setDoc(doc(db, 'platform_transactions', 'ptx_adugbo_super_admin_fee'), {
-          type: 'super_admin_fee',
-          amount: 1000,
-          gross_amount: 1000,
-          groupId: adugboGroupId,
-          group_id: adugboGroupId,
-          groupName: 'ADUGBO JAO',
-          ajoName: 'ADUGBO JAO',
-          source: 'packing_commission',
-          round: 1,
-          internal: true,
-          status: 'success',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
+        // 4. CLEANUP FAKE PACK THAT ALREADY HAPPENED - KOKO LOLA + 2000 COMMISSION
+        await deleteDoc(doc(db, 'platform_transactions', 'ptx_adugbo_super_admin_fee')).catch(() => {});
+        await deleteDoc(doc(db, 'platform_transactions', 'ptx_adugbo_admin_commission')).catch(() => {});
+        await deleteDoc(doc(db, 'pack_transactions', 'ptx_adugbo_pack_payout')).catch(() => {});
 
-        await setDoc(doc(db, 'platform_transactions', 'ptx_adugbo_admin_commission'), {
-          type: 'admin_commission',
-          amount: 2000,
-          gross_amount: 2000,
-          groupId: adugboGroupId,
-          group_id: adugboGroupId,
-          groupName: 'ADUGBO JAO',
-          ajoName: 'ADUGBO JAO',
-          source: 'packing_commission',
-          round: 1,
-          internal: true,
-          status: 'success',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
+        const groupsSnapAll = await getDocs(collection(db, 'groups')).catch(() => null);
+        if (groupsSnapAll) {
+          for (const gDoc of groupsSnapAll.docs) {
+            const gData = gDoc.data();
+            const members = gData.members || [];
+            const allPending = members.every((m: any) => (m.status === 'PENDING' || !m.hasPaid) && m.hasPaidCurrentCycle !== true);
 
-        await setDoc(doc(db, 'pack_transactions', 'ptx_adugbo_pack_payout'), {
-          type: 'pack_payout',
-          displayType: 'PACK OUT',
-          amount: 250000,
-          gross_amount: 250000,
-          packing_amount: 250000,
-          fee: 3000,
-          packing_fee: 3000,
-          groupId: adugboGroupId,
-          group_id: adugboGroupId,
-          groupName: 'ADUGBO JAO',
-          ajoName: 'ADUGBO JAO',
-          memberId: 'mem_adugbo_1',
-          member_id: 'mem_adugbo_1',
-          memberName: 'GLRY JAYE',
-          userName: 'GLRY JAYE',
-          member_name: 'GLRY JAYE',
-          round: 1,
-          round_number: 1,
-          status: 'PACKED',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }, { merge: true }).catch(() => {});
+            if (allPending) {
+              // Nobody paid - but contributions exist = auto bug - delete
+              const contribQ = query(collection(db, 'contributions'), where('groupId', '==', gDoc.id));
+              const contribSnap = await getDocs(contribQ);
+              for (const c of contribSnap.docs) {
+                await deleteDoc(doc(db, 'contributions', c.id)).catch(() => {});
+              }
+              const contribQ2 = query(collection(db, 'contributions'), where('group_id', '==', gDoc.id));
+              const contribSnap2 = await getDocs(contribQ2);
+              for (const c of contribSnap2.docs) {
+                await deleteDoc(doc(db, 'contributions', c.id)).catch(() => {});
+              }
+              const txQ = query(collection(db, 'platform_transactions'), where('groupId', '==', gDoc.id));
+              const txSnap = await getDocs(txQ);
+              for (const t of txSnap.docs) {
+                await deleteDoc(doc(db, 'platform_transactions', t.id)).catch(() => {});
+              }
+              const txQ2 = query(collection(db, 'platform_transactions'), where('group_id', '==', gDoc.id));
+              const txSnap2 = await getDocs(txQ2);
+              for (const t of txSnap2.docs) {
+                await deleteDoc(doc(db, 'platform_transactions', t.id)).catch(() => {});
+              }
+              const packQ = query(collection(db, 'pack_transactions'), where('groupId', '==', gDoc.id));
+              const packSnap = await getDocs(packQ);
+              for (const p of packSnap.docs) {
+                await deleteDoc(doc(db, 'pack_transactions', p.id)).catch(() => {});
+              }
+              const packQ2 = query(collection(db, 'pack_transactions'), where('group_id', '==', gDoc.id));
+              const packSnap2 = await getDocs(packQ2);
+              for (const p of packSnap2.docs) {
+                await deleteDoc(doc(db, 'pack_transactions', p.id)).catch(() => {});
+              }
+              // Reset packing
+              await updateDoc(doc(db, 'groups', gDoc.id), {
+                packingStatus: 'NOT_STARTED',
+                currentPackingOrder: 1,
+                currentCycle: 1
+              }).catch(() => {});
+            }
+          }
+        }
 
         // 5. Ensure OLOPA AJO has AJAYI OKE once at ₦20,000 + ₦60 = ₦20,060
         const qOlopa = query(collection(db, 'groups'), where('name', '==', 'OLOPA AJO'));
@@ -1054,6 +1048,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           current_round_status: 'pending_contribution',
           credit_balance: 0,
           hasPackedThisRound: false,
+          hasPacked: false,
+          hasPaid: false,
+          hasPaidCurrentCycle: false,
           isFullyPaid: false
         };
       });
@@ -1089,6 +1086,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         admin_id: userId || 'super_admin',
         admin_name: 'Super Administrator',
         members: membersList,
+        packingStatus: 'NOT_STARTED',
+        currentPackingOrder: 1,
+        currentCycle: 1,
         createdAt: serverTimestamp(),
         created_at: new Date().toISOString()
       });

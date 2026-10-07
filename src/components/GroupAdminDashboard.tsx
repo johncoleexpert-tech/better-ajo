@@ -133,50 +133,84 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   };
 
   const handleAdminPackCurrentMember = async () => {
-    const packer = data?.currentPacker;
-    if (!packer) return;
     try {
       setIsProcessingPack(true);
-      const res = await fetch(`/api/groups/${groupId}/pack`, {
+      const groupSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
+      const groupData = groupSnap?.data() || (data?.group as any) || {};
+      const currentMems = groupData.members || members || [];
+      const currentPackingOrder = Number(groupData.currentPackingOrder || 1);
+
+      const packingMember = currentMems.find((m: any) => Number(m.position || m.packingOrder || m.packing_position || 1) === currentPackingOrder) || currentMems[0] || data?.currentPacker;
+      if (!packingMember) {
+        showToast('No member found to pack');
+        return;
+      }
+
+      const packingMemberName = packingMember.full_name || packingMember.name || 'Member';
+      const grpName = groupData.name || groupData.group_name || 'ADUGBO JAO';
+      const totalPack = Number(groupData.totalPackAmount || groupData.packing_amount || (Number(groupData.contributionAmount || groupData.contribution_amount || 50000) * (currentMems.length || 5)));
+      const cycleDays = Number(groupData.packingIntervalDays || groupData.contributionFrequencyDays || (groupData.cycle_type ? parseInt(groupData.cycle_type.replace(/\D/g, ''), 10) : 3)) || 3;
+      const nextPackDate = new Date();
+      nextPackDate.setDate(nextPackDate.getDate() + cycleDays);
+
+      await fetch(`/api/groups/${groupId}/pack`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-user-id': currentUser.id
         },
         body: JSON.stringify({
-          memberId: packer.id
+          memberId: packingMember.id
         })
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error || 'Packing execution failed');
-      }
+      }).catch(() => null);
 
-      // Record dynamic packing rotation in Firestore
-      const groupSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
-      const groupData = groupSnap?.data() || (data?.group as any) || {};
-      const cycleDays = Number(groupData.packingIntervalDays || groupData.contributionFrequencyDays || (groupData.cycle_type ? parseInt(groupData.cycle_type.replace(/\D/g, ''), 10) : 3)) || 3;
-      const nextPackDate = new Date();
-      nextPackDate.setDate(nextPackDate.getDate() + cycleDays);
-
-      const totalPack = Number(groupData.totalPackAmount || groupData.packing_amount || (Number(groupData.contributionAmount || groupData.contribution_amount || 50000) * Number(groupData.memberCount || groupData.member_limit || 5)));
-
+      // 1. Separate Pack Now button onClick - ONLY creates real pack + 3000 fee split
       await addDoc(collection(db, 'contributions'), {
         groupId: groupId,
         group_id: groupId,
-        groupName: groupData.name || groupData.group_name || 'ADUGBO JAO',
-        memberName: packer.full_name || (packer as any).name,
+        groupName: grpName,
+        memberName: packingMemberName,
         amount: totalPack,
         gross_amount: totalPack,
-        packingOrder: (packer as any).packingOrder || packer.position || 1,
+        packingOrder: currentPackingOrder,
+        status: 'PACKED',
         packingDate: serverTimestamp(),
         nextPackDate: Timestamp.fromDate(nextPackDate),
         cycleDays: cycleDays,
-        status: 'PACKED',
         type: 'pack_payout'
+      });
+
+      await addDoc(collection(db, 'platform_transactions'), {
+        groupId: groupId,
+        group_id: groupId,
+        groupName: grpName,
+        memberName: packingMemberName,
+        totalFee: 3000,
+        adminShare: 2000, // Group Admin 2000
+        superAdminShare: 1000, // Super Admin 1000
+        amount: 2000,
+        gross_amount: 2000,
+        adminId: currentUser.id,
+        type: 'admin_commission',
+        status: 'success',
+        createdAt: serverTimestamp()
+      });
+
+      const updatedMembersAfterPack = currentMems.map((m: any) => {
+        if (m.id === packingMember.id || m.position === packingMember.position) {
+          return { ...m, hasPackedThisRound: true, hasPacked: true, current_round_status: 'packed' };
+        }
+        return m;
+      });
+
+      await updateDoc(doc(db, 'groups', groupId), {
+        packingStatus: 'PACKED',
+        currentPackingOrder: currentPackingOrder + 1,
+        totalPackedAmount: (Number(groupData.totalPackedAmount) || 0) + totalPack,
+        members: updatedMembersAfterPack
       }).catch(() => {});
 
-      showToast(`Packing completed for ${packer.full_name}! Next pack in ${cycleDays} days.`);
+      showToast(`Packing completed for ${packingMemberName}! Next pack in ${cycleDays} days.`);
       fetchDashboardData();
     } catch (err: any) {
       showToast(err.message || 'Error processing packing');
@@ -289,6 +323,38 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
       // Record to Firestore directly with total ₦50,060 (split internally)
       await handleSimulatePayment(simulatingMember, baseContrib);
+
+      // In Pay Now onClick - after marking member hasPaid=true:
+      const groupDocSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
+      const groupData = groupDocSnap?.data() || {};
+      const rawMembers = groupData.members || members || [];
+      const updatedMembers = rawMembers.map((m: any) => {
+        if (m.id === simulatingMember.id || m.position === simulatingMember.position) {
+          return {
+            ...m,
+            hasPaid: true,
+            hasPaidCurrentCycle: true,
+            status: 'PAID',
+            current_round_status: 'contributed',
+            isFullyPaid: true
+          };
+        }
+        return m;
+      });
+
+      await updateDoc(doc(db, 'groups', groupId), { members: updatedMembers }).catch(() => {});
+
+      const paidCount = updatedMembers.filter((m: any) => m.hasPaidCurrentCycle).length;
+      const allPaid = updatedMembers.length > 0 && paidCount === updatedMembers.length;
+
+      if (allPaid) {
+        // Only now allow pack - show button "PACK NOW" - do not auto pack
+        // DO NOT auto create contribution here - wait for Pack Now button click
+        await updateDoc(doc(db, 'groups', groupId), { packingStatus: 'READY_TO_PACK' }).catch(() => {});
+      } else {
+        // Still waiting - no pack - no commission
+        // Ledger shows 0 packed - commission N0
+      }
 
       const res = await fetch(`/api/groups/${groupId}/members/${simulatingMember.id}/simulate-payment`, {
         method: 'POST',
@@ -662,7 +728,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     const effectiveAdminUid = auth?.currentUser?.uid || currentUser.id;
     const adminCommissionQuery = query(
       collection(db, 'platform_transactions'),
-      where('adminId', '==', effectiveAdminUid),
+      where('groupId', '==', effectiveGroupId),
       where('type', '==', 'admin_commission'),
       where('status', '==', 'success')
     );
@@ -709,29 +775,6 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
               await updateDoc(d.ref, { amount: Math.round(amt), net_amount: Math.round(amt) }).catch(() => {});
             }
           });
-        }
-
-        // Ensure pack 1 admin commission document exists in platform_transactions if missing
-        const qPtxCheck = query(collection(db, 'platform_transactions'), where('adminId', '==', effectiveAdminUid));
-        const snapPtxCheck = await getDocs(qPtxCheck);
-        if (snapPtxCheck.empty) {
-          const grpDoc = await getDoc(doc(db, 'groups', effectiveGroupId)).catch(() => null);
-          const gData = grpDoc?.data();
-          const packedAmt = Number(gData?.totalPackedAmount || 0);
-          const packedRounds = Array.isArray(gData?.packedRounds) ? gData.packedRounds.length : 0;
-          if (packedAmt > 0 || packedRounds > 0) {
-            await addDoc(collection(db, 'platform_transactions'), {
-              adminId: effectiveAdminUid,
-              userId: effectiveAdminUid,
-              groupId: effectiveGroupId,
-              type: 'admin_commission',
-              amount: 10000,
-              gross_amount: 10000,
-              status: 'success',
-              description: `Group Admin Commission for ${gData?.group_name || 'Ajo Group'} Pack 1`,
-              createdAt: serverTimestamp()
-            }).catch(() => {});
-          }
         }
       } catch (e) {
         console.warn('[cleanDecimals migration warn]:', e);
@@ -961,21 +1004,15 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
   // A. Fix Group Admin Available Commission Calculation - MUST BE INTEGER, NO KOBO, NO PLATFORM FEE
   const ptxCommissionSum = platformCommissions
-    .filter(c => c.type === 'admin_commission' && (c.status === 'success' || c.status === 'completed'))
-    .reduce((sum, c) => sum + Math.floor(Number(c.amount || c.gross_amount || 0)), 0);
+    .filter(c => (c.groupId === groupId || c.group_id === groupId || !c.groupId) && (c.type === 'admin_commission' || c.adminShare) && (c.status === 'success' || c.status === 'completed' || !c.status))
+    .reduce((sum, c) => sum + Math.floor(Number(c.adminShare || c.amount || c.gross_amount || 0)), 0);
 
   const ptxWithdrawalsSum = platformWithdrawals
-    .filter(w => (w.type === 'admin_commission' || w.withdrawal_type === 'admin_commission') && (w.status === 'success' || w.status === 'completed'))
+    .filter(w => (w.groupId === groupId || w.group_id === groupId || !w.groupId) && (w.type === 'admin_commission' || w.withdrawal_type === 'admin_commission') && (w.status === 'success' || w.status === 'completed'))
     .reduce((sum, w) => sum + Math.floor(Number(w.amount || 0)), 0);
 
-  const totalAdminCommission = ptxCommissionSum > 0
-    ? ptxCommissionSum
-    : Math.floor(Number(data?.adminEarnings?.totalEarned || 0));
-
-  const totalAdminWithdrawn = ptxWithdrawalsSum > 0
-    ? ptxWithdrawalsSum
-    : Math.floor(Number(data?.adminEarnings?.withdrawn || 0));
-
+  const totalAdminCommission = ptxCommissionSum;
+  const totalAdminWithdrawn = ptxWithdrawalsSum;
   const availableAdminBalance = Math.floor(Math.max(0, totalAdminCommission - totalAdminWithdrawn));
 
   const displayAdminEarnings = {
@@ -1298,7 +1335,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     const creditBalance = Number(m.creditBalance ?? m.credit_balance ?? 0);
     const totalEffectivePaid = paidForRound + creditBalance;
     const remaining = Math.max(0, required - totalEffectivePaid);
-    const isFullyPaid = totalEffectivePaid >= required;
+    const isFullyPaid = totalEffectivePaid >= required || Boolean((m as any).hasPaidCurrentCycle || (m as any).hasPaid || (m as any).status === 'PAID');
 
     const isPayAhead =
       contributions.filter(
@@ -1759,7 +1796,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         const currentMemberItem = members.find(m => m.id === currentPacker.id || m.position === currentPacker.position);
                         const scheduledDate = currentMemberItem?.scheduledPackDate || (currentPacker as any).scheduledPackDate || '';
                         const scheduledDisplay = currentMemberItem?.scheduledPackDateDisplay || (currentPacker as any).scheduledPackDateDisplay || scheduledDate;
-                        const isPacked = currentPacker.current_round_status === 'packed' || currentMemberItem?.hasPacked;
+                        const hasRealPackRecord = contributions.some((c: any) => (c.groupId === groupId || c.group_id === groupId) && (c.status === 'PACKED' || c.type === 'pack_payout'));
+                        const isPacked = Boolean(hasRealPackRecord && (currentPacker.current_round_status === 'packed' || currentMemberItem?.hasPacked || (currentPacker as any)?.hasPackedThisRound));
 
                         if (isPacked) {
                           return <span className="font-extrabold text-emerald-700">Packed ✓</span>;
@@ -1787,10 +1825,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
                     {/* Pack Action Button on Current Packer Card */}
                     <div className="mt-3 pt-2.5 border-t border-emerald-100/80">
-                      {currentPacker.current_round_status === 'packed' || (members.find(m => m.id === currentPacker.id) as any)?.hasPacked ? (
+                      {Boolean(contributions.some((c: any) => (c.groupId === groupId || c.group_id === groupId) && (c.status === 'PACKED' || c.type === 'pack_payout')) && (currentPacker.current_round_status === 'packed' || (members.find(m => m.id === currentPacker.id) as any)?.hasPacked)) ? (
                         <div className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-300">
                           <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                          <span>Packed for Round {group.current_round} ✓</span>
+                          <span>Packed for Round {group.current_round || 1} ✓</span>
                         </div>
                       ) : (
                         <div className="relative group/pack w-full">
@@ -1812,7 +1850,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                             ) : allMembersPaid ? (
                               <>
                                 <Coins className="h-4 w-4" />
-                                <span>Ready to Pack</span>
+                                <span>PACK NOW</span>
                               </>
                             ) : (
                               <>
@@ -2087,7 +2125,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                             );
                           })()}
                           {/* Pack Button for Current Packer in table */}
-                          {currentPacker && m.id === currentPacker.id && !m.hasPacked && currentPacker.current_round_status !== 'packed' && (
+                          {currentPacker && m.id === currentPacker.id && !m.hasPacked && currentPacker.current_round_status !== 'packed' && !contributions.some((c: any) => (c.groupId === groupId || c.group_id === groupId) && (c.status === 'PACKED' || c.type === 'pack_payout')) && (
                             allMembersPaid ? (
                               <button
                                 onClick={handleAdminPackCurrentMember}
@@ -2096,7 +2134,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                                 title="Ready to Pack"
                               >
                                 <Coins className="h-3 w-3" />
-                                <span>{isProcessingPack ? 'Packing...' : 'Ready to Pack'}</span>
+                                <span>{isProcessingPack ? 'Packing...' : 'PACK NOW'}</span>
                               </button>
                             ) : (
                               <button
