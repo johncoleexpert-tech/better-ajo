@@ -100,6 +100,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [resetText, setResetText] = useState('');
   const [resetting, setResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+  const [resetLogs, setResetLogs] = useState<string>('');
 
   // Real-time live collections state for instant Super Admin calculation (STEP 4)
   const [allContributions, setAllContributions] = useState<any[]>([]);
@@ -389,316 +390,6 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
     fetchSuperAdminData();
     fetchSuperAdminWallet();
-
-    // MIGRATION: GROUP ISOLATION (EXACT NAMES ADUGBO JAO + GLRY JAYE) & ₦0 ZERO CLEANUP
-    const runGroupIsolationMigration = async () => {
-      try {
-        if (!db) return;
-
-        // 1. Find or ensure ADUGBO JAO group exists
-        const groupsSnap = await getDocs(collection(db, 'groups')).catch(() => null);
-        let adugboGroupId = groupsSnap?.docs?.find(d => {
-          const n = String(d.data().name || d.data().group_name || '').toUpperCase();
-          return n.includes('ADUGBO') || n.includes('ADUBO');
-        })?.id || 'grp_adugbo_jao';
-
-        const finalFiveFixedPacks = [
-          {
-            id: 'glry_jaye',
-            name: 'GLRY JAYE',
-            fullName: 'Glory Ajayi',
-            full_name: 'GLRY JAYE',
-            position: 1,
-            packingOrder: 1,
-            packing_position: 1,
-            packsLabel: 'Packs 1st',
-            phone: '08077777771',
-            virtualAccountNumber: '8152476851',
-            virtual_account_number: '8152476851',
-            virtualAccountName: 'BETTERAJO-GLRY JAYE',
-            virtual_account_name: 'BETTERAJO-GLRY JAYE',
-            status: 'PAID',
-            current_round_status: 'contributed',
-            credit_balance: 0,
-            hasPackedThisRound: false,
-            hasPacked: false,
-            hasPaid: true,
-            hasPaidCurrentCycle: true,
-            isFullyPaid: true
-          },
-          {
-            id: 'festus_chris',
-            name: 'Festus Chris',
-            fullName: 'Festus Chris',
-            full_name: 'Festus Chris',
-            altNames: ['FESTUA'],
-            position: 2,
-            packingOrder: 2,
-            packing_position: 2,
-            packsLabel: 'Packs 2nd',
-            phone: '07069702560',
-            virtualAccountNumber: '8152195643',
-            virtual_account_number: '8152195643',
-            virtualAccountName: 'BETTERAJO-FESTUS CHRIS',
-            virtual_account_name: 'BETTERAJO-FESTUS CHRIS',
-            status: 'PENDING',
-            current_round_status: 'pending_contribution',
-            credit_balance: 0,
-            hasPackedThisRound: false,
-            isFullyPaid: false
-          },
-          {
-            id: 'sholakule',
-            name: 'Sholakule',
-            fullName: 'Sholakule',
-            full_name: 'Sholakule',
-            altNames: ['SHOLA KUNLE'],
-            position: 3,
-            packingOrder: 3,
-            packing_position: 3,
-            packsLabel: 'Packs 3rd',
-            phone: '07069702563',
-            virtualAccountNumber: '8152741791',
-            virtual_account_number: '8152741791',
-            virtualAccountName: 'BETTERAJO-SHOLA KUNLE',
-            virtual_account_name: 'BETTERAJO-SHOLA KUNLE',
-            status: 'PENDING',
-            current_round_status: 'pending_contribution',
-            credit_balance: 0,
-            hasPackedThisRound: false,
-            isFullyPaid: false,
-            keepFromScreenshot: true
-          },
-          {
-            id: 'david_felistans',
-            name: 'David Felistans',
-            fullName: 'David Felistans',
-            full_name: 'David Felistans',
-            altNames: ['DAVID FELISTANCE', 'David Felictans'],
-            position: 4,
-            packingOrder: 4,
-            packing_position: 4,
-            packsLabel: 'Packs 4th',
-            phone: '07069702564',
-            virtualAccountNumber: '8152168957',
-            virtual_account_number: '8152168957',
-            virtualAccountName: 'BETTERAJO-DAVID FELISTANCE',
-            virtual_account_name: 'BETTERAJO-DAVID FELISTANCE',
-            status: 'PENDING',
-            current_round_status: 'pending_contribution',
-            credit_balance: 0,
-            hasPackedThisRound: false,
-            isFullyPaid: false,
-            keepFromScreenshot: true
-          },
-          {
-            id: 'kola_ogo',
-            name: 'Kola Ogo',
-            fullName: 'Kola Ogo',
-            full_name: 'Kola Ogo',
-            altNames: ['KOLA OGO'],
-            position: 5,
-            packingOrder: 5,
-            packing_position: 5,
-            packsLabel: 'Packs 5th',
-            phone: '07069702561',
-            virtualAccountNumber: '8152739353',
-            virtual_account_number: '8152739353',
-            virtualAccountName: 'BETTERAJO-KOLA OGO',
-            virtual_account_name: 'BETTERAJO-KOLA OGO',
-            status: 'PENDING',
-            current_round_status: 'pending_contribution',
-            credit_balance: 0,
-            hasPackedThisRound: false,
-            isFullyPaid: false
-          }
-        ];
-
-        // Overwrite group doc to 5 unique packs
-        await setDoc(doc(db, 'groups', adugboGroupId), {
-          id: adugboGroupId,
-          name: 'ADUGBO JAO',
-          group_name: 'ADUGBO JAO',
-          contributionAmount: 50000,
-          contribution_amount: 50000,
-          platformFee: 60,
-          totalAmount: 50060,
-          packFee: 3000,
-          packing_fee: 3000,
-          packing_amount: 250000,
-          members: finalFiveFixedPacks,
-          memberCount: 5,
-          member_limit: 5,
-          currentRound: 1,
-          current_round: 1
-        }, { merge: true }).catch(() => {});
-
-        // 2. Delete fake Chidi Eze, Fatima Bello, Tunde Okoro, Bisi Adebayo and duplicate GLRY JAYE
-        const fakeList = ['Chidi Eze', 'Fatima Bello', 'Tunde Okoro', 'Bisi Adebayo', 'CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
-        const fakeVans = ['8152629304', '8152467888'];
-
-        const snapContrib = await getDocs(collection(db, 'contributions'));
-        for (const d of snapContrib.docs) {
-          const dt = d.data();
-          const amt = Number(dt.amount || dt.gross_amount || 0);
-          const gName = String(dt.groupName || dt.ajoName || '');
-          const mName = String(dt.memberName || dt.userName || dt.full_name || '').trim();
-          const mNameUpper = mName.toUpperCase();
-          const van = String(dt.virtualAccountNumber || dt.virtual_account_number || '');
-          const docId = d.id;
-
-          if (
-            fakeList.includes(mName) ||
-            fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
-            fakeVans.includes(van) ||
-            docId.includes('mem_adugbo_2') ||
-            docId.includes('mem_adugbo_3') ||
-            docId.includes('mem_adugbo_4') ||
-            docId.includes('mem_adugbo_5') ||
-            (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
-            (mNameUpper === 'GLRY JAYE' && docId.includes('8152925182')) ||
-            mNameUpper.startsWith('MEMBER')
-          ) {
-            await deleteDoc(d.ref).catch(() => {});
-          } else if ((amt === 50000 || amt === 250000 || amt === 50060) && (gName.includes('OLOPA') || mName.includes('AJAYI OKE'))) {
-            await deleteDoc(d.ref).catch(() => {});
-          } else if (amt <= 0) {
-            // Fix existing rows with ₦0
-            const isGroup = Boolean(dt.groupId || dt.group_id || dt.type === 'group_contribution');
-            await updateDoc(d.ref, {
-              amount: 20060,
-              gross_amount: 20060,
-              total: 20060,
-              fee: 60,
-              type: isGroup ? 'group_contribution' : 'personal_ajo',
-              groupName: isGroup ? (dt.groupName || 'OLOPA AJO') : (dt.groupName || 'Personal Better Ajo'),
-              memberName: isGroup ? (dt.memberName || 'AJAYI OKE') : (dt.memberName || 'Personal Ajo Member')
-            }).catch(() => {});
-          }
-        }
-
-        const snapPtx = await getDocs(collection(db, 'platform_transactions'));
-        for (const d of snapPtx.docs) {
-          const dt = d.data();
-          const amt = Number(dt.amount || 0);
-          const gName = String(dt.groupName || dt.ajoName || '');
-          const mName = String(dt.memberName || dt.userName || '').trim();
-          const mNameUpper = mName.toUpperCase();
-          const van = String(dt.virtualAccountNumber || dt.virtual_account_number || '');
-          const docId = d.id;
-
-          if (
-            fakeList.includes(mName) ||
-            fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
-            fakeVans.includes(van) ||
-            docId.includes('mem_adugbo_2') ||
-            docId.includes('mem_adugbo_3') ||
-            docId.includes('mem_adugbo_4') ||
-            docId.includes('mem_adugbo_5') ||
-            (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
-            (mNameUpper === 'GLRY JAYE' && docId.includes('8152925182')) ||
-            mNameUpper.startsWith('MEMBER')
-          ) {
-            await deleteDoc(d.ref).catch(() => {});
-          } else if ((amt === 50000 || amt === 250000 || amt === 50060) && (gName.includes('OLOPA') || mName.includes('AJAYI OKE'))) {
-            await deleteDoc(d.ref).catch(() => {});
-          }
-        }
-
-        // Delete from group_members collection
-        const snapGm = await getDocs(collection(db, 'group_members')).catch(() => null);
-        if (snapGm) {
-          for (const d of snapGm.docs) {
-            const dt = d.data();
-            const mNameUpper = String(dt.full_name || dt.name || '').trim().toUpperCase();
-            const van = String(dt.virtual_account_number || dt.virtualAccountNumber || '');
-            if (
-              fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
-              fakeVans.includes(van) ||
-              (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
-              d.id.startsWith('mem_adugbo_')
-            ) {
-              await deleteDoc(d.ref).catch(() => {});
-            }
-          }
-        }
-
-        // Delete from subcollection groups/{adugboGroupId}/members
-        const snapSub = await getDocs(collection(db, 'groups', adugboGroupId, 'members')).catch(() => null);
-        if (snapSub) {
-          for (const d of snapSub.docs) {
-            const dt = d.data();
-            const mNameUpper = String(dt.full_name || dt.name || '').trim().toUpperCase();
-            const van = String(dt.virtual_account_number || dt.virtualAccountNumber || '');
-            if (
-              fakeList.map(s => s.toUpperCase()).includes(mNameUpper) ||
-              fakeVans.includes(van) ||
-              (mNameUpper === 'GLRY JAYE' && van === '8152925182') ||
-              d.id.startsWith('mem_adugbo_')
-            ) {
-              await deleteDoc(d.ref).catch(() => {});
-            }
-          }
-        }
-
-        // 4. CLEANUP FAKE PACK THAT ALREADY HAPPENED - KOKO LOLA + 2000 COMMISSION
-        await deleteDoc(doc(db, 'platform_transactions', 'ptx_adugbo_super_admin_fee')).catch(() => {});
-        await deleteDoc(doc(db, 'platform_transactions', 'ptx_adugbo_admin_commission')).catch(() => {});
-        await deleteDoc(doc(db, 'pack_transactions', 'ptx_adugbo_pack_payout')).catch(() => {});
-
-        const groupsSnapAll = await getDocs(collection(db, 'groups')).catch(() => null);
-        if (groupsSnapAll) {
-          for (const gDoc of groupsSnapAll.docs) {
-            const gData = gDoc.data();
-            const members = gData.members || [];
-            const allPending = members.length > 0 && members.every((m: any) => (m.status === 'PENDING' || !m.hasPaid) && m.hasPaidCurrentCycle !== true);
-
-            if (allPending) {
-              // Nobody paid - but contributions exist = auto bug - delete
-              const contribQ = query(collection(db, 'contributions'), where('groupId', '==', gDoc.id));
-              const contribSnap = await getDocs(contribQ);
-              for (const c of contribSnap.docs) {
-                await deleteDoc(doc(db, 'contributions', c.id)).catch(() => {});
-              }
-              const contribQ2 = query(collection(db, 'contributions'), where('group_id', '==', gDoc.id));
-              const contribSnap2 = await getDocs(contribQ2);
-              for (const c of contribSnap2.docs) {
-                await deleteDoc(doc(db, 'contributions', c.id)).catch(() => {});
-              }
-              const txQ = query(collection(db, 'platform_transactions'), where('groupId', '==', gDoc.id));
-              const txSnap = await getDocs(txQ);
-              for (const t of txSnap.docs) {
-                await deleteDoc(doc(db, 'platform_transactions', t.id)).catch(() => {});
-              }
-              const txQ2 = query(collection(db, 'platform_transactions'), where('group_id', '==', gDoc.id));
-              const txSnap2 = await getDocs(txQ2);
-              for (const t of txSnap2.docs) {
-                await deleteDoc(doc(db, 'platform_transactions', t.id)).catch(() => {});
-              }
-              const packQ = query(collection(db, 'pack_transactions'), where('groupId', '==', gDoc.id));
-              const packSnap = await getDocs(packQ);
-              for (const p of packSnap.docs) {
-                await deleteDoc(doc(db, 'pack_transactions', p.id)).catch(() => {});
-              }
-              const packQ2 = query(collection(db, 'pack_transactions'), where('group_id', '==', gDoc.id));
-              const packSnap2 = await getDocs(packQ2);
-              for (const p of packSnap2.docs) {
-                await deleteDoc(doc(db, 'pack_transactions', p.id)).catch(() => {});
-              }
-              // Reset packing
-              await updateDoc(doc(db, 'groups', gDoc.id), {
-                packingStatus: 'NOT_STARTED',
-                currentPackingOrder: 1,
-                currentCycle: 1
-              }).catch(() => {});
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[runGroupIsolationMigration warn]:', err);
-      }
-    };
-    runGroupIsolationMigration();
 
     return () => {
       unsub();
@@ -1032,66 +723,94 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const handleResetEverythingPermanent = async () => {
     if (resetText.trim() !== "RESET") {
-      alert("Please type RESET exactly to confirm.");
+      alert("Type RESET capital");
       return;
     }
     const finalConfirm = window.confirm(
-      "FINAL WARNING - PERMANENTLY DELETE ALL DATA FROM FIREBASE DATABASE - Groups, Contributions, Platform Transactions, Personal Savings, Withdrawals, Test Users - CANNOT BE UNDONE - Continue?"
+      "FINAL WARNING - PERMANENT DELETE ALL DATA FROM FIREBASE - This will delete ALL groups, members, contributions, transactions, savings, withdrawals, payouts - CANNOT BE UNDONE - Continue?"
     );
     if (!finalConfirm) return;
 
     setResetting(true);
+    setResetLogs("Starting permanent reset...\n");
+
     try {
-      const deleteAllDocsFromCollection = async (collectionName: string, keepUid?: string) => {
+      console.log("Starting permanent reset...");
+      const collectionsToDelete = [
+        "groups", "ajo_groups", "ajoGroups",
+        "contributions", "group_contributions", "groupContributions", "member_contributions",
+        "platform_transactions", "platformTransactions", "transactions", "platform_revenue", "recent_transactions", "transaction_logs",
+        "personal_savings", "personalSavings", "savings", "ajo_savings", "personalAjos", "personal_ajo", "payments",
+        "personal_withdrawals", "withdrawals", "personalWithdrawals", "super_admin_withdrawals",
+        "payouts", "group_payouts", "groupPayouts", "packings", "packings_history",
+        "members", "group_members", "groupMembers", "group_memberships",
+        "ledgers", "general_ledger", "central_ledger",
+        "group_atme", "super_atme", "atme_payouts",
+        "superAdminEarnings", "platformStats", "audit_logs"
+      ];
+
+      let totalDeletedAll = 0;
+      let report = "";
+
+      for (const colName of collectionsToDelete) {
         try {
-          const snapshot = await getDocs(collection(db, collectionName));
-          if (snapshot.empty) return 0;
-          const batchSize = 400;
-          let batch = writeBatch(db);
-          let count = 0;
-          let total = 0;
-          for (const d of snapshot.docs) {
-            if (collectionName === "users") {
-              const uData = d.data();
-              if (keepUid && d.id === keepUid) continue;
-              if (currentSuperAdminEmail && uData.email === currentSuperAdminEmail) continue;
-              if (userPhone && (uData.phone === userPhone || uData.phoneNumber === userPhone)) continue;
-              if (uData.role === 'super_admin' || uData.role === 'superadmin') continue;
-            }
-            batch.delete(d.ref);
-            count++;
-            if (count >= batchSize) {
-              await batch.commit();
-              total += count;
-              batch = writeBatch(db);
-              count = 0;
+          const snapshot = await getDocs(collection(db, colName));
+          if (snapshot.empty) {
+            console.log(`${colName}: 0 docs`);
+            continue;
+          }
+          console.log(`Deleting ${colName}: ${snapshot.size} docs`);
+          let colDeleted = 0;
+          for (const docSnap of snapshot.docs) {
+            try {
+              await deleteDoc(docSnap.ref);
+              colDeleted++;
+              totalDeletedAll++;
+            } catch (delErr) {
+              console.error(`Failed delete ${colName}/${docSnap.id}`, delErr);
             }
           }
-          if (count > 0) {
-            await batch.commit();
-            total += count;
-          }
-          return total;
-        } catch (colErr) {
-          console.warn(`[Reset] Collection ${collectionName} error:`, colErr);
-          return 0;
+          const line = `${colName}: ${colDeleted}/${snapshot.size} deleted\n`;
+          report += line;
+          setResetLogs(prev => prev + line);
+        } catch (err: any) {
+          console.log(`Collection ${colName} error or no access:`, err?.message || err);
         }
-      };
+      }
 
-      const delGroups = await deleteAllDocsFromCollection("groups");
-      const delContribs = await deleteAllDocsFromCollection("contributions");
-      const delTx = await deleteAllDocsFromCollection("platform_transactions");
-      const delSavings = await deleteAllDocsFromCollection("personal_savings");
-      const delWithdraw = await deleteAllDocsFromCollection("personal_withdrawals");
-      const delLegacySavings = await deleteAllDocsFromCollection("savings");
-      const delLegacyWithdrawals = await deleteAllDocsFromCollection("withdrawals");
-      const delGroupMembers = await deleteAllDocsFromCollection("group_members");
-      const delPackTxs = await deleteAllDocsFromCollection("pack_transactions");
-      const delCommissions = await deleteAllDocsFromCollection("commissions");
-      const delAudit = await deleteAllDocsFromCollection("audit_logs");
-      const delUsers = await deleteAllDocsFromCollection("users", currentSuperAdminUid);
+      // Delete profiles and users except Super Admin (08154267469)
+      for (const userCol of ["profiles", "users"]) {
+        try {
+          const snap = await getDocs(collection(db, userCol));
+          let count = 0;
+          for (const u of snap.docs) {
+            const data = u.data();
+            const email = String(data.email || '');
+            const phone = String(data.phone || data.phoneNumber || '');
+            const role = String(data.role || '').toLowerCase();
+            // Preserve Super Admin
+            if (u.id === currentSuperAdminUid) continue;
+            if (phone.includes("8154267469")) continue;
+            if (currentSuperAdminEmail && email === currentSuperAdminEmail) continue;
+            if (role.includes("super_admin") || role.includes("superadmin")) continue;
 
-      // Reset platformRevenue document to 0
+            try {
+              await deleteDoc(u.ref);
+              count++;
+              totalDeletedAll++;
+            } catch (e) {
+              console.error(`Failed delete ${userCol}/${u.id}:`, e);
+            }
+          }
+          const userLine = `${userCol} (test): ${count} deleted — super admin 08154267469 preserved\n`;
+          report += userLine;
+          setResetLogs(prev => prev + userLine);
+        } catch (e: any) {
+          console.warn(`Error deleting ${userCol}:`, e);
+        }
+      }
+
+      // Reset platformRevenue and platformStats documents to zero
       try {
         await setDoc(doc(db, 'platformRevenue', 'main'), {
           stream1: 0,
@@ -1103,50 +822,52 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           unifiedAvailable: 0,
           lastUpdated: serverTimestamp()
         });
+        await setDoc(doc(db, 'platformStats', 'main'), {
+          totalPersonalSavings: 0,
+          lastUpdated: serverTimestamp()
+        });
       } catch (revErr) {
-        console.warn('[Reset] platformRevenue reset warn:', revErr);
+        console.warn('[Reset] platformRevenue/platformStats client setDoc warn:', revErr);
       }
 
-      // Call server endpoint to wipe in-memory server database & disk json
+      // Call server Admin SDK endpoint (bypasses any client security rules)
       try {
-        await fetch('/api/admin/reset-database', {
+        setResetLogs(prev => prev + "Calling server Admin SDK reset...\n");
+        const srvRes = await fetch('/api/admin/reset-database', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-user-phone': userPhone || '08154267469'
           }
         });
-      } catch (srvErr) {
-        console.warn('[Reset] Server reset warn:', srvErr);
+        const srvJson = await srvRes.json();
+        const srvLine = `Server Admin SDK purge complete: ${JSON.stringify(srvJson.firestoreDeleted || {})}\n`;
+        report += srvLine;
+        setResetLogs(prev => prev + srvLine);
+      } catch (srvErr: any) {
+        console.warn('[Reset] Server Admin SDK reset warn:', srvErr);
       }
 
       localStorage.clear();
       sessionStorage.clear();
       setResetDone(true);
-      setShowResetConfirm(false);
-      setResetText("");
 
+      console.log("Reset complete", report);
       alert(
-        `✅ PERMANENT RESET COMPLETE FROM FIREBASE DATABASE:\n` +
-        `Groups: ${delGroups}\n` +
-        `Contributions: ${delContribs}\n` +
-        `Transactions: ${delTx}\n` +
-        `Personal Savings: ${delSavings + delLegacySavings}\n` +
-        `Withdrawals: ${delWithdraw + delLegacyWithdrawals}\n` +
-        `Group Members: ${delGroupMembers}\n` +
-        `Pack Transactions: ${delPackTxs}\n` +
-        `Commissions: ${delCommissions}\n` +
-        `Audit Logs: ${delAudit}\n` +
-        `Test Users: ${delUsers}\n\n` +
-        `Now ZERO - Gone forever - Refreshing page - Check Firebase Console: 0 documents.`
+        `✅ PERMANENT RESET COMPLETE - DELETED ${totalDeletedAll} DOCUMENTS FROM FIREBASE:\n\n${report}\n\nNow check Super Admin — Everything should be 0 (Personal Ajo 0, Contributions 0, Packed 0, Group Atme 0, Super Atme 0, Recent Transactions empty, All groups gone, All members gone, Payouts gone, Withdrawals gone).`
       );
 
       window.location.reload();
-    } catch (e: any) {
-      console.error(e);
-      alert("Reset failed: " + (e?.message || e));
+    } catch (error: any) {
+      console.error("Reset failed completely", error);
+      alert(
+        "Reset failed: " + (error?.message || error) +
+        "\n\nOpen Browser Console F12 to see details."
+      );
     } finally {
       setResetting(false);
+      setShowResetConfirm(false);
+      setResetText("");
     }
   };
 
@@ -1503,6 +1224,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                   <span>✅ Reset Complete — Database empty — Everything ZERO — Now register fresh to test 600, 60, 33.33%, 1.6%</span>
+                </div>
+              )}
+              {resetLogs && (
+                <div className="mt-3">
+                  <div className="text-[11px] font-bold text-slate-700 mb-1">Reset Execution Log:</div>
+                  <pre className="text-[10px] font-mono bg-slate-900 text-emerald-400 p-3 rounded-xl max-h-40 overflow-y-auto whitespace-pre-wrap">
+                    {resetLogs}
+                  </pre>
                 </div>
               )}
             </div>
@@ -3241,6 +2970,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   className="w-full px-3.5 py-2.5 rounded-xl border-2 border-rose-300 focus:border-rose-600 focus:outline-none font-mono font-bold text-sm tracking-wider uppercase text-slate-900"
                 />
               </div>
+
+              {resetLogs && (
+                <div className="mt-3">
+                  <label className="block text-slate-800 font-bold mb-1">Live Progress Output:</label>
+                  <pre className="text-[10px] font-mono bg-slate-900 text-emerald-400 p-3 rounded-xl max-h-36 overflow-y-auto whitespace-pre-wrap">
+                    {resetLogs}
+                  </pre>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">

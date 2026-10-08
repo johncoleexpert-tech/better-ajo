@@ -5187,7 +5187,84 @@ apiRouter.post('/support/mark-read', (req: Request, res: Response) => {
 
 apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
   try {
-    // Wipe server in-memory database completely
+    const fsDb = getFirestoreDb();
+    let fsReport: Record<string, number> = {};
+
+    if (fsDb) {
+      // 1. Enumerate and delete all documents in every Firestore root collection using Admin SDK
+      const rootCollections = await fsDb.listCollections().catch(() => []);
+      for (const col of rootCollections) {
+        try {
+          if (col.id === 'users' || col.id === 'profiles') {
+            const snap = await col.get();
+            let colDeleted = 0;
+            for (const d of snap.docs) {
+              const uData = d.data();
+              const phone = String(uData.phone || uData.phoneNumber || '');
+              const email = String(uData.email || '');
+              const role = String(uData.role || '').toLowerCase();
+              if (phone.includes('8154267469') || role.includes('super_admin') || role.includes('superadmin') || email.includes('paulakinyele54@gmail.com')) {
+                continue; // preserve Super Admin account!
+              }
+              await d.ref.delete().catch(() => {});
+              colDeleted++;
+            }
+            fsReport[col.id] = colDeleted;
+          } else if (col.id === 'platformRevenue') {
+            const snap = await col.get();
+            for (const d of snap.docs) {
+              if (d.id !== 'main') await d.ref.delete().catch(() => {});
+            }
+            fsReport[col.id] = snap.docs.length;
+          } else if (col.id === 'platformStats') {
+            const snap = await col.get();
+            for (const d of snap.docs) {
+              if (d.id !== 'main') await d.ref.delete().catch(() => {});
+            }
+            fsReport[col.id] = snap.docs.length;
+          } else {
+            const snap = await col.get();
+            let colDeleted = 0;
+            for (const d of snap.docs) {
+              if (typeof (fsDb as any).recursiveDelete === 'function') {
+                await (fsDb as any).recursiveDelete(d.ref).catch(async () => {
+                  await d.ref.delete().catch(() => {});
+                });
+              } else {
+                await d.ref.delete().catch(() => {});
+              }
+              colDeleted++;
+            }
+            fsReport[col.id] = colDeleted;
+          }
+        } catch (colErr) {
+          console.warn(`[Reset-Database Admin SDK] Error on ${col.id}:`, colErr);
+        }
+      }
+
+      // Explicitly reset platformRevenue and platformStats documents to zero
+      try {
+        await fsDb.collection('platformRevenue').doc('main').set({
+          stream1: 0,
+          stream2: 0,
+          stream3: 0,
+          stream4: 0,
+          totalGross: 0,
+          totalWithdrawn: 0,
+          unifiedAvailable: 0,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+        await fsDb.collection('platformStats').doc('main').set({
+          totalPersonalSavings: 0,
+          totalPersonalSavers: 0,
+          lastUpdated: new Date().toISOString()
+        });
+      } catch (statErr) {
+        console.warn('[Reset-Database Admin SDK] platform stats reset warn:', statErr);
+      }
+    }
+
+    // 2. Wipe server in-memory database completely
     db.data.groups = [];
     db.data.group_members = [];
     db.data.contributions = [];
@@ -5200,6 +5277,16 @@ apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
     db.data.super_admin_transactions = [];
     db.data.audit_logs = [];
     db.data.admin_revenue_ledger = [];
+    db.data.group_notifications = [];
+    db.data.support_messages = [];
+
+    // Filter profiles: preserve only authorized Super Admin
+    db.data.profiles = (db.data.profiles || []).filter(p => {
+      const phone = String(p.phone || '');
+      const email = String(p.email || '');
+      const role = String(p.role || '').toUpperCase();
+      return phone.includes('8154267469') || role.includes('SUPER_ADMIN') || email.includes('paulakinyele54@gmail.com');
+    });
     db.data.super_admin_wallet = {
       available_balance: 0,
       total_gross_earnings: 0,
@@ -5229,7 +5316,11 @@ apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
     // Save empty state to packajo_db.json
     db.save();
 
-    return res.json({ success: true, message: 'Server database reset successfully to ZERO.' });
+    return res.json({
+      success: true,
+      message: 'Server database and Firestore permanently reset to ZERO.',
+      firestoreDeleted: fsReport
+    });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
