@@ -319,6 +319,7 @@ export function normalizeNigerianPhone(phone: string | undefined | null): string
 
 class Database {
   public data: DatabaseSchema;
+  public onPackExecuted?: (packTx: PackTransaction, commission: Commission, group: GroupAjo, member: GroupMember) => void;
   private otpRequestTimes: Map<string, number[]> = new Map();
   private phoneLockouts: Map<string, number> = new Map();
 
@@ -2500,7 +2501,14 @@ class Database {
     ) {
       try {
         console.log(`[Auto-Disbursement Safeguard]: Auto-executing pack for ${currentPacker.full_name} in group ${group.group_name} (scheduled: ${packerSchedule.scheduled_date}, today: ${todayStr})`);
-        this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate);
+        const packRes = this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate);
+        if (this.onPackExecuted) {
+          try {
+            this.onPackExecuted(packRes.transaction, packRes.commission, group, currentPacker);
+          } catch (hookErr) {
+            console.warn('[onPackExecuted hook error]:', hookErr);
+          }
+        }
         return true;
       } catch (err: any) {
         console.warn('[Auto-Disbursement Safeguard Error]:', err?.message || err);
@@ -2781,7 +2789,14 @@ class Database {
         !this.isMemberPacked(groupId, currentPacker.id, group.current_round)
       ) {
         try {
-          this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate, { bypassDateCheck: paymentType === 'simulation' });
+          const packRes = this.executePack(groupId, currentPacker.id, group.current_round, simulatedDate, { bypassDateCheck: paymentType === 'simulation' });
+          if (this.onPackExecuted) {
+            try {
+              this.onPackExecuted(packRes.transaction, packRes.commission, group, currentPacker);
+            } catch (hookErr) {
+              console.warn('[onPackExecuted hook error]:', hookErr);
+            }
+          }
           autoDisbursed = true;
           disbursedMemberName = currentPacker.full_name;
         } catch (packErr) {

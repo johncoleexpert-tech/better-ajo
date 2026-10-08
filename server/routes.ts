@@ -85,6 +85,13 @@ import { wipeTestData } from './wipeTestData.js';
 
 export const apiRouter = Router();
 
+// Global hook: Whenever a pack is executed in db (manual or auto-pack safeguard), sync batch to Firestore
+db.onPackExecuted = (packTx, commission, group, member) => {
+  fsExecutePackBatch(packTx, commission, member, group).catch(err => {
+    console.warn('[Auto-Pack fsExecutePackBatch Warn]:', err?.message || err);
+  });
+};
+
 // Rate limiters for security hardening
 const authRateLimiter = createRateLimiter({
   windowMs: 60 * 1000,
@@ -2346,8 +2353,8 @@ apiRouter.post('/groups/:groupId/members/:memberId/simulate-payment', async (req
     paymentRec.virtual_account_name = member.virtual_account_name;
     paymentRec.payment_type = 'simulation';
 
-    const memberName = member.full_name || (member as any).name || 'AJAYI OKE';
-    const groupName = group.group_name || 'OLOPA AJO';
+    const memberName = member.full_name || (member as any).name || 'Member';
+    const groupName = group.group_name || 'Ajo Group';
 
     // Helper to log platform fee to platform_transactions in Firestore
     const recordPlatformFee = () => {
@@ -2641,6 +2648,7 @@ apiRouter.post('/groups/:groupId/check-disbursement', async (req: Request, res: 
       const currentPacker = db.getCurrentPacker(groupId, group.current_round);
       if (currentPacker && !db.isMemberPacked(groupId, currentPacker.id, group.current_round) && !cycleInfo.hasPackedToday) {
         const packResult = db.executePack(groupId, currentPacker.id, group.current_round, simulatedDate);
+        fsExecutePackBatch(packResult.transaction, packResult.commission, currentPacker, group).catch(() => {});
         return res.json({
           disbursed: true,
           scheduledPackDate: cycleInfo.scheduledPackDate,

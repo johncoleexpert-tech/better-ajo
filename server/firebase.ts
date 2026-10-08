@@ -1831,7 +1831,92 @@ export async function fsExecutePackBatch(
     if (cleanGroup && group?.id) {
       batch.set(db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(group.id), cleanGroup, { merge: true });
     }
+
+    // Commission Routing: group_admin_earnings, super_admin_revenue, packing_payouts
+    if (group?.id) {
+      const gAdminId = group.admin_id;
+      const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
+      const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
+      const sAdminShare = Math.floor(commission?.super_admin_amount ?? (packingFee - gAdminShare));
+
+      batch.set(db.collection('group_admin_earnings').doc(`gae_${transaction.id}`), {
+        id: `gae_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        adminId: gAdminId,
+        amount: gAdminShare,
+        type: 'packing_fee',
+        groupName: grpName,
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      batch.set(db.collection('super_admin_revenue').doc(`sar_${transaction.id}`), {
+        id: `sar_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        amount: sAdminShare,
+        type: 'packing_share_33_33',
+        groupName: grpName,
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      batch.set(db.collection('packing_payouts').doc(`pck_${transaction.id}`), {
+        id: `pck_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        groupName: grpName,
+        amount: grossAmt,
+        beneficiary: uName,
+        beneficiaryId: member?.id || transaction.member_id,
+        fee: packingFee,
+        status: 'packed',
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
     await batch.commit();
+
+    // Update platformRevenue/main stream3 (33.33% share)
+    if (group?.id) {
+      const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
+      const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
+      const sAdminShare = Math.floor(commission?.super_admin_amount ?? (packingFee - gAdminShare));
+      if (sAdminShare > 0) {
+        const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
+        await db.runTransaction(async (t) => {
+          const doc = await t.get(revRef);
+          if (doc.exists) {
+            t.update(revRef, {
+              stream3: FieldValue.increment(sAdminShare),
+              totalGross: FieldValue.increment(sAdminShare),
+              unifiedAvailable: FieldValue.increment(sAdminShare),
+              lastUpdated: FieldValue.serverTimestamp()
+            });
+          } else {
+            t.set(revRef, {
+              stream1: 0,
+              stream2: 0,
+              stream3: sAdminShare,
+              stream4: 0,
+              totalGross: sAdminShare,
+              totalWithdrawn: 0,
+              unifiedAvailable: sAdminShare,
+              lastUpdated: FieldValue.serverTimestamp()
+            });
+          }
+        }).catch(err => console.warn('[PlatformRevenue stream3 update warn]:', err));
+      }
+    }
+
     console.log(`[Firestore Pack Batch] Committed atomic batch for pack ${transaction.id} in ${Date.now() - startTime}ms`);
     return true;
   } catch (batchErr: any) {
@@ -1850,6 +1935,55 @@ export async function fsExecutePackBatch(
     }
     if (cleanGroup && group?.id) {
       await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(group.id).set(cleanGroup, { merge: true });
+    }
+    if (group?.id) {
+      const gAdminId = group.admin_id;
+      const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
+      const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
+      const sAdminShare = Math.floor(commission?.super_admin_amount ?? (packingFee - gAdminShare));
+
+      await db.collection('group_admin_earnings').doc(`gae_${transaction.id}`).set({
+        id: `gae_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        adminId: gAdminId,
+        amount: gAdminShare,
+        type: 'packing_fee',
+        groupName: grpName,
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+
+      await db.collection('super_admin_revenue').doc(`sar_${transaction.id}`).set({
+        id: `sar_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        amount: sAdminShare,
+        type: 'packing_share_33_33',
+        groupName: grpName,
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+
+      await db.collection('packing_payouts').doc(`pck_${transaction.id}`).set({
+        id: `pck_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        groupName: grpName,
+        amount: grossAmt,
+        beneficiary: uName,
+        beneficiaryId: member?.id || transaction.member_id,
+        fee: packingFee,
+        status: 'packed',
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
     }
     console.log(`[Firestore Pack Batch] Sequential fallback write successfully committed for pack: ${transaction.id}`);
     return true;

@@ -39,7 +39,7 @@ import {
 import { GroupAdminDashboardData, GroupAdminMemberItem, UserProfile } from '../types/index.js';
 import { formatNaira, formatPhone, NIGERIAN_BANKS } from '../lib/formatters.js';
 import { db, auth } from '../lib/firebase.js';
-import { collection, addDoc, setDoc, deleteDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, setDoc, deleteDoc, serverTimestamp, query, where, onSnapshot, doc, getDocs, getDoc, updateDoc, Timestamp, runTransaction, increment } from 'firebase/firestore';
 
 interface GroupAdminDashboardProps {
   groupId: string;
@@ -153,6 +153,12 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       const nextPackDate = new Date();
       nextPackDate.setDate(nextPackDate.getDate() + cycleDays);
 
+      const packingFee = Number(groupData.packingFee || groupData.packing_fee || groupData.packFee || 4000);
+      const adminShare = Math.round(packingFee * (2 / 3)); // 2667 for 4000, 2000 for 3000
+      const superAdminShare = packingFee - adminShare; // 1333 for 4000, 1000 for 3000
+      const adminId = groupData.creatorId || groupData.adminId || groupData.admin_id || currentUser.id;
+      const curRound = Number(groupData.current_round || groupData.currentRound || 1);
+
       await fetch(`/api/groups/${groupId}/pack`, {
         method: 'POST',
         headers: {
@@ -164,37 +170,71 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         })
       }).catch(() => null);
 
-      // 1. Separate Pack Now button onClick - ONLY creates real pack + 3000 fee split
-      await addDoc(collection(db, 'contributions'), {
+      // a) group_admin_earnings collection
+      await addDoc(collection(db, 'group_admin_earnings'), {
         groupId: groupId,
         group_id: groupId,
+        adminId: adminId,
+        amount: adminShare,
+        type: 'packing_fee',
         groupName: grpName,
-        memberName: packingMemberName,
-        amount: totalPack,
-        gross_amount: totalPack,
-        packingOrder: currentPackingOrder,
-        status: 'PACKED',
-        packingDate: serverTimestamp(),
-        nextPackDate: Timestamp.fromDate(nextPackDate),
-        cycleDays: cycleDays,
-        type: 'pack_payout'
-      });
-
-      await addDoc(collection(db, 'platform_transactions'), {
-        groupId: groupId,
-        group_id: groupId,
-        groupName: grpName,
-        memberName: packingMemberName,
-        totalFee: 3000,
-        adminShare: 2000, // Group Admin 2000
-        superAdminShare: 1000, // Super Admin 1000
-        amount: 2000,
-        gross_amount: 2000,
-        adminId: currentUser.id,
-        type: 'admin_commission',
-        status: 'success',
+        round: curRound,
+        timestamp: serverTimestamp(),
         createdAt: serverTimestamp()
       });
+
+      // b) super_admin_revenue collection (Stream 3)
+      await addDoc(collection(db, 'super_admin_revenue'), {
+        groupId: groupId,
+        group_id: groupId,
+        amount: superAdminShare,
+        type: 'packing_share_33_33',
+        groupName: grpName,
+        round: curRound,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      });
+
+      // c) packing_payouts collection
+      await addDoc(collection(db, 'packing_payouts'), {
+        groupId: groupId,
+        group_id: groupId,
+        groupName: grpName,
+        amount: totalPack,
+        beneficiary: packingMemberName,
+        beneficiaryId: packingMember.id,
+        fee: packingFee,
+        status: 'packed',
+        round: curRound,
+        packingOrder: currentPackingOrder,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      });
+
+      // Update platformRevenue/main directly
+      await runTransaction(db, async (t) => {
+        const revRef = doc(db, 'platformRevenue', 'main');
+        const revDoc = await t.get(revRef);
+        if (revDoc.exists()) {
+          t.update(revRef, {
+            stream3: increment(superAdminShare),
+            totalGross: increment(superAdminShare),
+            unifiedAvailable: increment(superAdminShare),
+            lastUpdated: serverTimestamp()
+          });
+        } else {
+          t.set(revRef, {
+            stream1: 0,
+            stream2: 0,
+            stream3: superAdminShare,
+            stream4: 0,
+            totalGross: superAdminShare,
+            totalWithdrawn: 0,
+            unifiedAvailable: superAdminShare,
+            lastUpdated: serverTimestamp()
+          });
+        }
+      }).catch(err => console.warn('[PlatformRevenue stream3 error]:', err));
 
       const updatedMembersAfterPack = currentMems.map((m: any) => {
         if (m.id === packingMember.id || m.position === packingMember.position) {
@@ -223,13 +263,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     try {
       const groupDocSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
       const groupData = groupDocSnap?.data();
-      const groupName = groupData?.name || groupData?.group_name || (data?.group as any)?.name || data?.group?.group_name || (groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo') ? 'ADUGBO JAO' : 'AJO GROUP');
-      const isAdugbo = groupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
-      const defaultContrib = isAdugbo ? 50000 : (Number(groupData?.contributionAmount || groupData?.contribution_amount || data?.group?.contribution_amount) || 50000);
-      const contributionAmount = customAmount || groupData?.contributionAmount || groupData?.contribution_amount || Number(data?.group?.contribution_amount) || defaultContrib;
+      const groupName = groupData?.name || groupData?.group_name || (data?.group as any)?.name || data?.group?.group_name || 'AJO GROUP';
+      const contributionAmount = customAmount || Number(groupData?.contributionAmount || groupData?.contribution_amount || data?.group?.contribution_amount) || 50000;
       const platformFee = 60;
       const totalAmount = contributionAmount + platformFee;
-      const memberName = member.full_name || (member as any).name || (isAdugbo ? 'GLRY JAYE' : 'MEMBER');
+      const memberName = member.full_name || (member as any).name || 'Member';
       const curRound = Number(groupData?.current_round || groupData?.currentRound || data?.group?.current_round || 1);
 
       const contributionId = `${groupId}_${member.id}_round${curRound}`;
@@ -240,7 +278,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
 
       if (db) {
-        // 1. Save contribution record - split internally, amount displays total ₦50,060
+        // Write ONLY to contributions collection as SINGLE SOURCE OF TRUTH (no duplicate write!)
         await setDoc(doc(db, 'contributions', contributionId), {
           groupId: groupId,
           group_id: groupId,
@@ -250,8 +288,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           member_id: member.id,
           memberName: memberName,
           userName: memberName,
-          contributionAmount: contributionAmount, // 50,000 pot
-          fee: platformFee, // 60 internal
+          contributionAmount: contributionAmount, // e.g. 50,000 pot
+          fee: platformFee, // 60 fee
+          net: contributionAmount, // 50,000
           total: totalAmount, // 50,060 what user paid
           amount: totalAmount, // Display ₦50,060 single amount
           gross_amount: totalAmount,
@@ -264,42 +303,30 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           timestamp: serverTimestamp()
         }).catch((err) => console.warn('[SetDoc contribution warn]:', err));
 
-        // 2. Save platform_transactions row - shows ₦50,060 single amount with real name
-        await setDoc(doc(db, 'platform_transactions', contributionId), {
-          type: 'group_contribution',
-          displayType: 'GROUP CONTRIBUTION',
-          groupId: groupId,
-          group_id: groupId,
-          groupName: groupName,
-          ajoName: groupName,
-          memberId: member.id,
-          member_id: member.id,
-          memberName: memberName,
-          userName: memberName,
-          amount: totalAmount, // ₦50,060 only - single amount - NO +60 label
-          gross_amount: totalAmount,
-          displayAmount: `₦${totalAmount.toLocaleString()}`,
-          round: curRound,
-          source: 'group_contribution',
-          status: 'success',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }).catch((err) => console.warn('[SetDoc platform_transactions warn]:', err));
-
-        // 3. Internal fee to Super Admin wallet - not shown as +60 in main table
-        await setDoc(doc(db, 'platform_transactions', `${contributionId}_fee`), {
-          type: 'platform_fee',
-          groupId: groupId,
-          group_id: groupId,
-          groupName: groupName,
-          ajoName: groupName,
-          amount: platformFee, // 60 goes to right place
-          gross_amount: platformFee,
-          internal: true,
-          status: 'success',
-          createdAt: serverTimestamp(),
-          timestamp: serverTimestamp()
-        }).catch((err) => console.warn('[SetDoc platform_fee warn]:', err));
+        // Increment Stream 2 atomically in platformRevenue/main
+        await runTransaction(db, async (t) => {
+          const revRef = doc(db, 'platformRevenue', 'main');
+          const revSnap = await t.get(revRef);
+          if (revSnap.exists()) {
+            t.update(revRef, {
+              stream2: increment(platformFee),
+              totalGross: increment(platformFee),
+              unifiedAvailable: increment(platformFee),
+              lastUpdated: serverTimestamp()
+            });
+          } else {
+            t.set(revRef, {
+              stream1: 0,
+              stream2: platformFee,
+              stream3: 0,
+              stream4: 0,
+              totalGross: platformFee,
+              totalWithdrawn: 0,
+              unifiedAvailable: platformFee,
+              lastUpdated: serverTimestamp()
+            });
+          }
+        }).catch((err) => console.warn('[PlatformRevenue stream2 update warn]:', err));
       }
     } catch (e) {
       console.warn('[handleSimulatePayment error]:', e);
@@ -311,10 +338,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     if (!simulatingMember) return;
 
     const currentGroupName = (data?.group as any)?.name || data?.group?.group_name || 'AJO GROUP';
-    const isAdugbo = (currentGroupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo'));
-    const baseContrib = isAdugbo ? 50000 : Number((data?.group as any)?.contributionAmount || data?.group?.contribution_amount || 50000);
+    const baseContrib = Number((data?.group as any)?.contributionAmount || data?.group?.contribution_amount || 50000);
     const totalToPay = baseContrib + 60;
-    const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'Member');
+    const memberName = simulatingMember.full_name || (simulatingMember as any).name || 'Member';
 
     if (!confirm(`Pay ₦${totalToPay.toLocaleString()} for ${memberName}?`)) return;
 
@@ -322,10 +348,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       setIsSimulating(true);
       setSimulateError(null);
 
-      // Record to Firestore directly with total ₦50,060 (split internally)
-      await handleSimulatePayment(simulatingMember, baseContrib);
-
-      // In Pay Now onClick - after marking member hasPaid=true:
+      // In Pay Now onClick - mark member status in group doc:
       const groupDocSnap = await getDoc(doc(db, 'groups', groupId)).catch(() => null);
       const groupData = groupDocSnap?.data() || {};
       const rawMembers = groupData.members || members || [];
@@ -543,67 +566,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           return;
         }
 
-        // Map confirmed member IDs and guarantee canonical positions for Adugbo JAO
-        let stableId = item.id;
-        const isAdugboGroup = (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUGBO') || (data?.group?.group_name || (data?.group as any)?.name || '').toUpperCase().includes('ADUBO') || effectiveGroupId === 'grp_adugbo_jao' || effectiveGroupId.toLowerCase().includes('adugbo');
-
-        if (isAdugboGroup) {
-          if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) {
-            stableId = 'glry_jaye';
-            item.position = 1;
-            item.packingOrder = 1;
-            item.packing_position = 1;
-            item.packsLabel = 'Packs 1st';
-            item.virtualAccountNumber = '8152476851';
-            item.virtual_account_number = '8152476851';
-            item.virtualAccountName = 'BETTERAJO-GLRY JAYE';
-            item.virtual_account_name = 'BETTERAJO-GLRY JAYE';
-          } else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) {
-            stableId = 'festus_chris';
-            item.position = 2;
-            item.packingOrder = 2;
-            item.packing_position = 2;
-            item.packsLabel = 'Packs 2nd';
-            item.virtualAccountNumber = '8152195643';
-            item.virtual_account_number = '8152195643';
-            item.virtualAccountName = 'BETTERAJO-FESTUS CHRIS';
-            item.virtual_account_name = 'BETTERAJO-FESTUS CHRIS';
-          } else if (nameUpper.includes('SHOLA')) {
-            stableId = 'sholakule';
-            item.position = 3;
-            item.packingOrder = 3;
-            item.packing_position = 3;
-            item.packsLabel = 'Packs 3rd';
-            item.virtualAccountNumber = '8152741791';
-            item.virtual_account_number = '8152741791';
-            item.virtualAccountName = 'BETTERAJO-SHOLA KUNLE';
-            item.virtual_account_name = 'BETTERAJO-SHOLA KUNLE';
-            item.keepFromScreenshot = true;
-          } else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) {
-            stableId = 'david_felistans';
-            item.position = 4;
-            item.packingOrder = 4;
-            item.packing_position = 4;
-            item.packsLabel = 'Packs 4th';
-            item.virtualAccountNumber = '8152168957';
-            item.virtual_account_number = '8152168957';
-            item.virtualAccountName = 'BETTERAJO-DAVID FELISTANCE';
-            item.virtual_account_name = 'BETTERAJO-DAVID FELISTANCE';
-            item.keepFromScreenshot = true;
-          } else if (nameUpper.includes('KOLA')) {
-            stableId = 'kola_ogo';
-            item.position = 5;
-            item.packingOrder = 5;
-            item.packing_position = 5;
-            item.packsLabel = 'Packs 5th';
-            item.virtualAccountNumber = '8152739353';
-            item.virtual_account_number = '8152739353';
-            item.virtualAccountName = 'BETTERAJO-KOLA OGO';
-            item.virtual_account_name = 'BETTERAJO-KOLA OGO';
-          }
-        }
-
-        memberMap.set(stableId, { ...item, id: stableId } as GroupAdminMemberItem);
+        memberMap.set(item.id, { ...item } as GroupAdminMemberItem);
       });
 
       const memberList = Array.from(memberMap.values());
@@ -716,18 +679,16 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       }
     }, (err) => console.warn('[Contribs2 Snapshot Warn]:', err));
 
-    // 8. Admin Commission from platform_transactions
-    // ONLY admin_commission, NEVER platform_fee, NEVER super_admin_fee
+    // 8. Admin Commission from group_admin_earnings
     const effectiveAdminUid = auth?.currentUser?.uid || currentUser.id;
-    const adminCommissionQuery = query(
-      collection(db, 'platform_transactions'),
-      where('groupId', '==', effectiveGroupId),
-      where('type', '==', 'admin_commission'),
-      where('status', '==', 'success')
-    );
-    const unsubAdminCom = onSnapshot(adminCommissionQuery, (snap) => {
+    const unsubAdminCom = onSnapshot(collection(db, 'group_admin_earnings'), (snap) => {
       const list: any[] = [];
-      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      snap.forEach(d => {
+        const val = d.data();
+        if (val.groupId === effectiveGroupId || val.group_id === effectiveGroupId || val.adminId === effectiveAdminUid) {
+          list.push({ id: d.id, ...val });
+        }
+      });
       setPlatformCommissions(list);
     }, (err) => console.warn('[AdminCom Snapshot Warn]:', err));
 
@@ -744,37 +705,6 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       setPlatformWithdrawals(list);
     }, (err) => console.warn('[AdminWth Snapshot Warn]:', err));
 
-    // E. Migration to clean existing .02 and 2.2 data - RUN ONCE ON LOAD
-    const cleanDecimals = async () => {
-      try {
-        const uids = Array.from(new Set([currentUser?.id, auth?.currentUser?.uid].filter(Boolean))) as string[];
-        for (const uid of uids) {
-          const qPtx = query(collection(db, 'platform_transactions'), where('adminId', '==', uid));
-          const snapPtx = await getDocs(qPtx);
-          snapPtx.forEach(async (d) => {
-            const dt = d.data();
-            const amt = Number(dt.amount);
-            if (!isNaN(amt) && amt % 1 !== 0) {
-              await updateDoc(d.ref, { amount: Math.round(amt), gross_amount: Math.round(amt) }).catch(() => {});
-            }
-          });
-
-          const qWth = query(collection(db, 'withdrawals'), where('adminId', '==', uid));
-          const snapWth = await getDocs(qWth);
-          snapWth.forEach(async (d) => {
-            const dt = d.data();
-            const amt = Number(dt.amount);
-            if (!isNaN(amt) && amt % 1 !== 0) {
-              await updateDoc(d.ref, { amount: Math.round(amt), net_amount: Math.round(amt) }).catch(() => {});
-            }
-          });
-        }
-      } catch (e) {
-        console.warn('[cleanDecimals migration warn]:', e);
-      }
-    };
-    cleanDecimals();
-
     return () => {
       unsubSub();
       unsubQ1();
@@ -790,11 +720,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
 
   // A. Fix Group Admin Available Commission Calculation - MUST BE INTEGER, NO KOBO, NO PLATFORM FEE
   const ptxCommissionSum = platformCommissions
-    .filter(c => (c.groupId === groupId || c.group_id === groupId || !c.groupId) && (c.type === 'admin_commission' || c.adminShare) && (c.status === 'success' || c.status === 'completed' || !c.status))
-    .reduce((sum, c) => sum + Math.floor(Number(c.adminShare || c.amount || c.gross_amount || 0)), 0);
+    .reduce((sum, c) => sum + Math.floor(Number(c.amount || c.adminShare || 0)), 0);
 
   const ptxWithdrawalsSum = platformWithdrawals
-    .filter(w => (w.groupId === groupId || w.group_id === groupId || !w.groupId) && (w.type === 'admin_commission' || w.withdrawal_type === 'admin_commission') && (w.status === 'success' || w.status === 'completed'))
     .reduce((sum, w) => sum + Math.floor(Number(w.amount || 0)), 0);
 
   const totalAdminCommission = ptxCommissionSum;
@@ -1003,90 +931,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   const currentRound = Number(group.current_round || 1);
   const nextRound = currentRound + 1;
 
-  // Filter out any fake members and deduplicate positions
-  const fakeListUpper = ['CHIDI EZE', 'FATIMA BELLO', 'TUNDE OKORO', 'BISI ADEBAYO'];
-  const fakeVans = ['8152629304', '8152467888', '8152925182'];
-  const isAdugboGroup = (group?.group_name || (group as any)?.name || '').toUpperCase().includes('ADUGBO') || (group?.group_name || (group as any)?.name || '').toUpperCase().includes('ADUBO') || groupId === 'grp_adugbo_jao' || groupId.toLowerCase().includes('adugbo');
-
-  const filteredSafeMembers = safeMembers.filter((m: any) => {
-    const nameUpper = String(m.full_name || m.name || m.fullName || '').trim().toUpperCase();
-    if (fakeListUpper.includes(nameUpper) || nameUpper.startsWith('MEMBER')) return false;
-    const van = String(m.virtual_account_number || m.virtualAccountNumber || '');
-    if (fakeVans.includes(van)) return false;
-    if (nameUpper === 'GLRY JAYE' && van === '8152925182') return false;
-    if (m.id && String(m.id).startsWith('mem_adugbo_')) return false;
-    return true;
-  });
-
   const memberCanonicalMap = new Map<string, GroupAdminMemberItem>();
-  filteredSafeMembers.forEach((m: any) => {
-    const nameUpper = String(m.full_name || m.name || m.fullName || '').trim().toUpperCase();
-    let stableId = m.id;
-    let pos = Number(m.position || m.packing_position || 1);
-
-    if (isAdugboGroup) {
-      if (nameUpper.includes('GLRY') || nameUpper.includes('GLORY')) {
-        stableId = 'glry_jaye';
-        pos = 1;
-        m.position = 1;
-        m.packingOrder = 1;
-        m.packing_position = 1;
-        m.packsLabel = 'Packs 1st';
-        m.virtual_account_number = '8152476851';
-        m.virtualAccountNumber = '8152476851';
-        m.virtual_account_name = 'BETTERAJO-GLRY JAYE';
-        m.virtualAccountName = 'BETTERAJO-GLRY JAYE';
-      } else if (nameUpper.includes('FESTUS') || nameUpper.includes('FESTUA')) {
-        stableId = 'festus_chris';
-        pos = 2;
-        m.position = 2;
-        m.packingOrder = 2;
-        m.packing_position = 2;
-        m.packsLabel = 'Packs 2nd';
-        m.virtual_account_number = '8152195643';
-        m.virtualAccountNumber = '8152195643';
-        m.virtual_account_name = 'BETTERAJO-FESTUS CHRIS';
-        m.virtualAccountName = 'BETTERAJO-FESTUS CHRIS';
-      } else if (nameUpper.includes('SHOLA')) {
-        stableId = 'sholakule';
-        pos = 3;
-        m.position = 3;
-        m.packingOrder = 3;
-        m.packing_position = 3;
-        m.packsLabel = 'Packs 3rd';
-        m.virtual_account_number = '8152741791';
-        m.virtualAccountNumber = '8152741791';
-        m.virtual_account_name = 'BETTERAJO-SHOLA KUNLE';
-        m.virtualAccountName = 'BETTERAJO-SHOLA KUNLE';
-        m.keepFromScreenshot = true;
-      } else if (nameUpper.includes('DAVID') || nameUpper.includes('FELIST')) {
-        stableId = 'david_felistans';
-        pos = 4;
-        m.position = 4;
-        m.packingOrder = 4;
-        m.packing_position = 4;
-        m.packsLabel = 'Packs 4th';
-        m.virtual_account_number = '8152168957';
-        m.virtualAccountNumber = '8152168957';
-        m.virtual_account_name = 'BETTERAJO-DAVID FELISTANCE';
-        m.virtualAccountName = 'BETTERAJO-DAVID FELISTANCE';
-        m.keepFromScreenshot = true;
-      } else if (nameUpper.includes('KOLA')) {
-        stableId = 'kola_ogo';
-        pos = 5;
-        m.position = 5;
-        m.packingOrder = 5;
-        m.packing_position = 5;
-        m.packsLabel = 'Packs 5th';
-        m.virtual_account_number = '8152739353';
-        m.virtualAccountNumber = '8152739353';
-        m.virtual_account_name = 'BETTERAJO-KOLA OGO';
-        m.virtualAccountName = 'BETTERAJO-KOLA OGO';
-      }
-    }
-
-    if (!memberCanonicalMap.has(stableId)) {
-      memberCanonicalMap.set(stableId, { ...m, id: stableId, position: pos });
+  safeMembers.forEach((m: any) => {
+    if (m && m.id && !memberCanonicalMap.has(m.id)) {
+      memberCanonicalMap.set(m.id, { ...m, position: Number(m.position || m.packing_position || 1) });
     }
   });
 
@@ -1103,7 +951,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
     }
   }
   uniqueGroupMembers.sort((a, b) => Number(a.position || 1) - Number(b.position || 1));
-  const expectedCap = data.totalMembersExpected || (isAdugboGroup ? 5 : safeMembers.length);
+  const expectedCap = data.totalMembersExpected || (group as any)?.member_limit || (group as any)?.memberCount || safeMembers.length || 5;
   const groupMembers = (uniqueGroupMembers.length > 0 ? uniqueGroupMembers : safeMembers).slice(0, expectedCap);
   const totalCount = groupMembers.length;
 
@@ -1877,8 +1725,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                             const isPayAhead = statusItem?.isPayAhead ?? m.isPayAhead;
                             const rem = statusItem?.remaining ?? Math.max(0, required - (statusItem?.totalEffectivePaid || 0));
 
-                            const isAdugboGroup = (data?.group?.group_name === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo'));
-                            const contribAmount = isAdugboGroup ? 50000 : required;
+                            const contribAmount = required || 50000;
                             const totalAmountToPay = contribAmount + 60;
 
                             let simLabel = `Pay ₦${totalAmountToPay.toLocaleString()}`;
@@ -2795,10 +2642,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
           <div className="w-full max-w-md rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-slate-100 my-8">
             {(() => {
               const currentGroupName = (data?.group as any)?.name || data?.group?.group_name || 'AJO GROUP';
-              const isAdugbo = currentGroupName === 'ADUGBO JAO' || groupId.toLowerCase().includes('adugbo');
-              const baseContrib = isAdugbo ? 50000 : required;
+              const baseContrib = required;
               const totalToPay = baseContrib + 60;
-              const memberName = simulatingMember.full_name || (simulatingMember as any).name || (isAdugbo ? 'GLRY JAYE' : 'Member');
+              const memberName = simulatingMember.full_name || (simulatingMember as any).name || 'Member';
 
               return (
                 <div>

@@ -403,14 +403,27 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     };
   }, [userPhone, userId]);
 
-  // STEP 4 - FIX SUPER ADMIN AGGREGATE AND REVENUE:
-  // Personal Ajo Aggregate = SUM all contributions amount where status success/credited (NO distinct, NO limit)
+  // STEP 4 - FIX SUPER ADMIN AGGREGATE AND REVENUE (NO CARDS MIXING):
+  // Personal Ajo Aggregate = SUM all personal savings deposits (NO group contributions!)
   const personalAjoAggregate = allContributions
     .filter((doc) => {
       const s = String(doc.status || '').toLowerCase();
-      return s === 'success' || s === 'credited' || s === 'completed';
+      const isSuccess = s === 'success' || s === 'credited' || s === 'completed';
+      const isPersonal = !doc.groupId && !doc.group_id && (!doc.round && !doc.round_number) &&
+        (String(doc.type || '').toUpperCase().includes('PERSONAL') || String(doc.type || '').toUpperCase().includes('DEPOSIT') || doc.isPersonal);
+      return isSuccess && isPersonal;
     })
     .reduce((sum, d) => sum + Number(d.amount || d.savingsAmount || 0), 0);
+
+  // Group Contributions Collected = SUM all group contributions
+  const groupContributionsCollected = allContributions
+    .filter((doc) => {
+      const s = String(doc.status || '').toLowerCase();
+      const isPaid = s === 'paid' || s === 'success' || s === 'credited' || s === 'completed';
+      const isGroup = Boolean(doc.groupId || doc.group_id || doc.round || doc.round_number || String(doc.type || '').toLowerCase().includes('group'));
+      return isPaid && isGroup;
+    })
+    .reduce((sum, d) => sum + Number(d.amount || 0), 0);
 
   // Stream1 = users.filter(u => u.isActivated || u.activationFeePaid).length * 600
   const activatedUsersCount = allPlatformUsers.filter((u) => {
@@ -738,14 +751,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       console.log("Starting permanent reset...");
       const collectionsToDelete = [
         "groups", "ajo_groups", "ajoGroups",
-        "contributions", "group_contributions", "groupContributions", "member_contributions",
+        "contributions", "group_contributions", "groupContributions", "member_contributions", "contributions_old",
         "platform_transactions", "platformTransactions", "transactions", "platform_revenue", "recent_transactions", "transaction_logs",
         "personal_savings", "personalSavings", "savings", "ajo_savings", "personalAjos", "personal_ajo", "payments",
-        "personal_withdrawals", "withdrawals", "personalWithdrawals", "super_admin_withdrawals",
-        "payouts", "group_payouts", "groupPayouts", "packings", "packings_history",
-        "members", "group_members", "groupMembers", "group_memberships",
+        "personal_withdrawals", "withdrawals", "personalWithdrawals", "super_admin_withdrawals", "admin_withdrawals", "group_admin_withdrawals",
+        "payouts", "group_payouts", "groupPayouts", "packings", "packings_history", "packing_payouts", "packing_payouts_old",
+        "members", "group_members", "groupMembers", "group_memberships", "group_members_old",
         "ledgers", "general_ledger", "central_ledger",
-        "group_atme", "super_atme", "atme_payouts",
+        "group_atme", "super_atme", "atme_payouts", "super_atme_ledger",
+        "group_admin_earnings", "admin_earnings", "super_admin_revenue",
         "superAdminEarnings", "platformStats", "audit_logs"
       ];
 
@@ -975,54 +989,42 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   // Group Admin Fees card: sum admin_commission dynamically (66.67% share: 10,000 for 15,000 fee or 2,000 for 3,000 fee)
   const groupAdminCommissionsSum = (allPackTransactions || []).reduce((sum: number, pt: any) => {
-    const pFee = Number(pt.packing_fee || pt.packingFee || 15000);
+    const pFee = Number(pt.packing_fee || pt.packingFee || 4000);
     const split = pFee === 15000 ? 10000 : (pFee === 3000 ? 2000 : Math.round(pFee * (2 / 3)));
     return sum + Number(pt.admin_commission || pt.groupAdminShare || split);
   }, 0);
-  const totalGroupAdminFees = groupAdminCommissionsSum > 0 ? groupAdminCommissionsSum : Number(metrics.totalGroupAdminEarnings || 10000);
+  const totalGroupAdminFees = groupAdminCommissionsSum > 0 ? groupAdminCommissionsSum : Number(metrics.totalGroupAdminEarnings || 0);
 
-  // 6. Super Admin - Payments Page: Live union of deposits & withdrawals from all real-time Firestore collections
+  // 6. Super Admin - Payments Page: Live union of deposits, packings & withdrawals from real-time Firestore collections
   const rawPayments = [
     ...(allContributions || []).map((c: any) => {
       const isGroup = Boolean(c.groupId || c.group_id || c.type === 'group_contribution' || c.source === 'group_contribution' || c.round || c.round_number);
       const g = (groups || []).find((grp: any) => grp.id === (c.groupId || c.group_id));
       const m = (members || []).find((mem: any) => mem.id === (c.memberId || c.member_id));
-      const rawGName = c.groupName || c.ajoName || g?.group_name || (g as any)?.name;
-      const isAdugbo = rawGName === 'ADUGBO JAO' || (c.groupId && c.groupId.includes('adugbo')) || c.memberName === 'GLRY JAYE' || Number(c.amount) === 50000 || Number(c.amount) === 50060;
-      const groupName = isAdugbo ? 'ADUGBO JAO' : (rawGName || (isGroup ? 'OLOPA AJO' : 'Personal Better Ajo'));
-      const memberName = c.memberName || c.userName || m?.full_name || (m as any)?.name || c.full_name || (isAdugbo ? 'GLRY JAYE' : (isGroup ? 'AJAYI OKE' : 'Personal Ajo Member'));
-      
-      let amt = 20060;
-      if (isAdugbo) {
-        amt = 50060;
-      } else if (!isGroup) {
-        amt = Number(c.amount || c.gross_amount || 0);
-      } else {
-        amt = 20060;
-      }
+      const groupName = c.groupName || c.ajoName || g?.group_name || (isGroup ? 'Group Better Ajo' : 'Personal Better Ajo');
+      const memberName = c.memberName || c.userName || m?.full_name || (m as any)?.name || c.full_name || (isGroup ? 'Group Member' : 'Personal Ajo Member');
+      const amt = Number(c.amount || c.gross_amount || 0);
 
       return {
         ...c,
         isGroup,
-        type: isGroup ? 'group_contribution' : (c.type || 'group_contribution'),
+        type: isGroup ? 'group_contribution' : (c.type || 'personal_deposit'),
         displayType: isGroup ? 'GROUP CONTRIBUTION' : 'PERSONAL AJO',
         gross_amount: amt,
         amount: amt,
-        fee: 60,
+        fee: Number(c.fee || 60),
         groupName,
         ajoName: groupName,
         memberName,
         userName: memberName,
-        status: 'COMPLETED'
+        status: (c.status || 'COMPLETED').toUpperCase()
       };
     }),
     ...(allPackTransactions || []).filter((pt: any) => pt.type !== 'personal_ajo_fee').map((pt: any) => {
       const g = (groups || []).find((grp: any) => grp.id === (pt.groupId || pt.group_id));
-      const rawGName = pt.groupName || pt.ajoName || g?.group_name;
-      const isAdugbo = rawGName === 'ADUGBO JAO' || Number(pt.amount || pt.packing_amount) === 250000 || pt.memberName === 'GLRY JAYE' || pt.member_name === 'GLRY JAYE';
-      const groupName = isAdugbo ? 'ADUGBO JAO' : (rawGName || 'OLOPA AJO');
-      const memberName = isAdugbo ? 'GLRY JAYE' : (pt.memberName || pt.member_name || pt.userName || 'AJAYI OKE');
-      const amt = isAdugbo ? 250000 : (Number(pt.amount || pt.packing_amount || 0) > 0 ? Math.floor(Number(pt.amount || pt.packing_amount)) : 100000);
+      const groupName = pt.groupName || pt.ajoName || g?.group_name || 'Group Better Ajo';
+      const memberName = pt.memberName || pt.member_name || pt.userName || 'Group Member';
+      const amt = Number(pt.amount || pt.packing_amount || 0);
       return {
         ...pt,
         isGroup: true,
@@ -1031,37 +1033,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         status: 'PACKED',
         gross_amount: amt,
         amount: amt,
-        fee: Number(pt.fee || pt.packing_fee || (isAdugbo ? 3000 : 15000)),
+        fee: Number(pt.fee || pt.packing_fee || 0),
         groupName,
         ajoName: groupName,
         memberName,
         userName: memberName
       };
     }),
-    ...(allPlatformTransactions || []).filter((pt: any) => !pt.internal && pt.type !== 'platform_fee' && pt.type !== 'super_admin_fee' && pt.type !== 'admin_commission').map((pt: any) => {
-      const isAdugbo = pt.groupName === 'ADUGBO JAO' || pt.ajoName === 'ADUGBO JAO' || (pt.groupId && pt.groupId.includes('adugbo')) || pt.memberName === 'GLRY JAYE' || Number(pt.amount) === 50000 || Number(pt.amount) === 50060;
-      const groupName = isAdugbo ? 'ADUGBO JAO' : (pt.groupName || pt.ajoName || 'OLOPA AJO');
-      const memberName = pt.memberName || pt.userName || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
-      const isPack = pt.type === 'pack_payout' || pt.type === 'PACK OUT';
-      const amt = isPack ? (isAdugbo ? 250000 : 100000) : (isAdugbo ? 50060 : 20060);
-      return {
-        ...pt,
-        isGroup: true,
-        type: isPack ? 'pack_payout' : 'group_contribution',
-        displayType: isPack ? 'PACK OUT' : 'GROUP CONTRIBUTION',
-        status: isPack ? 'PACKED' : 'COMPLETED',
-        gross_amount: amt,
-        amount: amt,
-        groupName,
-        ajoName: groupName,
-        memberName,
-        userName: memberName
-      };
-    }),
-    ...withdrawalHistory,
-    ...(safeTransactions || []).filter(
-      (t) => t && t?.type && (t?.type?.toString().toLowerCase().includes('withdraw') || t?.type?.toString().toLowerCase().includes('deposit'))
-    )
+    ...withdrawalHistory
   ];
 
   const seenPayKeys = new Set<string>();
@@ -1070,19 +1049,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     if (p.internal || p.type === 'platform_fee' || p.type === 'super_admin_fee' || p.type === 'admin_commission') {
       return false;
     }
-    const mName = String(p.memberName || p.userName || '').trim().toUpperCase();
-    const gName = String(p.groupName || p.ajoName || '').trim().toUpperCase();
-    const pType = String(p.displayType || p.type || '').trim().toUpperCase();
-    const roundVal = String(p.round || p.round_number || '1');
-    const dedupKey = `${gName}_${mName}_${pType}_${roundVal}`;
-
-    if (seenPayKeys.has(dedupKey)) return false;
-    seenPayKeys.add(dedupKey);
-
-    const docKey = p.reference || p.id;
-    if (docKey && seenPayKeys.has(docKey)) return false;
-    if (docKey) seenPayKeys.add(docKey);
-
+    const key = p.reference || p.id;
+    if (key) {
+      if (seenPayKeys.has(key)) return false;
+      seenPayKeys.add(key);
+    }
     return true;
   }).sort((a: any, b: any) => {
     const secA = (typeof a?.timestamp?.seconds === 'number')
@@ -1101,13 +1072,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   // Filter recent platform transactions by groupFilter dropdown (Section 6)
   const filteredRecent = (recentAll || []).filter((tx: any) => {
     if (groupFilter === 'all') return true;
-    const isAdugbo = (tx.groupName === 'ADUGBO JAO' || tx.ajoName === 'ADUGBO JAO' || (tx.groupId && tx.groupId.includes('adugbo')) || tx.memberName === 'GLRY JAYE' || Number(tx.amount) === 50060 || Number(tx.amount) === 250000);
-    const isOlopa = (tx.groupName === 'OLOPA AJO' || tx.ajoName === 'OLOPA AJO' || (!isAdugbo && (tx.groupId || tx.type === 'group_contribution' || tx.source === 'group_contribution')));
-    const isPersonal = !isAdugbo && !isOlopa && (!tx.groupId && tx.type !== 'group_contribution' && tx.source !== 'group_contribution');
-    if (groupFilter === 'olopa') return isOlopa && !isAdugbo && tx.memberName !== 'GLRY JAYE';
-    if (groupFilter === 'adugbo') return isAdugbo && tx.memberName !== 'AJAYI OKE';
-    if (groupFilter === 'personal') return isPersonal;
-    return true;
+    if (groupFilter === 'personal') {
+      return !tx.groupId && !tx.group_id && (!tx.round && !tx.round_number) &&
+        (String(tx.type || '').toUpperCase().includes('PERSONAL') || String(tx.displayType || '').toUpperCase().includes('PERSONAL'));
+    }
+    return tx.groupId === groupFilter || tx.group_id === groupFilter;
   });
 
   return (
@@ -1281,7 +1250,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             </span>
           </div>
           <span className="text-xl font-black text-emerald-950 block">
-            {formatNaira(personalAjoAggregate > 0 ? personalAjoAggregate : (totalPersonalSavings || Number(data?.metrics?.totalPersonalSavings || 0)))}
+            {formatNaira(totalPersonalSavings > 0 ? totalPersonalSavings : (personalAjoAggregate > 0 ? personalAjoAggregate : Number(data?.metrics?.totalPersonalSavings || 0)))}
           </span>
           <span className="text-[10px] text-emerald-700/90 mt-1 block font-medium">
             Protected member vaults
@@ -1293,7 +1262,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             Total Contribution Collected
           </span>
           <span className="text-xl font-black text-slate-900 block">
-            {formatNaira(metrics.totalContributionsAmount)}
+            {formatNaira(groupContributionsCollected > 0 ? groupContributionsCollected : Number(metrics.totalContributionsAmount || 0))}
           </span>
           <span className="text-[10px] text-emerald-600 mt-1 block font-bold">Includes member credits</span>
         </div>
@@ -1523,9 +1492,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#008751]/30 cursor-pointer"
                 >
                   <option value="all">All Groups ({recentAll.length})</option>
-                  <option value="olopa">OLOPA AJO - ₦20,000</option>
-                  <option value="adugbo">ADUGBO JAO - ₦50,000</option>
                   <option value="personal">Personal Ajo</option>
+                  {(groups || []).map((g: any) => (
+                    <option key={g.id} value={g.id}>
+                      {g.group_name || g.name} {g.contribution_amount ? `- ₦${Number(g.contribution_amount).toLocaleString()}` : ''}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -1550,40 +1522,33 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     </tr>
                   ) : (
                     (filteredRecent || []).map((tx: any) => {
-                      const isAdugbo = (tx.groupName === 'ADUGBO JAO' || tx.ajoName === 'ADUGBO JAO' || (tx.groupId && tx.groupId.includes('adugbo')) || tx.memberName === 'GLRY JAYE' || Number(tx.amount) === 50000 || Number(tx.amount) === 50060 || Number(tx.amount) === 250000);
                       const isPackPayout = tx?.type === 'pack_payout' || tx?.source === 'pack_payout' || tx?.type === 'PACK_PAYOUT' || tx?.type === 'PACKING_PAYOUT' || tx?.displayType === 'PACK OUT';
-                      const defaultAmt = isAdugbo ? (isPackPayout ? 250000 : 50060) : 20060;
-                      const displayAmount = tx.amount && Number(tx.amount) > 0 ? Math.floor(Number(tx.amount)) : defaultAmt;
-                      const isGroup = Boolean(isPackPayout || isAdugbo || tx.groupId || tx.group_id || tx.type === 'group_contribution' || tx.source === 'group_contribution' || tx.type === 'GROUP_CONTRIBUTION' || tx.displayType === 'GROUP CONTRIBUTION');
+                      const displayAmount = Math.floor(Number(tx.amount || tx.gross_amount || tx.packing_amount || 0));
+                      const isGroup = Boolean(isPackPayout || tx.groupId || tx.group_id || tx.type === 'group_contribution' || tx.source === 'group_contribution' || tx.type === 'GROUP_CONTRIBUTION' || tx.displayType === 'GROUP CONTRIBUTION');
                       const isWithdraw = tx?.type?.toString().toLowerCase().includes('withdraw') || tx?.type === 'GROUP_ADMIN_WITHDRAWAL';
                       const dateVal = tx?.timestamp?.seconds ? new Date(tx.timestamp.seconds * 1000) : (tx?.createdAt || tx?.created_at || tx?.date);
                       const dateFormatted = dateVal ? new Date(dateVal).toLocaleString('en-NG', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
                       let typeBadgeText = 'PERSONAL AJO';
                       let typeBadgeClass = 'bg-blue-100 text-blue-800 border border-blue-200';
-                      let user = tx.memberName || tx.userName || tx.user_name || 'Personal Ajo Member';
-                      let ajoName = tx.groupName || tx.ajoName || 'Personal Better Ajo';
+                      let user = tx.memberName || tx.userName || tx.user_name || (isGroup ? 'Group Member' : 'Personal Ajo Member');
+                      let ajoName = tx.groupName || tx.ajoName || (isGroup ? 'Group Better Ajo' : 'Personal Better Ajo');
                       let statusText = 'COMPLETED';
                       let statusBadgeClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
 
                       if (isPackPayout) {
                         typeBadgeText = 'PACK OUT';
                         typeBadgeClass = 'bg-purple-100 text-purple-800 border border-purple-200';
-                        user = tx.memberName || tx.userName || (isAdugbo ? 'GLRY JAYE' : 'Group Member');
-                        ajoName = tx.groupName || tx.ajoName || (isAdugbo ? 'ADUGBO JAO' : 'OLOPA AJO');
                         statusText = 'PACKED';
                         statusBadgeClass = 'bg-purple-100 text-purple-800 border border-purple-200';
                       } else if (isWithdraw) {
                         typeBadgeText = 'WITHDRAWAL';
                         typeBadgeClass = 'bg-amber-100 text-amber-800 border border-amber-200';
-                        user = tx.userName || tx.user_name || tx.destination || tx.accountName || 'User';
-                        ajoName = tx.groupName || tx.ajoName || (isAdugbo ? 'ADUGBO JAO' : (isGroup ? 'OLOPA AJO' : 'Personal Better Ajo'));
+                        user = tx.userName || tx.user_name || tx.destination || tx.accountName || user;
                         statusText = 'COMPLETED';
                       } else if (isGroup) {
                         typeBadgeText = 'GROUP CONTRIBUTION';
                         typeBadgeClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-                        user = tx.memberName || tx.userName || tx.user_name || (isAdugbo ? 'GLRY JAYE' : 'AJAYI OKE');
-                        ajoName = tx.groupName || tx.ajoName || (isAdugbo ? 'ADUGBO JAO' : 'OLOPA AJO');
                         statusText = 'COMPLETED';
                       }
 
@@ -1815,22 +1780,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </tr>
                 ) : (
                   (paymentsHistory || []).map((p: any) => {
-                    const isAdugbo = (p.groupName === 'ADUGBO JAO' || p.ajoName === 'ADUGBO JAO' || p.groupId === 'grp_adugbo_jao' || p.memberName === 'GLRY JAYE' || Number(p.amount) === 50000 || Number(p.amount) === 250000);
-                    const defaultAmt = isAdugbo ? (p.type === 'pack_payout' ? 250000 : 50000) : 20000;
-                    const displayAmount = p.amount && Number(p.amount) > 0 ? Math.floor(Number(p.amount)) : defaultAmt;
+                    const displayAmount = Math.floor(Number(p.amount || p.gross_amount || 0));
                     const isPackPayout = p?.type === 'pack_payout' || p?.source === 'pack_payout' || p?.type === 'PACK_PAYOUT';
-                    const isGroup = Boolean(isPackPayout || isAdugbo || p.groupId || p.group_id || p.type === 'group_contribution' || p.source === 'group_contribution' || p.type === 'GROUP_CONTRIBUTION');
+                    const isGroup = Boolean(isPackPayout || p.groupId || p.group_id || p.type === 'group_contribution' || p.source === 'group_contribution' || p.type === 'GROUP_CONTRIBUTION');
                     const isWithdraw = p?.type?.toString().toLowerCase().includes('withdraw');
                     const dateVal = p?.timestamp?.seconds ? new Date(p.timestamp.seconds * 1000) : (p?.createdAt || p?.created_at || p?.date);
                     const dateFormatted = dateVal ? new Date(dateVal).toLocaleString('en-NG', { dateStyle: 'short', timeStyle: 'short' }) : '—';
-                    const feeVal = Number(p?.fee ?? (isWithdraw ? Math.round(displayAmount * 0.016) : (isPackPayout ? 3000 : 60)));
+                    const feeVal = Number(p?.fee ?? (isWithdraw ? Math.round(displayAmount * 0.016) : (isPackPayout ? 0 : 60)));
                     const netPayout = isWithdraw ? Number(p?.net_payout ?? p?.netPayout ?? p?.net_amount ?? (displayAmount - feeVal)) : displayAmount;
-                    const userName = isPackPayout
-                      ? (p?.memberName || p?.userName || (isAdugbo ? 'GLRY JAYE' : 'Group Member'))
-                      : (p?.memberName || p?.userName || p?.user_name || (isAdugbo ? 'GLRY JAYE' : (isGroup ? 'AJAYI OKE' : 'Personal Ajo Member')));
-                    const ajoName = isPackPayout
-                      ? (p?.groupName || p?.ajoName || (isAdugbo ? 'ADUGBO JAO' : 'OLOPA AJO'))
-                      : (p?.groupName || p?.ajoName || (isAdugbo ? 'ADUGBO JAO' : (isGroup ? 'OLOPA AJO' : 'Personal Better Ajo')));
+                    const userName = p?.memberName || p?.userName || p?.user_name || (isGroup ? 'Group Member' : 'Personal Ajo Member');
+                    const ajoName = p?.groupName || p?.ajoName || (isGroup ? 'Group Better Ajo' : 'Personal Better Ajo');
 
                     return (
                       <tr key={p?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
