@@ -195,6 +195,20 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
         createdAt: serverTimestamp()
       });
 
+      // super_admin_earnings collection (Stream 3)
+      await addDoc(collection(db, 'super_admin_earnings'), {
+        groupId: groupId,
+        group_id: groupId,
+        amount: superAdminShare,
+        type: 'packing_share',
+        stream: 'stream3',
+        streamName: 'STREAM_3_PACKING',
+        groupName: grpName,
+        round: curRound,
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp()
+      });
+
       // c) packing_payouts collection
       await addDoc(collection(db, 'packing_payouts'), {
         groupId: groupId,

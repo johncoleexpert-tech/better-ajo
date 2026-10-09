@@ -2623,6 +2623,49 @@ apiRouter.post('/groups/:groupId/check-disbursement', async (req: Request, res: 
       if (currentPacker && !db.isMemberPacked(groupId, currentPacker.id, group.current_round) && !cycleInfo.hasPackedToday) {
         const packResult = db.executePack(groupId, currentPacker.id, group.current_round, simulatedDate);
         fsExecutePackBatch(packResult.transaction, packResult.commission, currentPacker, group).catch(() => {});
+
+        // Commission Split: 33.33% super_admin_earnings (stream3) and 66.67% group_admin_earnings
+        try {
+          const fsDb = getFirestoreDb();
+          if (fsDb) {
+            const pFee = Number(packResult.transaction.packing_fee || 3000);
+            const saShare = packResult.commission?.super_admin_amount ?? Math.round(pFee * 0.3333); // 1,000 for 3,000
+            const gaShare = packResult.commission?.admin_amount ?? (pFee - saShare);                // 2,000 for 3,000
+
+            fsDb.collection('super_admin_earnings').doc(`sae_${packResult.transaction.id}`).set({
+              id: `sae_${packResult.transaction.id}`,
+              groupId: groupId,
+              group_id: groupId,
+              adminId: group.admin_id,
+              memberId: currentPacker.id,
+              amount: saShare,
+              type: 'packing_share',
+              stream: 'stream3',
+              streamName: 'STREAM_3_PACKING',
+              groupName: group.group_name,
+              round: packResult.transaction.round_number || group.current_round || 1,
+              reference: packResult.transaction.id,
+              description: `33.33% Packing Share from ${group.group_name}`,
+              createdAt: FieldValue.serverTimestamp(),
+              timestamp: FieldValue.serverTimestamp()
+            }, { merge: true }).catch(() => {});
+
+            fsDb.collection('group_admin_earnings').doc(`gae_${packResult.transaction.id}`).set({
+              id: `gae_${packResult.transaction.id}`,
+              groupId: groupId,
+              group_id: groupId,
+              adminId: group.admin_id,
+              amount: gaShare,
+              type: 'packing_fee',
+              groupName: group.group_name,
+              round: packResult.transaction.round_number || group.current_round || 1,
+              reference: packResult.transaction.id,
+              createdAt: FieldValue.serverTimestamp(),
+              timestamp: FieldValue.serverTimestamp()
+            }, { merge: true }).catch(() => {});
+          }
+        } catch (e) {}
+
         return res.json({
           disbursed: true,
           scheduledPackDate: cycleInfo.scheduledPackDate,
@@ -3454,6 +3497,67 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
         result.commission.super_admin_amount,
         group.group_name
       ).catch(err => console.warn('[Firestore Packing Revenue Warn]:', err?.message || err));
+    }
+
+    // Commission Split on Group Collection (Amount Packed):
+    // 33.33% to super_admin_earnings (stream3) and 66.67% to group_admin_earnings
+    try {
+      const fsDb = getFirestoreDb();
+      if (fsDb) {
+        const packingFee = Number(result.transaction.packing_fee || (group as any).packing_fee || 3000);
+        const superAdminShare = result.commission?.super_admin_amount ?? Math.round(packingFee * 0.3333); // 1,000 for 3,000
+        const groupAdminShare = result.commission?.admin_amount ?? (packingFee - superAdminShare);        // 2,000 for 3,000
+
+        // 1. Write 33.33% to super_admin_earnings (Stream 3)
+        await fsDb.collection('super_admin_earnings').doc(`sae_${result.transaction.id}`).set({
+          id: `sae_${result.transaction.id}`,
+          groupId: groupId,
+          group_id: groupId,
+          adminId: group.admin_id,
+          memberId: memberId,
+          amount: superAdminShare,
+          type: 'packing_share',
+          stream: 'stream3',
+          streamName: 'STREAM_3_PACKING',
+          groupName: group.group_name,
+          round: result.transaction.round_number || group.current_round || 1,
+          reference: result.transaction.id,
+          description: `33.33% Packing Share from ${group.group_name}`,
+          createdAt: FieldValue.serverTimestamp(),
+          timestamp: FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.warn('[Firestore super_admin_earnings Write Warn]:', err?.message || err));
+
+        // 2. Also ensure super_admin_revenue receives record for backward compatibility
+        await fsDb.collection('super_admin_revenue').doc(`sar_${result.transaction.id}`).set({
+          id: `sar_${result.transaction.id}`,
+          groupId: groupId,
+          group_id: groupId,
+          amount: superAdminShare,
+          type: 'packing_share',
+          groupName: group.group_name,
+          round: result.transaction.round_number || group.current_round || 1,
+          reference: result.transaction.id,
+          createdAt: FieldValue.serverTimestamp(),
+          timestamp: FieldValue.serverTimestamp()
+        }, { merge: true }).catch(() => {});
+
+        // 3. Write 66.67% to group_admin_earnings
+        await fsDb.collection('group_admin_earnings').doc(`gae_${result.transaction.id}`).set({
+          id: `gae_${result.transaction.id}`,
+          groupId: groupId,
+          group_id: groupId,
+          adminId: group.admin_id,
+          amount: groupAdminShare,
+          type: 'packing_fee',
+          groupName: group.group_name,
+          round: result.transaction.round_number || group.current_round || 1,
+          reference: result.transaction.id,
+          createdAt: FieldValue.serverTimestamp(),
+          timestamp: FieldValue.serverTimestamp()
+        }, { merge: true }).catch(err => console.warn('[Firestore group_admin_earnings Write Warn]:', err?.message || err));
+      }
+    } catch (writeErr) {
+      console.warn('[Firestore Commission Routing Warn]:', writeErr);
     }
 
     if (result.commission && result.commission.admin_amount > 0) {
@@ -5230,8 +5334,9 @@ apiRouter.post(['/admin/reset-database', '/reset-database', '/api/reset-database
         }
       }
 
-      // Aggressive explicit purge for group_admin_earnings and related ghost collections
+      // Aggressive explicit purge for group_admin_earnings, super_admin_earnings and related ghost collections
       const aggressivePurgeCols = [
+        'super_admin_earnings',
         'group_admin_earnings',
         'admin_earnings',
         'group_atme',

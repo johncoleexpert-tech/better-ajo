@@ -54,6 +54,7 @@ export async function wipeTestData(): Promise<{
       FIRESTORE_COLLECTIONS.WITHDRAWALS,
       FIRESTORE_COLLECTIONS.TRANSACTIONS,
       FIRESTORE_COLLECTIONS.PAYMENTS,
+      'super_admin_earnings',
       'group_admin_earnings',
       'admin_earnings',
       'group_admin_fees',

@@ -155,6 +155,7 @@ export async function wipeDatabase() {
     '_system_checks',
     'group_notifications',
     'support_messages',
+    'super_admin_earnings',
     'group_admin_earnings',
     'admin_earnings',
     'group_admin_fees',

@@ -108,6 +108,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [allWithdrawals, setAllWithdrawals] = useState<any[]>([]);
   const [allPlatformUsers, setAllPlatformUsers] = useState<any[]>([]);
   const [allPlatformTransactions, setAllPlatformTransactions] = useState<any[]>([]);
+  const [allSuperAdminEarnings, setAllSuperAdminEarnings] = useState<any[]>([]);
+  const [allGroupAdminEarnings, setAllGroupAdminEarnings] = useState<any[]>([]);
   const [groupFilter, setGroupFilter] = useState<string>('all');
 
   // Super Admin Wallet state
@@ -353,6 +355,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     let unsubWithdr: (() => void) | null = null;
     let unsubUsers: (() => void) | null = null;
     let unsubPlatformTx: (() => void) | null = null;
+    let unsubSuperAdminEarnings: (() => void) | null = null;
+    let unsubGroupAdminEarnings: (() => void) | null = null;
     try {
       unsubContrib = onSnapshot(collection(db, 'contributions'), (snap) => {
         const list: any[] = [];
@@ -384,6 +388,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         setAllPlatformTransactions(list);
         fetchSuperAdminWallet();
       });
+      unsubSuperAdminEarnings = onSnapshot(collection(db, 'super_admin_earnings'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        setAllSuperAdminEarnings(list);
+        fetchSuperAdminWallet();
+      });
+      unsubGroupAdminEarnings = onSnapshot(collection(db, 'group_admin_earnings'), (snap) => {
+        const list: any[] = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        setAllGroupAdminEarnings(list);
+      });
     } catch (e) {
       console.warn('[Super Admin] Error setting up collection listeners:', e);
     }
@@ -400,6 +415,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       if (unsubWithdr) unsubWithdr();
       if (unsubUsers) unsubUsers();
       if (unsubPlatformTx) unsubPlatformTx();
+      if (unsubSuperAdminEarnings) unsubSuperAdminEarnings();
+      if (unsubGroupAdminEarnings) unsubGroupAdminEarnings();
     };
   }, [userPhone, userId]);
 
@@ -441,8 +458,20 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   }).length;
   const stream2Live = depositDocsCount > 0 ? (depositDocsCount * 60) : Number(revenue?.stream2 || wallet?.stream2 || 0);
 
-  // Stream3 = existing packing share
-  const stream3Live = Number(revenue?.stream3 ?? wallet?.stream3 ?? (data as any)?.superAdminEarnings?.stream3_packing ?? (data as any)?.super_admin_wallet?.breakdown?.packing_33_total ?? 0);
+  // Stream3: Sum from super_admin_earnings where type=packing_share (₦1,000 per pack)
+  const stream3EarningsDocs = allSuperAdminEarnings.filter((doc: any) => {
+    const t = String(doc.type || '').toLowerCase();
+    const s = String(doc.stream || '').toLowerCase();
+    return t === 'packing_share' || t === 'packing_share_33_33' || s === 'stream3' || s === 'stream_3_packing';
+  });
+  const stream3FromEarnings = stream3EarningsDocs.reduce((sum: number, doc: any) => {
+    const amt = Number(doc.amount || 0);
+    return sum + (amt > 0 ? amt : 1000);
+  }, 0);
+
+  const stream3Live = stream3FromEarnings > 0
+    ? stream3FromEarnings
+    : Number(revenue?.stream3 ?? wallet?.stream3 ?? (data as any)?.superAdminEarnings?.stream3_packing ?? (data as any)?.super_admin_wallet?.breakdown?.packing_33_total ?? 0);
 
   // Stream4 = sum of withdrawal fees
   const withdrawalFeesSum = allWithdrawals
@@ -468,7 +497,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       s1 += Math.floor(amt);
     } else if (type === 'platform_fee' || type === 'contribution_fee') {
       s2 += Math.floor(amt);
-    } else if (type === 'super_admin_fee' || type === 'super_admin_commission' || type === 'stream3_packing') {
+    } else if (type === 'super_admin_fee' || type === 'super_admin_commission' || type === 'stream3_packing' || type === 'packing_share') {
       s3 += Math.floor(amt);
     } else if (type === 'withdrawal_fee' || type === 'personal_withdrawal_fee') {
       s4 += Math.floor(amt);
@@ -477,7 +506,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
   const stream1Total = s1 > 0 ? s1 : (revenue?.stream1 ?? (activatedUsersCount > 0 ? stream1Live : 0));
   const stream2Total = s2 > 0 ? s2 : (revenue?.stream2 ?? (depositDocsCount > 0 ? stream2Live : 0));
-  const stream3Total = s3 > 0 ? s3 : (revenue?.stream3 ?? stream3Live);
+  const stream3Total = stream3FromEarnings > 0 ? stream3FromEarnings : (s3 > 0 ? s3 : (revenue?.stream3 ?? stream3Live));
   const stream4Total = s4 > 0 ? s4 : (revenue?.stream4 ?? stream4Live);
 
   // Total Gross = Stream1 + Stream2 + Stream3 + Stream4
@@ -760,7 +789,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         "ledgers", "general_ledger", "central_ledger",
         "group_atme", "super_atme", "atme_payouts", "super_atme_ledger",
         "group_admin_earnings", "admin_earnings", "group_admin_fees", "groupAdminEarnings", "super_admin_revenue",
-        "superAdminEarnings", "platformStats", "audit_logs"
+        "super_admin_earnings", "superAdminEarnings", "platformStats", "audit_logs"
       ];
 
       let totalDeletedAll = 0;
@@ -991,8 +1020,21 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     return st === withdrawalStatusFilter;
   });
 
-  // Group Admin Fees card: sum admin_commission dynamically (66.67% share: 10,000 for 15,000 fee or 2,000 for 3,000 fee)
+  // Group Admin Fees card: sum 66.67% share dynamically (2,000 for 3,000 fee, 10,000 for 15,000 fee)
   // Group Admin Fees must strictly be 0 when no groups exist
+  const gaeDocsSum = (!groups || groups.length === 0)
+    ? 0
+    : (allGroupAdminEarnings || [])
+        .filter((gae: any) => {
+          const gid = gae.groupId || gae.group_id;
+          const isPersonal = gae.type === 'personal_ajo_fee' || gae.type === 'personal_deposit' || gae.type === 'personal_withdraw' || gae.source === 'personal_ajo';
+          return Boolean(gid && !isPersonal && groups.some((g: any) => g.id === gid));
+        })
+        .reduce((sum: number, gae: any) => {
+          const amt = Number(gae.amount || gae.adminShare || 0);
+          return sum + (amt > 0 ? amt : 2000);
+        }, 0);
+
   const groupAdminCommissionsSum = (!groups || groups.length === 0)
     ? 0
     : (allPackTransactions || [])
@@ -1005,11 +1047,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           const pFee = Number(pt.packing_fee || pt.packingFee || 0);
           if (pFee <= 0) return sum + Number(pt.admin_commission || pt.groupAdminShare || 0);
           const split = pFee === 15000 ? 10000 : (pFee === 3000 ? 2000 : Math.round(pFee * (2 / 3)));
-          return sum + Number(pt.admin_commission || pt.groupAdminShare || split);
+          const adminCom = Number(pt.admin_commission || pt.groupAdminShare || 0);
+          const effectiveShare = (adminCom > 0 && adminCom < pFee) ? adminCom : split;
+          return sum + effectiveShare;
         }, 0);
+
   const totalGroupAdminFees = (!groups || groups.length === 0)
     ? 0
-    : (groupAdminCommissionsSum > 0 ? groupAdminCommissionsSum : Number(metrics?.totalGroupAdminEarnings || 0));
+    : (gaeDocsSum > 0 ? gaeDocsSum : (groupAdminCommissionsSum > 0 ? groupAdminCommissionsSum : Number(metrics?.totalGroupAdminEarnings || 0)));
 
   // 6. Super Admin - Payments Page: Live union of deposits, packings & withdrawals from real-time Firestore collections
   const rawPayments = [
@@ -1465,7 +1510,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   {formatNaira(stream3Total)}
                 </span>
                 <span className="text-xs text-slate-500 mt-1 block">
-                  1/3 share of group packing fees
+                  ₦1,000 per pack (33.33% share)
                 </span>
               </div>
 
@@ -2370,7 +2415,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   {formatNaira(stream3Total)}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  1/3 share of packing fees retained on group payouts.
+                  ₦1,000 per pack (1/3 share of group packing fees).
                 </p>
               </div>
 

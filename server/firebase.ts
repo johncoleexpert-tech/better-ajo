@@ -1867,6 +1867,22 @@ export async function fsExecutePackBatch(
         createdAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
+      batch.set(db.collection('super_admin_earnings').doc(`sae_${transaction.id}`), {
+        id: `sae_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        amount: sAdminShare,
+        type: 'packing_share',
+        stream: 'stream3',
+        streamName: 'STREAM_3_PACKING',
+        groupName: grpName,
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        description: `33.33% Packing Share from ${grpName}`,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+
       batch.set(db.collection('packing_payouts').doc(`pck_${transaction.id}`), {
         id: `pck_${transaction.id}`,
         groupId: group.id,
@@ -1966,6 +1982,22 @@ export async function fsExecutePackBatch(
         groupName: grpName,
         round: transaction.round_number || group.current_round || 1,
         reference: transaction.id,
+        timestamp: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp()
+      }, { merge: true }).catch(() => {});
+
+      await db.collection('super_admin_earnings').doc(`sae_${transaction.id}`).set({
+        id: `sae_${transaction.id}`,
+        groupId: group.id,
+        group_id: group.id,
+        amount: sAdminShare,
+        type: 'packing_share',
+        stream: 'stream3',
+        streamName: 'STREAM_3_PACKING',
+        groupName: grpName,
+        round: transaction.round_number || group.current_round || 1,
+        reference: transaction.id,
+        description: `33.33% Packing Share from ${grpName}`,
         timestamp: FieldValue.serverTimestamp(),
         createdAt: FieldValue.serverTimestamp()
       }, { merge: true }).catch(() => {});
