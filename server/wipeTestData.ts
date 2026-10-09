@@ -53,7 +53,13 @@ export async function wipeTestData(): Promise<{
       FIRESTORE_COLLECTIONS.COMMISSIONS,
       FIRESTORE_COLLECTIONS.WITHDRAWALS,
       FIRESTORE_COLLECTIONS.TRANSACTIONS,
-      FIRESTORE_COLLECTIONS.PAYMENTS
+      FIRESTORE_COLLECTIONS.PAYMENTS,
+      'group_admin_earnings',
+      'admin_earnings',
+      'group_admin_fees',
+      'groupAdminEarnings',
+      'super_admin_revenue',
+      'packing_payouts'
     ];
 
     for (const collName of collectionsToWipe) {
@@ -183,6 +189,9 @@ export async function wipeTestData(): Promise<{
   db.data.admin_revenue_ledger = [];
   db.data.super_admin_transactions = [];
   db.data.personal_ajo = [];
+  (db.data as any).transactions = [];
+  db.data.groupAdminRevenue = 0;
+  db.data.superAdminRevenue = 0;
 
   // Filter profiles and users to keep ONLY super admin
   if (Array.isArray(db.data.profiles)) {

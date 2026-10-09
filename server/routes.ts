@@ -905,11 +905,8 @@ apiRouter.post(['/personal/verify-fee', '/personal/verify-personal-ajo', '/verif
 
     // 5. PREVENT DUPLICATE PROCESSING (Requirement 3 & 5):
     // The same Paystack reference must never activate Personal Better Ajo twice or charge twice.
-    // Check if reference exists in payments or pack_transactions with success status locally or in Firestore
+    // Check if reference exists in payments with success status locally or in Firestore
     const existingPayment = db.getPaymentByReference(reference);
-    const existingPackTx = (db.data.pack_transactions || []).find(
-      t => (t.reference === reference || t.id === `pak_personal_${reference}`) && (t.status === 'success' || t.status === 'completed')
-    );
 
     const fsDb = getFirestoreDb();
     if (fsDb) {
@@ -926,22 +923,10 @@ apiRouter.post(['/personal/verify-fee', '/personal/verify-personal-ajo', '/verif
             payment: existingFsPay.data()
           });
         }
-        const existingFsPack = await fsDb.collection('pack_transactions').doc(`pak_personal_${reference}`).get();
-        if (existingFsPack.exists && (existingFsPack.data()?.status === 'success' || existingFsPack.data()?.status === 'completed')) {
-          const personalAjo = db.activatePersonalAjo(userId);
-          return res.json({
-            success: true,
-            message: 'Payment already verified and Personal Better Ajo is active.',
-            alreadyVerified: true,
-            alreadyProcessed: true,
-            personalAjo,
-            payment: existingFsPack.data()
-          });
-        }
       } catch (err) {}
     }
 
-    if ((existingPayment && existingPayment.status === 'success') || existingPackTx) {
+    if (existingPayment && existingPayment.status === 'success') {
       const personalAjo = db.activatePersonalAjo(userId);
       await fsVerifyPersonalAjoFeeTransaction(userId, reference, 600).catch(() => {});
       return res.json({
@@ -1175,17 +1160,6 @@ apiRouter.post(['/personal-ajo/deposit', '/personal-deposit', '/personal/deposit
         fee,
         type: 'personal',
         status: 'credited',
-        reference: ref,
-        created_at: new Date().toISOString()
-      });
-
-      // 2. Create pack_transaction doc with fee = 60
-      await fsDb.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS).add({
-        user_id: userId,
-        amount: fee,
-        fee,
-        type: 'personal_deposit',
-        status: 'success',
         reference: ref,
         created_at: new Date().toISOString()
       });
@@ -4328,6 +4302,12 @@ apiRouter.get('/superadmin/full-data', async (req: Request, res: Response) => {
     }
     if (data.metrics) {
       data.metrics.personalAjoAccounts = data.personalUsers.length;
+      if (!data.groups || data.groups.length === 0) {
+        data.metrics.totalGroupAdminEarnings = 0;
+        (data.metrics as any).totalGroupPackingFees = 0;
+        data.metrics.totalPackingAmount = 0;
+        (data.metrics as any).groupAdminCommissionTotal = 0;
+      }
     }
 
     try {
@@ -5193,7 +5173,7 @@ apiRouter.post('/support/mark-read', (req: Request, res: Response) => {
   }
 });
 
-apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
+apiRouter.post(['/admin/reset-database', '/reset-database', '/api/reset-database'], async (req: Request, res: Response) => {
   try {
     const fsDb = getFirestoreDb();
     let fsReport: Record<string, number> = {};
@@ -5250,6 +5230,38 @@ apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
         }
       }
 
+      // Aggressive explicit purge for group_admin_earnings and related ghost collections
+      const aggressivePurgeCols = [
+        'group_admin_earnings',
+        'admin_earnings',
+        'group_atme',
+        'group_admin_fees',
+        'groupAdminEarnings',
+        'adminEarnings',
+        'super_atme_ledger',
+        'super_admin_revenue',
+        'superAdminEarnings',
+        'pack_transactions',
+        'packing_payouts',
+        'commissions'
+      ];
+      for (const colName of aggressivePurgeCols) {
+        try {
+          let count = 0;
+          while (true) {
+            const snap = await fsDb.collection(colName).limit(300).get();
+            if (snap.empty) break;
+            const batch = fsDb.batch();
+            snap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            count += snap.size;
+          }
+          fsReport[colName] = count;
+        } catch (e) {
+          console.warn(`[Reset-Database Admin SDK] Purge error on ${colName}:`, e);
+        }
+      }
+
       // Explicitly reset platformRevenue and platformStats documents to zero
       try {
         await fsDb.collection('platformRevenue').doc('main').set({
@@ -5260,11 +5272,17 @@ apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
           totalGross: 0,
           totalWithdrawn: 0,
           unifiedAvailable: 0,
+          groupAdminFees: 0,
           lastUpdated: FieldValue.serverTimestamp()
         });
         await fsDb.collection('platformStats').doc('main').set({
           totalPersonalSavings: 0,
           totalPersonalSavers: 0,
+          groupAdminFees: 0,
+          totalGroupAdminFees: 0,
+          totalGroupAdminEarnings: 0,
+          totalPersonalDeposits: 0,
+          totalPersonalWithdrawn: 0,
           lastUpdated: new Date().toISOString()
         });
       } catch (statErr) {
@@ -5287,6 +5305,9 @@ apiRouter.post('/admin/reset-database', async (req: Request, res: Response) => {
     db.data.admin_revenue_ledger = [];
     db.data.group_notifications = [];
     db.data.support_messages = [];
+    db.data.groupAdminRevenue = 0;
+    db.data.superAdminRevenue = 0;
+    (db.data as any).transactions = [];
 
     // Filter profiles: preserve only authorized Super Admin
     db.data.profiles = (db.data.profiles || []).filter(p => {

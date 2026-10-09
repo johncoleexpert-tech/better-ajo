@@ -564,7 +564,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         const newUnifiedAvailable = Math.max(0, newTotalGross - totalWithdrawn);
 
         const contribRef = doc(collection(db, 'contributions'));
-        const packRef = doc(collection(db, 'pack_transactions'));
         const logRef = doc(collection(db, 'transaction_logs'));
         const ptxRef = doc(collection(db, 'platform_transactions'));
         const txRef = doc(collection(db, 'transactions'));
@@ -576,19 +575,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
           fee: 60,
           status: 'success',
           type: 'DEPOSIT - PERSONAL AJO SAVINGS',
-          timestamp: serverTimestamp(),
-          reference: effectiveRef,
-          created_at: nowIso,
-          createdAt: nowIso
-        };
-
-        const packData = {
-          userId,
-          user_id: userId,
-          amount: Number(savingsAmount),
-          fee: 60,
-          status: 'success',
-          type: 'personal_deposit',
           timestamp: serverTimestamp(),
           reference: effectiveRef,
           created_at: nowIso,
@@ -640,7 +626,6 @@ export const PersonalDashboard: React.FC<PersonalDashboardProps> = ({
         };
 
         t.set(contribRef, contribData);
-        t.set(packRef, packData);
         t.set(logRef, logData);
         t.set(ptxRef, ptxData);
         t.set(txRef, txData);

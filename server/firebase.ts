@@ -1833,7 +1833,8 @@ export async function fsExecutePackBatch(
     }
 
     // Commission Routing: group_admin_earnings, super_admin_revenue, packing_payouts
-    if (group?.id) {
+    // Strictly for valid groups, NEVER for personal ajo
+    if (group?.id && !group.id.startsWith('personal') && (transaction as any)?.type !== 'personal_ajo_fee' && (transaction as any)?.type !== 'personal_deposit' && (transaction as any)?.type !== 'personal_withdraw') {
       const gAdminId = group.admin_id;
       const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
       const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
@@ -1936,7 +1937,7 @@ export async function fsExecutePackBatch(
     if (cleanGroup && group?.id) {
       await db.collection(FIRESTORE_COLLECTIONS.GROUPS).doc(group.id).set(cleanGroup, { merge: true });
     }
-    if (group?.id) {
+    if (group?.id && !group.id.startsWith('personal') && (transaction as any)?.type !== 'personal_ajo_fee' && (transaction as any)?.type !== 'personal_deposit' && (transaction as any)?.type !== 'personal_withdraw') {
       const gAdminId = group.admin_id;
       const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
       const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
@@ -3865,7 +3866,6 @@ export async function fsVerifyPersonalAjoFeeTransaction(
     return { success: true, alreadyVerified: false, message: 'Local database verified' };
   }
 
-  const packTxRef = db.collection(FIRESTORE_COLLECTIONS.PACK_TRANSACTIONS).doc(`pak_personal_${reference}`);
   const paymentRef = db.collection(FIRESTORE_COLLECTIONS.PAYMENTS).doc(`pay_${reference}`);
   const personalAjoRef = db.collection('personal_ajo').doc(userId);
   const personalAjosRef = db.collection('personalAjos').doc(userId);
@@ -3876,15 +3876,7 @@ export async function fsVerifyPersonalAjoFeeTransaction(
 
   try {
     const result = await db.runTransaction(async (transaction) => {
-      // 1. Idempotency Check: check if already verified in Firestore
-      const existingPackSnap = await transaction.get(packTxRef);
-      if (existingPackSnap.exists) {
-        const packData = existingPackSnap.data() as any;
-        if (packData?.status === 'success' || packData?.status === 'completed') {
-          return { success: true, alreadyVerified: true, message: 'Transaction already verified in Firestore' };
-        }
-      }
-
+      // 1. Idempotency Check: check if payment already verified in Firestore
       const existingPaySnap = await transaction.get(paymentRef);
       if (existingPaySnap.exists) {
         const payData = existingPaySnap.data() as any;
@@ -3894,22 +3886,6 @@ export async function fsVerifyPersonalAjoFeeTransaction(
       }
 
       const now = new Date().toISOString();
-
-      // 2. Set pack_transactions record
-      transaction.set(packTxRef, {
-        id: `pak_personal_${reference}`,
-        reference,
-        user_id: userId,
-        amount,
-        amount_kobo: amount * 100,
-        currency: 'NGN',
-        type: 'personal_ajo_fee',
-        stream: 'STREAM_REGISTRATION',
-        category: 'ACTIVATION_FEE',
-        status: 'success',
-        verified_at: now,
-        created_at: now
-      }, { merge: true });
 
       // 3. Set payments record
       transaction.set(paymentRef, {

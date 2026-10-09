@@ -759,7 +759,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         "members", "group_members", "groupMembers", "group_memberships", "group_members_old",
         "ledgers", "general_ledger", "central_ledger",
         "group_atme", "super_atme", "atme_payouts", "super_atme_ledger",
-        "group_admin_earnings", "admin_earnings", "super_admin_revenue",
+        "group_admin_earnings", "admin_earnings", "group_admin_fees", "groupAdminEarnings", "super_admin_revenue",
         "superAdminEarnings", "platformStats", "audit_logs"
       ];
 
@@ -864,6 +864,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
       localStorage.clear();
       sessionStorage.clear();
+      setAllPackTransactions([]);
+      setAllContributions([]);
+      setAllWithdrawals([]);
+      setTransactions([]);
       setResetDone(true);
 
       console.log("Reset complete", report);
@@ -988,12 +992,24 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   });
 
   // Group Admin Fees card: sum admin_commission dynamically (66.67% share: 10,000 for 15,000 fee or 2,000 for 3,000 fee)
-  const groupAdminCommissionsSum = (allPackTransactions || []).reduce((sum: number, pt: any) => {
-    const pFee = Number(pt.packing_fee || pt.packingFee || 4000);
-    const split = pFee === 15000 ? 10000 : (pFee === 3000 ? 2000 : Math.round(pFee * (2 / 3)));
-    return sum + Number(pt.admin_commission || pt.groupAdminShare || split);
-  }, 0);
-  const totalGroupAdminFees = groupAdminCommissionsSum > 0 ? groupAdminCommissionsSum : Number(metrics.totalGroupAdminEarnings || 0);
+  // Group Admin Fees must strictly be 0 when no groups exist
+  const groupAdminCommissionsSum = (!groups || groups.length === 0)
+    ? 0
+    : (allPackTransactions || [])
+        .filter((pt: any) => {
+          const gid = pt.groupId || pt.group_id;
+          const isPersonal = pt.type === 'personal_ajo_fee' || pt.type === 'personal_deposit' || pt.type === 'personal_withdraw' || pt.source === 'personal_ajo';
+          return Boolean(gid && !isPersonal && groups.some((g: any) => g.id === gid));
+        })
+        .reduce((sum: number, pt: any) => {
+          const pFee = Number(pt.packing_fee || pt.packingFee || 0);
+          if (pFee <= 0) return sum + Number(pt.admin_commission || pt.groupAdminShare || 0);
+          const split = pFee === 15000 ? 10000 : (pFee === 3000 ? 2000 : Math.round(pFee * (2 / 3)));
+          return sum + Number(pt.admin_commission || pt.groupAdminShare || split);
+        }, 0);
+  const totalGroupAdminFees = (!groups || groups.length === 0)
+    ? 0
+    : (groupAdminCommissionsSum > 0 ? groupAdminCommissionsSum : Number(metrics?.totalGroupAdminEarnings || 0));
 
   // 6. Super Admin - Payments Page: Live union of deposits, packings & withdrawals from real-time Firestore collections
   const rawPayments = [

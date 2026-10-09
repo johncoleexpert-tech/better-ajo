@@ -80,9 +80,20 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Group Admin Earnings & Purge Support
+    match /group_admin_earnings/{docId} {
+      allow read, write, delete: if true;
+    }
+    match /admin_earnings/{docId} {
+      allow read, write, delete: if true;
+    }
+    match /super_admin_revenue/{docId} {
+      allow read, write, delete: if true;
+    }
+
     // Default fallback
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write, delete: if true;
     }
   }
 }

@@ -719,8 +719,16 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   }, [groupId, currentUser.id]);
 
   // A. Fix Group Admin Available Commission Calculation - MUST BE INTEGER, NO KOBO, NO PLATFORM FEE
-  const ptxCommissionSum = platformCommissions
-    .reduce((sum, c) => sum + Math.floor(Number(c.amount || c.adminShare || 0)), 0);
+  // Group Admin fees must strictly be 0 when no group
+  const currentGroupId = groupId || data?.group?.id || (data as any)?.groupId || '';
+  const ptxCommissionSum = (!currentGroupId)
+    ? 0
+    : platformCommissions
+        .filter((c: any) => {
+          const isPersonal = c.type === 'personal_ajo_fee' || c.type === 'personal_deposit' || c.type === 'personal_withdraw' || c.source === 'personal_ajo';
+          return !isPersonal && (c.groupId === currentGroupId || c.group_id === currentGroupId);
+        })
+        .reduce((sum, c) => sum + Math.floor(Number(c.amount || c.adminShare || 0)), 0);
 
   const ptxWithdrawalsSum = platformWithdrawals
     .reduce((sum, w) => sum + Math.floor(Number(w.amount || 0)), 0);

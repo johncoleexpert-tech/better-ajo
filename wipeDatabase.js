@@ -154,7 +154,13 @@ export async function wipeDatabase() {
     'otps',
     '_system_checks',
     'group_notifications',
-    'support_messages'
+    'support_messages',
+    'group_admin_earnings',
+    'admin_earnings',
+    'group_admin_fees',
+    'groupAdminEarnings',
+    'super_admin_revenue',
+    'packing_payouts'
   ];
 
   // Also query any dynamic collections that exist in Firestore

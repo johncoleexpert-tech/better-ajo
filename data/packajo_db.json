@@ -36,8 +36,8 @@
   "audit_logs": [],
   "support_messages": [],
   "group_notifications": [],
-  "superAdminRevenue": 2334,
-  "groupAdminRevenue": 4666,
+  "superAdminRevenue": 0,
+  "groupAdminRevenue": 0,
   "superAdminEarnings": {
     "totalEarnings": 0,
     "available_balance": 0,
@@ -49,19 +49,24 @@
     "pending_withdrawals": 0,
     "breakdown": [],
     "history": [],
-    "updated_at": "2026-10-08T11:21:34.473Z"
+    "updated_at": "2026-10-09T10:29:05.259Z"
   },
   "super_admin_wallet": {
+    "available_balance": 0,
     "total_gross_earnings": 0,
     "total_withdrawn": 0,
-    "available_balance": 0,
+    "stream1_registration": 0,
+    "stream2_contribution": 0,
+    "stream3_packing": 0,
+    "stream4_withdrawal": 0,
     "breakdown": {
       "reg_600_total": 0,
       "contrib_60_total": 0,
       "packing_33_total": 0,
       "withdrawal_1_6_total": 0
     },
-    "updated_at": "2026-10-08T11:21:34.473Z"
+    "updated_at": "2026-10-09T10:29:26.627Z",
+    "last_updated": "2026-10-09T10:29:26.627Z"
   },
   "admin_revenue_ledger": [],
   "personal_transactions": [],

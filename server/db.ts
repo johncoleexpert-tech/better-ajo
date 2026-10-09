@@ -3789,8 +3789,8 @@ class Database {
       .filter(c => c.status === 'Paid')
       .reduce((sum, c) => sum + c.amount, 0) + totalMemberCredits;
 
-    const totalPackingAmount = this.data.pack_transactions
-      .filter(t => t.status === 'completed')
+    const totalPackingAmount = this.data.groups.length === 0 ? 0 : this.data.pack_transactions
+      .filter(t => t.status === 'completed' && this.data.groups.some(g => g.id === t.group_id))
       .reduce((sum, t) => sum + t.packing_amount, 0);
 
     this.initSuperAdminEarnings();
@@ -3800,10 +3800,14 @@ class Database {
     const totalSuperAdminEarnings = wallet.total_gross_earnings;
     const totalPersonalPlatformFees = wallet.breakdown.reg_600_total;
     const totalContributionFees = wallet.breakdown.contrib_60_total;
-    const totalSuperAdminCommission = wallet.breakdown.packing_33_total;
+    const totalSuperAdminCommission = this.data.groups.length === 0 ? 0 : wallet.breakdown.packing_33_total;
     const totalPersonalWithdrawalFees = wallet.breakdown.withdrawal_1_6_total;
-    const totalGroupPackingFees = Number((this.data.commissions.reduce((sum, c) => sum + Math.round((c.admin_amount + c.super_admin_amount) * 100), 0) / 100).toFixed(2));
-    const totalGroupAdminEarnings = Number((this.data.commissions.reduce((sum, c) => sum + Math.round(c.admin_amount * 100), 0) / 100).toFixed(2));
+    const totalGroupPackingFees = this.data.groups.length === 0
+      ? 0
+      : Number((this.data.commissions.filter(c => this.data.groups.some(g => g.id === c.group_id)).reduce((sum, c) => sum + Math.round((c.admin_amount + c.super_admin_amount) * 100), 0) / 100).toFixed(2));
+    const totalGroupAdminEarnings = this.data.groups.length === 0
+      ? 0
+      : Number((this.data.commissions.filter(c => this.data.groups.some(g => g.id === c.group_id)).reduce((sum, c) => sum + Math.round(c.admin_amount * 100), 0) / 100).toFixed(2));
     const totalPlatformEarnings = totalPersonalPlatformFees + totalGroupPackingFees + totalContributionFees;
 
     const allCompletedWithdrawals = this.data.withdrawals.filter(w => w.status === 'completed' || w.status === 'successful');
@@ -4600,14 +4604,19 @@ class Database {
     const totalPersonalPlatformFees = wallet.breakdown.reg_600_total;
     const totalPersonalWithdrawalFees = wallet.breakdown.withdrawal_1_6_total;
     const totalContributionFees = wallet.breakdown.contrib_60_total;
-    const totalSuperAdminCommission = wallet.breakdown.packing_33_total;
-    const totalGroupPackingFees = Number((this.data.commissions.reduce((sum, c) => sum + Math.round((c.admin_amount + c.super_admin_amount) * 100), 0) / 100).toFixed(2));
+    const totalSuperAdminCommission = this.data.groups.length === 0 ? 0 : wallet.breakdown.packing_33_total;
+    const totalGroupPackingFees = this.data.groups.length === 0
+      ? 0
+      : Number((this.data.commissions.filter(c => this.data.groups.some(g => g.id === c.group_id)).reduce((sum, c) => sum + Math.round((c.admin_amount + c.super_admin_amount) * 100), 0) / 100).toFixed(2));
     const totalSuperAdminEarnings = wallet.total_gross_earnings;
     const superAdminCommission = totalSuperAdminEarnings;
     const superAdminAvailableBalance = wallet.available_balance;
     const superAdminWithdrawnAmount = wallet.total_withdrawn;
 
-    const groupAdminCommissionTotalKobo = this.data.commissions.reduce((sum, c) => sum + Math.round(c.admin_amount * 100), 0);
+    const validGroupCommissions = this.data.groups.length === 0
+      ? []
+      : this.data.commissions.filter(c => this.data.groups.some(g => g.id === c.group_id));
+    const groupAdminCommissionTotalKobo = validGroupCommissions.reduce((sum, c) => sum + Math.round(c.admin_amount * 100), 0);
     const groupAdminCommissionTotal = Number((groupAdminCommissionTotalKobo / 100).toFixed(2));
 
     const totalWithdrawalsAmountKobo = this.data.withdrawals.reduce((sum, w) => sum + Math.round(w.amount * 100), 0);
