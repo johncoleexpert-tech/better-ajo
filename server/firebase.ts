@@ -1836,9 +1836,17 @@ export async function fsExecutePackBatch(
     // Strictly for valid groups, NEVER for personal ajo
     if (group?.id && !group.id.startsWith('personal') && (transaction as any)?.type !== 'personal_ajo_fee' && (transaction as any)?.type !== 'personal_deposit' && (transaction as any)?.type !== 'personal_withdraw') {
       const gAdminId = group.admin_id;
-      const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
-      const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
-      const sAdminShare = Math.floor(commission?.super_admin_amount ?? (packingFee - gAdminShare));
+      const packingFee = Number(
+        group?.packing_fee ??
+        (group as any)?.packingFee ??
+        (group as any)?.withdrawalFee ??
+        transaction?.packing_fee ??
+        commission?.packing_fee ??
+        feeAmt ??
+        0
+      );
+      const sAdminShare = Math.round(packingFee * 0.3333);
+      const gAdminShare = packingFee - sAdminShare;
 
       batch.set(db.collection('group_admin_earnings').doc(`gae_${transaction.id}`), {
         id: `gae_${transaction.id}`,
@@ -1904,9 +1912,17 @@ export async function fsExecutePackBatch(
 
     // Update platformRevenue/main stream3 (33.33% share)
     if (group?.id) {
-      const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
-      const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
-      const sAdminShare = Math.floor(commission?.super_admin_amount ?? (packingFee - gAdminShare));
+      const packingFee = Number(
+        group?.packing_fee ??
+        (group as any)?.packingFee ??
+        (group as any)?.withdrawalFee ??
+        transaction?.packing_fee ??
+        commission?.packing_fee ??
+        feeAmt ??
+        0
+      );
+      const sAdminShare = Math.round(packingFee * 0.3333);
+      const gAdminShare = packingFee - sAdminShare;
       if (sAdminShare > 0) {
         const revRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
         await db.runTransaction(async (t) => {
@@ -1955,9 +1971,17 @@ export async function fsExecutePackBatch(
     }
     if (group?.id && !group.id.startsWith('personal') && (transaction as any)?.type !== 'personal_ajo_fee' && (transaction as any)?.type !== 'personal_deposit' && (transaction as any)?.type !== 'personal_withdraw') {
       const gAdminId = group.admin_id;
-      const packingFee = feeAmt || Number(commission?.packing_fee || 4000);
-      const gAdminShare = Math.floor(commission?.admin_amount ?? Math.round(packingFee * (2 / 3)));
-      const sAdminShare = Math.floor(commission?.super_admin_amount ?? (packingFee - gAdminShare));
+      const packingFee = Number(
+        group?.packing_fee ??
+        (group as any)?.packingFee ??
+        (group as any)?.withdrawalFee ??
+        transaction?.packing_fee ??
+        commission?.packing_fee ??
+        feeAmt ??
+        0
+      );
+      const sAdminShare = Math.round(packingFee * 0.3333);
+      const gAdminShare = packingFee - sAdminShare;
 
       await db.collection('group_admin_earnings').doc(`gae_${transaction.id}`).set({
         id: `gae_${transaction.id}`,

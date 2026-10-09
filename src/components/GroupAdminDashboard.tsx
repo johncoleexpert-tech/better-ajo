@@ -153,9 +153,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
       const nextPackDate = new Date();
       nextPackDate.setDate(nextPackDate.getDate() + cycleDays);
 
-      const packingFee = Number(groupData.packingFee || groupData.packing_fee || groupData.packFee || 4000);
-      const adminShare = Math.round(packingFee * (2 / 3)); // 2667 for 4000, 2000 for 3000
-      const superAdminShare = packingFee - adminShare; // 1333 for 4000, 1000 for 3000
+      const packingFee = Number(groupData.packingFee || groupData.packing_fee || groupData.packFee || (data?.group as any)?.packing_fee || 0);
+      const superAdminShare = Math.round(packingFee * 0.3333);
+      const adminShare = packingFee - superAdminShare;
       const adminId = groupData.creatorId || groupData.adminId || groupData.admin_id || currentUser.id;
       const curRound = Number(groupData.current_round || groupData.currentRound || 1);
 

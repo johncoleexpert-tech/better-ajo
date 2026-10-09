@@ -466,7 +466,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   });
   const stream3FromEarnings = stream3EarningsDocs.reduce((sum: number, doc: any) => {
     const amt = Number(doc.amount || 0);
-    return sum + (amt > 0 ? amt : 1000);
+    return sum + amt;
   }, 0);
 
   const stream3Live = stream3FromEarnings > 0
@@ -1032,7 +1032,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         })
         .reduce((sum: number, gae: any) => {
           const amt = Number(gae.amount || gae.adminShare || 0);
-          return sum + (amt > 0 ? amt : 2000);
+          return sum + amt;
         }, 0);
 
   const groupAdminCommissionsSum = (!groups || groups.length === 0)
@@ -1046,9 +1046,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         .reduce((sum: number, pt: any) => {
           const pFee = Number(pt.packing_fee || pt.packingFee || 0);
           if (pFee <= 0) return sum + Number(pt.admin_commission || pt.groupAdminShare || 0);
-          const split = pFee === 15000 ? 10000 : (pFee === 3000 ? 2000 : Math.round(pFee * (2 / 3)));
+          const sShare = Math.round(pFee * 0.3333);
+          const dynamicSplit = pFee - sShare;
           const adminCom = Number(pt.admin_commission || pt.groupAdminShare || 0);
-          const effectiveShare = (adminCom > 0 && adminCom < pFee) ? adminCom : split;
+          const effectiveShare = (adminCom > 0 && adminCom < pFee) ? adminCom : dynamicSplit;
           return sum + effectiveShare;
         }, 0);
 
@@ -1510,7 +1511,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   {formatNaira(stream3Total)}
                 </span>
                 <span className="text-xs text-slate-500 mt-1 block">
-                  ₦1,000 per pack (33.33% share)
+                  33.33% share of group packing fees
                 </span>
               </div>
 
@@ -2415,7 +2416,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   {formatNaira(stream3Total)}
                 </div>
                 <p className="text-xs text-slate-500 mt-1">
-                  ₦1,000 per pack (1/3 share of group packing fees).
+                  33.33% share of packing fees retained on group payouts.
                 </p>
               </div>
 

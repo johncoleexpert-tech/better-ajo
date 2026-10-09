@@ -41,8 +41,11 @@ export {
  */
 export function calculatePackingSplit(packingFee: number): { superAdmin: number; groupAdmin: number } {
   const fee = Math.round(Number(packingFee));
-  if (isNaN(fee) || fee <= 0) {
+  if (isNaN(fee) || fee < 0) {
     throw new Error(`Invalid packing fee for split calculation: ${packingFee}`);
+  }
+  if (fee === 0) {
+    return { superAdmin: 0, groupAdmin: 0 };
   }
   const superAdmin = Math.round(fee * 0.3333);
   const groupAdmin = fee - superAdmin;
@@ -3020,9 +3023,11 @@ class Database {
 
     // 8. Calculate amounts based on group's dynamic withdrawal fee / packing fee
     const amount = group.packing_amount;
-    const rawFee = typeof (group as any).withdrawalFee === 'number'
-      ? (group as any).withdrawalFee
-      : (typeof group.packing_fee === 'number' ? group.packing_fee : 3000);
+    const rawFee = typeof group.packing_fee === 'number'
+      ? group.packing_fee
+      : (typeof (group as any).packingFee === 'number'
+          ? (group as any).packingFee
+          : (typeof (group as any).withdrawalFee === 'number' ? (group as any).withdrawalFee : 0));
     const totalRounded = Math.round(rawFee);
 
     // Whole Naira 66.67% / 33.33% split without decimals via pure function

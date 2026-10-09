@@ -2628,9 +2628,16 @@ apiRouter.post('/groups/:groupId/check-disbursement', async (req: Request, res: 
         try {
           const fsDb = getFirestoreDb();
           if (fsDb) {
-            const pFee = Number(packResult.transaction.packing_fee || 3000);
-            const saShare = packResult.commission?.super_admin_amount ?? Math.round(pFee * 0.3333); // 1,000 for 3,000
-            const gaShare = packResult.commission?.admin_amount ?? (pFee - saShare);                // 2,000 for 3,000
+            const pFee = Number(
+              group?.packing_fee ??
+              (group as any)?.packingFee ??
+              (group as any)?.withdrawalFee ??
+              packResult.transaction?.packing_fee ??
+              packResult.commission?.packing_fee ??
+              0
+            );
+            const saShare = Math.round(pFee * 0.3333);
+            const gaShare = pFee - saShare;
 
             fsDb.collection('super_admin_earnings').doc(`sae_${packResult.transaction.id}`).set({
               id: `sae_${packResult.transaction.id}`,
@@ -3504,9 +3511,16 @@ apiRouter.post('/groups/:groupId/pack', packRateLimiter, async (req: Request, re
     try {
       const fsDb = getFirestoreDb();
       if (fsDb) {
-        const packingFee = Number(result.transaction.packing_fee || (group as any).packing_fee || 3000);
-        const superAdminShare = result.commission?.super_admin_amount ?? Math.round(packingFee * 0.3333); // 1,000 for 3,000
-        const groupAdminShare = result.commission?.admin_amount ?? (packingFee - superAdminShare);        // 2,000 for 3,000
+        const packingFee = Number(
+          group?.packing_fee ??
+          (group as any)?.packingFee ??
+          (group as any)?.withdrawalFee ??
+          result.transaction?.packing_fee ??
+          result.commission?.packing_fee ??
+          0
+        );
+        const superAdminShare = Math.round(packingFee * 0.3333);
+        const groupAdminShare = packingFee - superAdminShare;
 
         // 1. Write 33.33% to super_admin_earnings (Stream 3)
         await fsDb.collection('super_admin_earnings').doc(`sae_${result.transaction.id}`).set({
