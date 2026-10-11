@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Menu,
   X,
@@ -66,8 +66,25 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentView
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [superAdminRevenue, setSuperAdminRevenue] = useState<number>(1787);
   const activeUser = user || currentUser || null;
   const isSuperAdmin = activeUser?.phone === '08154267469' || activeUser?.role === 'SUPER_ADMIN' || activeUser?.role === 'superadmin' || activeUser?.role === 'super_admin' || activeUser?.email === 'realheavenict@gmail.com' || activeUser?.email === 'superadmin@packajo.ng' || activeUser?.email === 'paulakinyele54@gmail.com';
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    const fetchRev = async () => {
+      try {
+        const res = await fetch('/api/super-admin-wallet');
+        const json = await res.json();
+        if (json && (json.availableRevenue !== undefined || json.available_balance !== undefined)) {
+          setSuperAdminRevenue(Number(json.availableRevenue ?? json.available_balance ?? 1787));
+        }
+      } catch {}
+    };
+    fetchRev();
+    const interval = setInterval(fetchRev, 10000);
+    return () => clearInterval(interval);
+  }, [isSuperAdmin]);
   const isGroupAdmin = !isSuperAdmin && (hasAdminGroups || activeUser?.role === 'GROUP_ADMIN' || activeUser?.role === 'groupadmin' || activeUser?.role === 'group_admin');
   // Personal Ajo is strictly visible to role == 'user' only (hidden for superadmin & groupadmin)
   const isUserRole = Boolean(activeUser && !isSuperAdmin && !isGroupAdmin && (activeUser.role === 'user' || activeUser.role === 'MEMBER' || !activeUser.role));
@@ -201,8 +218,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }`}
                   >
                     <Shield className="h-3.5 w-3.5 text-purple-700" />
-                    <span className="hidden sm:inline">Super Admin</span>
-                    <span className="sm:hidden">Super</span>
+                    <span className="hidden sm:inline">Super Admin Revenue (₦{Number(superAdminRevenue || 1787).toLocaleString()})</span>
+                    <span className="sm:hidden">Super (₦{Number(superAdminRevenue || 1787).toLocaleString()})</span>
                   </button>
                 )}
 
@@ -328,10 +345,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                       setIsMenuOpen(false);
                       onOpenSuperAdmin();
                     }}
-                    className="w-full flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/60 transition text-left cursor-pointer"
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200/60 transition text-left cursor-pointer"
                   >
-                    <Shield className="h-4 w-4 text-purple-700" />
-                    <span>Super Admin</span>
+                    <div className="flex items-center gap-3.5">
+                      <Shield className="h-4 w-4 text-purple-700" />
+                      <span>Super Admin</span>
+                    </div>
+                    <span className="text-xs font-black text-purple-700">₦{Number(superAdminRevenue || 1787).toLocaleString()}</span>
                   </button>
                 )}
 

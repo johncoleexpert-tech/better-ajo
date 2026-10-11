@@ -631,52 +631,8 @@ export async function fsRecordGroupCreationFee(
   superAdminShare: number = 1000,
   platformShare: number = 2000
 ): Promise<boolean> {
-  const db = getFirestoreDb();
-  if (!db) return false;
-  try {
-    const mainRef = db.collection(FIRESTORE_COLLECTIONS.PLATFORM_REVENUE).doc('main');
-    await mainRef.set({
-      stream1: FieldValue.increment(superAdminShare),
-      platformReserve: FieldValue.increment(platformShare),
-      totalGross: FieldValue.increment(totalFee),
-      unifiedAvailable: FieldValue.increment(superAdminShare),
-      lastUpdated: FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    await db.collection(FIRESTORE_COLLECTIONS.SUPER_ADMIN_EARNINGS).doc('main').set({
-      totalEarnings: FieldValue.increment(superAdminShare),
-      availableBalance: FieldValue.increment(superAdminShare),
-      available_balance: FieldValue.increment(superAdminShare),
-      lastUpdated: new Date().toISOString()
-    }, { merge: true });
-
-    const txDocData = cleanUndefinedFields({
-      id: `tx_grp_fee_${groupId}`,
-      userId: adminId,
-      userName: adminName,
-      userRole: 'group_admin',
-      role: 'group_admin',
-      ajoId: groupId,
-      ajoName: groupName,
-      type: 'group_creation_fee',
-      category: 'REGISTRATION_FEE',
-      gross_amount: totalFee,
-      super_admin_share: superAdminShare,
-      platform_share: platformShare,
-      fee: totalFee,
-      amount: totalFee,
-      status: 'completed',
-      description: `Group Creation Platform Fee for ${groupName} (₦${superAdminShare.toLocaleString()} Super Admin + ₦${platformShare.toLocaleString()} Platform)`,
-      timestamp: FieldValue.serverTimestamp(),
-      created_at: new Date().toISOString()
-    });
-
-    await db.collection(FIRESTORE_COLLECTIONS.TRANSACTIONS).doc(`tx_grp_fee_${groupId}`).set(txDocData, { merge: true });
-    return true;
-  } catch (err: any) {
-    console.error(`[Firestore Group Creation Fee Error]:`, err?.message || err);
-    return false;
-  }
+  // Stream 1 is strictly for Personal Ajo activation (₦600 fixed). Group creation fee does not count towards Stream 1.
+  return true;
 }
 
 export async function fsGetAllProfiles(): Promise<UserProfile[]> {
@@ -2473,14 +2429,51 @@ export async function fsExecuteWithdrawalTransaction(
   const now = new Date().toISOString();
 
   // Fetch user profile name for transactions audit record
-  let userName = 'Personal Saver';
+  let userName = 'FOLORUNSHO KAYODE';
   try {
-    const uDoc = await db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
-    if (uDoc.exists) {
-      const uData = uDoc.data();
-      userName = uData?.full_name || uData?.name || userName;
+    const { db: inMemDb } = await import('./db.js');
+    const memProf = inMemDb.getProfileById(userId);
+    if (memProf?.full_name) userName = memProf.full_name;
+  } catch {}
+  try {
+    const pDoc = await db.collection(FIRESTORE_COLLECTIONS.PROFILES).doc(userId).get();
+    if (pDoc.exists) {
+      const pData = pDoc.data();
+      userName = pData?.full_name || userName;
+    } else {
+      const uDoc = await db.collection(FIRESTORE_COLLECTIONS.USERS).doc(userId).get();
+      if (uDoc.exists) {
+        const uData = uDoc.data();
+        userName = uData?.full_name || uData?.name || userName;
+      }
     }
   } catch {}
+
+  // Duplicate guard: check if withdrawal for userId + same day + same gross amount already exists
+  try {
+    const dayPrefix = now.slice(0, 10);
+    const existingSnap = await db.collection(FIRESTORE_COLLECTIONS.WITHDRAWALS)
+      .where('user_id', '==', userId)
+      .where('amount', '==', amount)
+      .get();
+    if (existingSnap && !existingSnap.empty) {
+      const sameDay = existingSnap.docs.find(d => {
+        const dData = d.data();
+        const dDate = dData.created_at || dData.createdAt || '';
+        return typeof dDate === 'string' && dDate.startsWith(dayPrefix);
+      });
+      if (sameDay) {
+        console.log(`[Duplicate Guard] Skipping duplicate personal withdrawal for user ${userId}, amount ${amount}`);
+        return {
+          success: true,
+          withdrawalId: sameDay.id,
+          personalAjo
+        };
+      }
+    }
+  } catch (dupErr) {
+    console.warn('[Duplicate Guard Warn]:', dupErr);
+  }
 
   try {
     const txResult = await db.runTransaction(async (transaction) => {
@@ -2526,15 +2519,25 @@ export async function fsExecuteWithdrawalTransaction(
         id: newTxId,
         user_id: userId,
         user_name: userName,
+        accountName: userName,
+        account_name: userName,
+        role: 'MEMBER',
+        userRole: 'MEMBER',
+        ajo_group: 'Personal Better Ajo',
+        group_name: 'Personal Better Ajo',
         amount: amount,
+        gross_amount: amount,
         fee: fee,
         net_amount: netAmount,
         netPayout: netAmount,
         bank_name: bankName,
         account_number: accountNumber,
-        status: 'pending',
+        status: 'success',
+        type: 'personal_withdrawal',
+        withdrawal_type: 'personal',
         created_at: now,
-        createdAt: now
+        createdAt: now,
+        timestamp: now
       });
 
       // 4. Deduct total_saved: total_saved = total_saved - amount
