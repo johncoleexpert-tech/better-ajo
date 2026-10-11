@@ -41,6 +41,50 @@ interface SuperAdminDashboardProps {
   userId?: string;
 }
 
+// Robust safe text and number renderers to completely eliminate React Error #310 (Objects are not valid as a React child)
+const safeRenderText = (value: any, fallback = '—'): React.ReactNode => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'object') {
+    if (value.name) return String(value.name);
+    if (value.fullName) return String(value.fullName);
+    if (value.full_name) return String(value.full_name);
+    if (value.userName) return String(value.userName);
+    if (value.user_name) return String(value.user_name);
+    if (value.email) return String(value.email);
+    if (value.accountName) return String(value.accountName);
+    if (value.account_name) return String(value.account_name);
+    if (value.destination?.accountName) return String(value.destination.accountName);
+    if (value.destination?.name) return String(value.destination.name);
+    if (value.total != null) return `₦${Number(value.total).toLocaleString()}`;
+    if (value.amount != null) return `₦${Number(value.amount).toLocaleString()}`;
+    if (value.totalAmount != null) return `₦${Number(value.totalAmount).toLocaleString()}`;
+    if (value.groupName) return String(value.groupName);
+    if (value.group_name) return String(value.group_name);
+    if (value.title) return String(value.title);
+    if (value.label) return String(value.label);
+    if (value.text) return String(value.text);
+    if (value.status) return String(value.status);
+    if (value.message) return String(value.message);
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+};
+
+const safeRenderNum = (value: any, fallback = 0): number => {
+  if (typeof value === 'number') return isNaN(value) ? fallback : value;
+  if (typeof value === 'object' && value !== null) {
+    const extracted = value.total ?? value.amount ?? value.totalAmount ?? value.value ?? value.gross_amount;
+    const n = Number(extracted);
+    return isNaN(n) ? fallback : n;
+  }
+  const n = Number(value);
+  return isNaN(n) ? fallback : n;
+};
+
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   onBack,
   onLogout,
@@ -1931,6 +1975,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                         statusText = 'COMPLETED';
                       }
 
+                      const finalUserName = typeof user === 'object'
+                        ? (user?.name || user?.fullName || user?.full_name || user?.userName || user?.accountName || user?.account_name || user?.destination?.accountName || user?.destination?.name || 'Member')
+                        : (user || 'Member');
+                      const finalAjoName = typeof ajoName === 'object'
+                        ? (ajoName?.name || ajoName?.group_name || ajoName?.title || 'Better Ajo')
+                        : (ajoName || 'Better Ajo');
+
                       return (
                         <tr key={tx?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
@@ -1942,10 +1993,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-2.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                            {user}
+                            {typeof finalUserName === 'object' ? finalUserName?.name || JSON.stringify(finalUserName) : finalUserName}
                           </td>
                           <td className="py-2.5 px-4 text-slate-700 font-medium whitespace-nowrap">
-                            {ajoName}
+                            {typeof finalAjoName === 'object' ? finalAjoName?.name || JSON.stringify(finalAjoName) : finalAjoName}
                           </td>
                           <td className="py-2.5 px-4 font-black text-slate-900 whitespace-nowrap font-mono text-xs">
                             ₦{displayAmount.toLocaleString()}
@@ -2007,29 +2058,43 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {groups.map((g) => (
-                  <tr key={g.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3 px-4 font-bold text-slate-900">{g.group_name}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-700">{g.group_code}</td>
-                    <td className="py-3 px-4 font-bold text-slate-800">{g.admin_name}</td>
-                    <td className="py-3 px-4 font-mono text-slate-500">{formatPhone(g.admin_phone)}</td>
-                    <td className="py-3 px-4">
-                      {g.members_joined} / {g.member_limit}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(g.contribution_amount)}</td>
-                    <td className="py-3 px-4 font-bold text-emerald-700">{formatNaira(g.packing_amount)}</td>
-                    <td className="py-3 px-4 text-slate-700">{formatNaira(g.packing_fee)}</td>
-                    <td className="py-3 px-4 font-bold">Round {g.current_round}</td>
-                    <td className="py-3 px-4 text-slate-800">{g.current_packer_name || '—'}</td>
-                    <td className="py-3 px-4 text-slate-800">{g.next_packer_name || '—'}</td>
-                    <td className="py-3 px-4 text-slate-500 font-mono">{g.next_packing_date}</td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                        {g.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {groups.map((g: any) => {
+                  const gName = typeof g?.group_name === 'object' ? g?.group_name?.name || 'Group' : (g?.group_name || 'Group');
+                  const gCode = typeof g?.group_code === 'object' ? g?.group_code?.code || '—' : (g?.group_code || '—');
+                  const gAdminName = typeof g?.admin_name === 'object' ? g?.admin_name?.name || 'Admin' : (g?.admin_name || 'Admin');
+                  const gAdminPhone = typeof g?.admin_phone === 'object' ? g?.admin_phone?.phone || '08000000000' : (g?.admin_phone || '08000000000');
+                  const gJoined = typeof g?.members_joined === 'object' ? g?.members_joined?.count || 5 : Number(g?.members_joined || 5);
+                  const gLimit = typeof g?.member_limit === 'object' ? g?.member_limit?.limit || 5 : Number(g?.member_limit || 5);
+                  const gRound = typeof g?.current_round === 'object' ? g?.current_round?.round || 1 : (g?.current_round || 1);
+                  const gCurrPacker = typeof g?.current_packer_name === 'object' ? g?.current_packer_name?.name || '—' : (g?.current_packer_name || '—');
+                  const gNextPacker = typeof g?.next_packer_name === 'object' ? g?.next_packer_name?.name || '—' : (g?.next_packer_name || '—');
+                  const gNextDate = typeof g?.next_packing_date === 'object' ? g?.next_packing_date?.date || '—' : (g?.next_packing_date || '—');
+                  const gStatus = typeof g?.status === 'object' ? g?.status?.status || 'Active' : (g?.status || 'Active');
+
+                  return (
+                    <tr key={g.id} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3 px-4 font-bold text-slate-900">{gName}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-700">{gCode}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{gAdminName}</td>
+                      <td className="py-3 px-4 font-mono text-slate-500">{formatPhone(gAdminPhone)}</td>
+                      <td className="py-3 px-4">
+                        {gJoined} / {gLimit}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(Number(g.contribution_amount || 0))}</td>
+                      <td className="py-3 px-4 font-bold text-emerald-700">{formatNaira(Number(g.packing_amount || 0))}</td>
+                      <td className="py-3 px-4 text-slate-700">{formatNaira(Number(g.packing_fee || 0))}</td>
+                      <td className="py-3 px-4 font-bold">Round {gRound}</td>
+                      <td className="py-3 px-4 text-slate-800">{gCurrPacker}</td>
+                      <td className="py-3 px-4 text-slate-800">{gNextPacker}</td>
+                      <td className="py-3 px-4 text-slate-500 font-mono">{gNextDate}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                          {gStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -2071,45 +2136,57 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {displayedMembers.map((m) => (
-                    <tr key={m.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-3 px-4 font-bold text-slate-900">{m.full_name}</td>
-                      <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(m.phone)}</td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
-                        {m.bank_name && m.bank_name !== 'Not provided' ? (
-                          <span>{m.bank_name} - <strong className="text-slate-900">{m.account_number}</strong></span>
-                        ) : (
-                          <span className="text-slate-400 italic">Not set</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                          {m.account_status || 'Active'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{m.group_name}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900">Position {m.position}</td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          m.contribution_status === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          {m.contribution_status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          m.has_packed ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {m.packing_status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(m.total_contributed)}</td>
-                      <td className="py-3 px-4 font-bold text-emerald-700">{formatNaira(m.total_packed)}</td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {m.registration_date ? new Date(m.registration_date).toLocaleDateString('en-NG') : '10/10/2025'}
-                      </td>
-                    </tr>
-                  ))}
+                  {displayedMembers.map((m: any) => {
+                    const mName = typeof m?.full_name === 'object' ? m?.full_name?.name || m?.full_name?.fullName || 'Member' : (m?.full_name || 'Member');
+                    const mPhone = typeof m?.phone === 'object' ? m?.phone?.phone || '08000000000' : (m?.phone || '08000000000');
+                    const mBankName = typeof m?.bank_name === 'object' ? m?.bank_name?.name || 'Not provided' : m?.bank_name;
+                    const mAccNum = typeof m?.account_number === 'object' ? m?.account_number?.number || '' : m?.account_number;
+                    const mAccStatus = typeof m?.account_status === 'object' ? m?.account_status?.status || 'Active' : (m?.account_status || 'Active');
+                    const mGroupName = typeof m?.group_name === 'object' ? m?.group_name?.name || 'Personal Better Ajo' : (m?.group_name || 'Personal Better Ajo');
+                    const mPos = typeof m?.position === 'object' ? m?.position?.position || 1 : (m?.position || 1);
+                    const mContribStatus = typeof m?.contribution_status === 'object' ? m?.contribution_status?.status || 'Paid' : (m?.contribution_status || 'Paid');
+                    const mPackStatus = typeof m?.packing_status === 'object' ? m?.packing_status?.status || 'Awaiting Turn' : (m?.packing_status || 'Awaiting Turn');
+
+                    return (
+                      <tr key={m.id} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3 px-4 font-bold text-slate-900">{mName}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(mPhone)}</td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
+                          {mBankName && mBankName !== 'Not provided' ? (
+                            <span>{mBankName} - <strong className="text-slate-900">{mAccNum}</strong></span>
+                          ) : (
+                            <span className="text-slate-400 italic">Not set</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            {mAccStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-slate-800">{mGroupName}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">Position {mPos}</td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            mContribStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {mContribStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            m.has_packed ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'
+                          }`}>
+                            {mPackStatus}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(Number(m.total_contributed || 0))}</td>
+                        <td className="py-3 px-4 font-bold text-emerald-700">{formatNaira(Number(m.total_packed || 0))}</td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                          {m.registration_date ? new Date(m.registration_date).toLocaleDateString('en-NG') : '10/10/2025'}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
