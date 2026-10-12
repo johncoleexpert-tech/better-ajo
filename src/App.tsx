@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Lock } from 'lucide-react';
-import { Navbar } from './components/Navbar.js';
+import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer.js';
 import { HomeHero } from './components/HomeHero.js';
 import { AuthModal } from './components/AuthModal.js';
-import { PersonalRegistration } from './components/PersonalRegistration.js';
-import { PersonalDashboard } from './components/PersonalDashboard.js';
-import { GroupCreation } from './components/GroupCreation.js';
-import { GroupJoin } from './components/GroupJoin.js';
-import { GroupDashboard } from './components/GroupDashboard.js';
-import { GroupAdminDashboard } from './components/GroupAdminDashboard.js';
-import { SuperAdminDashboard } from './components/SuperAdminDashboard.js';
-import { DatabaseStatusModal } from './components/DatabaseStatusModal.js';
-import { InfoModal } from './components/InfoModals.js';
-import { LiveSupportChat } from './components/LiveSupportChat.js';
-import { ErrorBoundary } from './components/ErrorBoundary.js';
-import { UserProfile, PersonalAjo, GroupAjo } from './types/index.js';
-import { subscribeToUserPersonalBalance, db } from './lib/firebase.js';
+import { PersonalRegistration } from './components/PersonalRegistration';
+import { PersonalDashboard } from './components/PersonalDashboard';
+import { GroupCreation } from './components/GroupCreation';
+import { GroupJoin } from './components/GroupJoin';
+import { GroupDashboard } from './components/GroupDashboard';
+import { GroupAdminDashboard } from './components/GroupAdminDashboard';
+import { SuperAdminDashboard } from './components/SuperAdminDashboard';
+import { DatabaseStatusModal } from './components/DatabaseStatusModal';
+import { InfoModal } from './components/InfoModals';
+import { LiveSupportChat } from './components/LiveSupportChat';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { UserProfile, PersonalAjo, GroupAjo } from './types/index';
+import { subscribeToUserPersonalBalance, db } from './lib/firebase';
 import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
-import { getRevenue } from './lib/revenue.js';
+import { getRevenue } from './lib/revenue';
 
 export type AppView =
   | 'home'
