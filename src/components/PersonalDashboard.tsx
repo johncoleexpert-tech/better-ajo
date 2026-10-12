@@ -1,108 +1,302 @@
-// PersonalDashboard.tsx - FINAL SAFE - No Build Error sir - Virtual Account + 60 ON TOP + Personal Ajo sir
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { Wallet, Copy, Check, ShieldCheck, ArrowUpCircle, ArrowDownCircle, Info } from 'lucide-react';
 
-type Props = { userId?: string; userName?: string; };
-
-function formatNaira(n: number) {
-  try {
-    const { formatNaira: fmt } = require('../lib/formatters');
-    return fmt(n);
-  } catch {
-    return `₦${Number(n).toLocaleString()}`;
-  }
+interface Transaction {
+  id: string;
+  type: 'ACTIVATION' | 'DEPOSIT' | 'WITHDRAWAL';
+  amount: number;
+  fee: number;
+  net: number;
+  date: string;
+  status: 'SUCCESS' | 'SIMULATED';
 }
 
-export const PersonalDashboard: React.FC<Props> = ({ userId = "test_user", userName = "User" }) => {
-  const [goalName, setGoalName] = useState("");
-  const [targetAmount, setTargetAmount] = useState(100000);
-  const [amountToSave, setAmountToSave] = useState(5000);
-  const [savings, setSavings] = useState<any[]>([]);
-  const [totalSaved, setTotalSaved] = useState(0);
-  const [virtualAccount] = useState(`9${Math.floor(100000000 + Math.random()*900000000)}`);
-  const [bankName] = useState("Monnify - Wema Bank (Pending Docs sir)");
+export const PersonalAjoDashboard: React.FC<{ userId?: string }> = ({ userId = 'user_123' }) => {
+  // --- SIMULATION STATE SIR ---
+  const [isActivated, setIsActivated] = useState<boolean>(() => {
+    return localStorage.getItem(`personal_activated_${userId}`) === 'true';
+  });
+  const [virtualAccount] = useState<string>(() => {
+    const saved = localStorage.getItem(`personal_va_${userId}`);
+    if (saved) return saved;
+    const va = `9458${Math.floor(100000 + Math.random() * 900000)}`;
+    localStorage.setItem(`personal_va_${userId}`, va);
+    return va;
+  });
+  const [totalSaved, setTotalSaved] = useState<number>(() => Number(localStorage.getItem(`personal_balance_${userId}`) || 0));
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    const t = localStorage.getItem(`personal_tx_${userId}`);
+    return t? JSON.parse(t) : [];
+  });
 
+  const [saveAmount, setSaveAmount] = useState<string>('5000');
+  const [withdrawAmount, setWithdrawAmount] = useState<string>('');
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Save to localStorage simulation sir
   useEffect(() => {
-    if (!userId) return;
-    const q = query(collection(db, `users/${userId}/personal_savings`), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, snap => {
-      let total = 0; const list:any[]=[];
-      snap.forEach(d=>{ const data:any=d.data(); list.push({id:d.id,...data}); total+= data.amount||0; });
-      setSavings(list); setTotalSaved(total);
-    }, () => { /* ignore if no collection yet sir */ });
-    return () => unsub();
-  }, [userId]);
+    localStorage.setItem(`personal_balance_${userId}`, String(totalSaved));
+    localStorage.setItem(`personal_tx_${userId}`, JSON.stringify(transactions));
+  }, [totalSaved, transactions, userId]);
 
-  const handleDeposit = async () => {
-    if(!goalName) return alert("Enter goal name sir e.g Rent");
-    if(!userId) return alert("No userId sir");
-    try {
-      await addDoc(collection(db, `users/${userId}/personal_savings`), {
-        goalName: goalName.trim(),
-        amount: amountToSave,
-        targetAmount,
-        userId, userName,
-        type: "personal_deposit",
-        platformFee: 60,
-        platformFeeNote: `Full pot + 60 ON TOP sir`,
-        createdAt: serverTimestamp(),
-        virtualAccount, bankName,
-        monnifyStatus: "pending_documents"
-      });
-      await addDoc(collection(db, "contributions"), {
-        type: "personal_deposit",
-        amount: amountToSave,
-        userId, userName, goalName,
-        platformFee: 60,
-        createdAt: serverTimestamp(),
-      });
-      alert(`Saved ${formatNaira(amountToSave)} sir! You paid ${formatNaira(amountToSave+60)} total sir - ${formatNaira(amountToSave)} pot + ${formatNaira(60)} ON TOP sir`);
-    } catch(e:any) { alert("Error sir: " + e.message); }
+  // --- ACTIVATION LOGIC SIR - 600 NAIRA ONLY FOR PERSONAL AJO SIR ---
+  const handleSimulateActivation = async () => {
+    setLoading(true);
+    // Simulate API call sir
+    await new Promise(r => setTimeout(r, 1000));
+
+    // Mark activated sir
+    localStorage.setItem(`personal_activated_${userId}`, 'true');
+    setIsActivated(true);
+
+    const tx: Transaction = {
+      id: Date.now().toString(),
+      type: 'ACTIVATION',
+      amount: 600,
+      fee: 0,
+      net: 600,
+      date: new Date().toISOString(),
+      status: 'SIMULATED'
+    };
+    setTransactions(prev => [tx,...prev]);
+
+    // Simulate Super Admin Stream 1 increase sir - Call your real API when ready sir
+    // fetch('/api/super-admin-wallet', { method: 'POST', body: JSON.stringify({ stream: 1, amount: 600 }) })
+    console.log('SIMULATION: Stream 1 +600 - Personal Activation');
+
+    setLoading(false);
   };
 
-  const handleActivation = async () => {
-    try {
-      await addDoc(collection(db, "contributions"), { type: "activation", amount: 600, userId, userName, createdAt: serverTimestamp() });
-      alert("Activated! 600 Stream 1 sir");
-    } catch(e:any){ alert(e.message); }
+  // --- SAVE LOGIC SIR - 60 NAIRA FEE ON TOP SIR ---
+  const handleSimulateSave = async () => {
+    const amt = Number(saveAmount);
+    if (!amt || amt < 100) return;
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 800));
+
+    const fee = 60; // Stream 2 sir
+    const totalPay = amt + fee;
+
+    setTotalSaved(prev => prev + amt);
+
+    const tx: Transaction = {
+      id: Date.now().toString(),
+      type: 'DEPOSIT',
+      amount: amt,
+      fee: fee,
+      net: totalPay,
+      date: new Date().toISOString(),
+      status: 'SIMULATED'
+    };
+    setTransactions(prev => [tx,...prev]);
+
+    // Stream 2 sir
+    console.log(`SIMULATION: Stream 2 +${fee} - Saving ${amt} => User paid ${totalPay}`);
+
+    setLoading(false);
   };
 
-  return (
-    <div className="p-4 space-y-5 max-w-2xl mx-auto bg-gray-50 min-h-screen">
-      <h2 className="text-xl font-bold">Personal Ajo - Save Better sir</h2>
+  // --- WITHDRAWAL LOGIC SIR - 1.6% FEE TO STREAM 4 SIR ---
+  const handleSimulateWithdraw = async () => {
+    const amt = Number(withdrawAmount);
+    if (!amt || amt > totalSaved || amt < 100) return;
+    setLoading(true);
+    await new Promise(r => setTimeout(r, 800));
 
-      <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white p-5 rounded-2xl space-y-2">
-        <p className="text-sm">Your Personal Virtual Account sir (Personal Savings)</p>
-        <p className="text-3xl font-mono font-bold">{virtualAccount}</p>
-        <p className="text-sm">{bankName}</p>
-        <p className="text-xs opacity-80">{userName} - Deposit here sir</p>
-        <button onClick={()=>{navigator.clipboard.writeText(virtualAccount); alert("Copied sir: "+virtualAccount);}} className="bg-white text-green-700 px-4 py-2 rounded-full text-sm font-bold">Copy Account sir</button>
-        <p className="text-[10px]">Monnify Pending Docs sir - Structure Ready sir</p>
-      </div>
+    const feePercent = 1.6;
+    const fee = Number((amt * feePercent / 100).toFixed(2)); // Stream 4 sir
+    const netToUser = amt - fee;
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white p-4 rounded-xl shadow"><p className="text-xs text-gray-500">Total Saved</p><p className="text-xl font-bold">{formatNaira(totalSaved)}</p><p className="text-[10px]">Full pot sir</p></div>
-        <div className="bg-white p-4 rounded-xl shadow"><p className="text-xs text-gray-500">Target</p><p className="text-xl font-bold">{formatNaira(targetAmount)}</p><p className="text-[10px]">{Math.round((totalSaved/targetAmount)*100)||0}% done sir</p></div>
-      </div>
+    setTotalSaved(prev => prev - amt);
 
-      <div className="bg-white p-5 rounded-xl shadow space-y-4">
-        <input className="w-full border p-3 rounded-xl" placeholder="Goal Name - e.g Rent, School Fees" value={goalName} onChange={e=>setGoalName(e.target.value)} />
-        <div className="grid grid-cols-2 gap-3">
-          <div><label className="text-xs font-bold">Target Amount</label><input className="w-full border p-3 rounded-xl" type="number" value={targetAmount} onChange={e=>setTargetAmount(Number(e.target.value))} /></div>
-          <div><label className="text-xs font-bold">Amount to Save</label><input className="w-full border p-3 rounded-xl" type="number" value={amountToSave} onChange={e=>setAmountToSave(Number(e.target.value))} /><p className="text-[11px] text-blue-600 mt-1">Pay {formatNaira(amountToSave+60)} sir - {formatNaira(amountToSave)} pot + 60 ON TOP sir</p></div>
+    const tx: Transaction = {
+      id: Date.now().toString(),
+      type: 'WITHDRAWAL',
+      amount: amt,
+      fee: fee,
+      net: netToUser,
+      date: new Date().toISOString(),
+      status: 'SIMULATED'
+    };
+    setTransactions(prev => [tx,...prev]);
+
+    // Stream 4 sir
+    console.log(`SIMULATION: Stream 4 +${fee} - Withdraw ${amt} => User gets ${netToUser} (1.6% fee)`);
+
+    setWithdrawAmount('');
+    setLoading(false);
+  };
+
+  const copyAccount = () => {
+    navigator.clipboard.writeText(virtualAccount);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // --- ACTIVATION GATE SIR - BEFORE DASHBOARD SIR ---
+  if (!isActivated) {
+    return (
+      <div className="max-w-2xl mx-auto p-4 sm:p-6">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center">
+          <div className="h-14 w-14 mx-auto rounded-2xl bg-[#008751]/10 text-[#008751] flex items-center justify-center mb-4">
+            <ShieldCheck className="h-7 w-7" />
+          </div>
+          <h2 className="text-xl font-black text-slate-900">Activate Personal Ajo</h2>
+          <p className="text-sm text-slate-600 mt-2 max-w-md mx-auto">
+            Your personal savings account. Save anytime, withdraw anytime. Secure virtual account just for you.
+          </p>
+
+          <div className="mt-6 bg-slate-50 rounded-xl p-4 text-left text-sm border border-slate-200">
+            <div className="font-bold text-slate-900 mb-2 flex items-center gap-2"><Info className="h-4 w-4" /> What you get after activation:</div>
+            <ul className="space-y-1.5 text-slate-700">
+              <li>✅ Your own 10-digit Wema Bank virtual account</li>
+              <li>✅ Save anytime - ₦60 fee on top of any amount</li>
+              <li>✅ Withdraw anytime - 1.6% fee goes to Stream 4</li>
+              <li>✅ No Goal, No Target - Just your personal pot</li>
+            </ul>
+          </div>
+
+          <div className="mt-6 p-4 rounded-xl bg-[#E6F3ED] border border-[#008751]/20">
+            <div className="text-xs text-slate-600">One-time Activation Fee</div>
+            <div className="text-3xl font-black text-[#008751]">₦600</div>
+            <div className="text-[11px] text-slate-500 mt-1">Lifetime access - Group members don't pay this</div>
+          </div>
+
+          <button
+            onClick={handleSimulateActivation}
+            disabled={loading}
+            className="mt-6 w-full py-3.5 rounded-xl bg-[#008751] text-white font-bold text-sm shadow-md hover:bg-[#007345] disabled:opacity-50 transition"
+          >
+            {loading? 'Activating...' : 'Pay ₦600 to Activate (Simulate)'}
+          </button>
+
+          <p className="text-[10px] text-slate-400 mt-3">
+            SIMULATION MODE: Clicking simulates payment. When you connect real Monnify, this will be real Paystack/Monnify checkout. ₦600 goes to Super Admin Stream 1.
+          </p>
         </div>
-        <button onClick={handleDeposit} className="w-full bg-black text-white p-4 rounded-full font-bold">Save {formatNaira(amountToSave)} Now sir</button>
-        <button onClick={handleActivation} className="w-full bg-gray-100 p-3 rounded-full text-sm">Activate Personal Ajo - 600 once sir</button>
+      </div>
+    );
+  }
+
+  // --- MAIN DASHBOARD SIR - PROFESSIONAL, NO GOAL/TARGET SIR ---
+  return (
+    <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
+      {/* Header sir - Professional sir */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-black text-slate-900 flex items-center gap-2">
+            <Wallet className="h-5 w-5 text-[#008751]" /> Personal Ajo
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">Your personal savings - Private & Secure</p>
+        </div>
+        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">ACTIVE</span>
       </div>
 
-      <div className="bg-white rounded-xl shadow p-4">
-        <h3 className="font-bold mb-2">My Savings History sir</h3>
-        {savings.map((s:any)=><div key={s.id} className="flex justify-between border-b py-2 text-sm"><span>{s.goalName}</span><span className="font-bold">{formatNaira(s.amount)} + 60 sir</span></div>)}
-        {savings.length===0 && <p className="text-center text-xs py-4">No savings yet sir</p>}
+      {/* Virtual Account Card sir - Simulation sir */}
+      <div className="bg-gradient-to-br from-[#008751] to-[#007345] rounded-2xl p-5 text-white shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="text-xs opacity-80">Personal Virtual Account</div>
+          <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/20">SIMULATED</div>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="text-2xl font-black tracking-wider">{virtualAccount}</div>
+          <button onClick={copyAccount} className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 transition">
+            {copied? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          </button>
+        </div>
+        <div className="text-xs mt-1 opacity-80">Monnify - Wema Bank • Transfer to this account to save (simulated)</div>
+        <div className="mt-3 text-[11px] opacity-70">When you connect real Monnify, this becomes real account number. Copy works same way.</div>
+      </div>
+
+      {/* Balance Cards sir */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="text-xs text-slate-500">Total Saved</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">₦{totalSaved.toLocaleString()}</div>
+          <div className="text-[11px] text-slate-400 mt-1">Available to withdraw</div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="text-xs text-slate-500">Simulation Notice</div>
+          <div className="text-xs text-slate-700 mt-1 leading-relaxed">
+            All deposits/withdrawals are simulated now. Real Monnify webhook will replace <code>handleSimulateSave</code> later. No Goal/Target logic.
+          </div>
+        </div>
+      </div>
+
+      {/* Save Money sir - 60 fee sir */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><ArrowUpCircle className="h-4 w-4 text-[#008751]" /> Save Money</h3>
+        <div className="mt-4 flex gap-3">
+          <input
+            type="number"
+            value={saveAmount}
+            onChange={(e) => setSaveAmount(e.target.value)}
+            className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#008751]/20 focus:border-[#008751]"
+            placeholder="Amount to save"
+          />
+          <button
+            onClick={handleSimulateSave}
+            disabled={loading}
+            className="px-5 py-3 rounded-xl bg-[#008751] text-white font-bold text-xs hover:bg-[#007345] disabled:opacity-50 transition"
+          >
+            {loading? '...' : `Save ₦${Number(saveAmount||0).toLocaleString()} (Pay ₦${(Number(saveAmount||0)+60).toLocaleString()})`}
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">You pay amount + ₦60 fee on top. ₦60 goes to Super Admin Stream 2. Same for group contributions.</p>
+      </div>
+
+      {/* Withdraw Money sir - 1.6% fee Stream 4 sir */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2"><ArrowDownCircle className="h-4 w-4 text-rose-600" /> Withdraw Money</h3>
+        <div className="mt-4 flex gap-3">
+          <input
+            type="number"
+            value={withdrawAmount}
+            onChange={(e) => setWithdrawAmount(e.target.value)}
+            className="flex-1 px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-rose-200 focus:border-rose-400"
+            placeholder="Amount to withdraw"
+            max={totalSaved}
+          />
+          <button
+            onClick={handleSimulateWithdraw}
+            disabled={loading ||!withdrawAmount || Number(withdrawAmount) > totalSaved}
+            className="px-5 py-3 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-black disabled:opacity-40 transition"
+          >
+            {withdrawAmount? `Withdraw ₦${Number(withdrawAmount).toLocaleString()} (Fee 1.6% = ₦${(Number(withdrawAmount)*0.016).toFixed(0)})` : 'Withdraw'}
+          </button>
+        </div>
+        {withdrawAmount && (
+          <p className="text-[11px] text-slate-600 mt-2">
+            You withdraw ₦{Number(withdrawAmount).toLocaleString()} - Fee ₦{(Number(withdrawAmount)*0.016).toFixed(2)} (1.6%) goes to Stream 4 - You receive ₦{(Number(withdrawAmount)*0.984).toFixed(2)}
+          </p>
+        )}
+      </div>
+
+      {/* Transaction History sir */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <h3 className="text-sm font-bold text-slate-900">Transaction History (Simulated)</h3>
+        <div className="mt-4 space-y-2 max-h-64 overflow-y-auto">
+          {transactions.length === 0 && <div className="text-xs text-slate-400 text-center py-8">No transactions yet - Activate and simulate a save</div>}
+          {transactions.map(tx => (
+            <div key={tx.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div>
+                <div className="text-xs font-bold text-slate-900">{tx.type} - {tx.status}</div>
+                <div className="text-[11px] text-slate-500">{new Date(tx.date).toLocaleString()}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs font-bold text-slate-900">Amount: ₦{tx.amount.toLocaleString()} | Fee: ₦{tx.fee.toLocaleString()}</div>
+                <div className="text-[11px] text-slate-600">Net: ₦{tx.net.toLocaleString()} {tx.type === 'WITHDRAWAL'? `(You get ₦${tx.net.toLocaleString()})` : ''}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* For Real Monnify sir - Note */}
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-[11px] text-amber-800">
+        <b>To connect real Monnify sir:</b> Replace <code>handleSimulateActivation</code> with real Paystack checkout for ₦600, replace <code>virtualAccount</code> with real API response <code>res.accountNumber</code>, replace <code>handleSimulateSave</code> with webhook listener. Keep UI same. Streams already logged.
       </div>
     </div>
   );
 };
-
-export default PersonalDashboard;
