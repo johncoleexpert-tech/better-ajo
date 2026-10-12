@@ -42,14 +42,139 @@ interface SuperAdminDashboardProps {
   userId?: string;
 }
 
-// Robust safe text and number renderers to completely eliminate React Error #310 (Objects are not valid as a React child)
-export const safeText = (v: any): React.ReactNode => {
+export const ultraSafe = (v: any): string => {
   if (v === null || v === undefined) return '-';
+  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v);
   if (typeof v === 'object') {
-    return v?.name || v?.full_name || v?.fullName || v?.accountName || v?.account_name || v?.bankName || v?.bank_name || v?.group_name || v?.groupName || v?.userName || v?.user_name || (typeof v?.destination === 'object' ? (v?.destination?.accountName || v?.destination?.name || JSON.stringify(v?.destination)) : v?.destination) || JSON.stringify(v);
+    if (Array.isArray(v)) return v.map(ultraSafe).join(', ');
+    return (
+      v.name ||
+      v.full_name ||
+      v.fullName ||
+      v.accountName ||
+      v.bankName ||
+      v.group_name ||
+      v.groupName ||
+      v.account_name ||
+      v.userName ||
+      v.user_name ||
+      v.email ||
+      v.destination?.accountName ||
+      v.destination?.name ||
+      v.bank_name ||
+      v.status ||
+      (typeof JSON !== 'undefined' ? JSON.stringify(v).slice(0, 100) : '-')
+    );
   }
-  return v;
+  return String(v);
 };
+
+export const safeText = (v: any): string => ultraSafe(v);
+
+interface InnerErrorBoundaryProps {
+  children: React.ReactNode;
+  onNavigateHome: () => void;
+  resetLogs: string;
+  resetDone: boolean;
+  setShowResetConfirm: (v: boolean) => void;
+  setResetText: (v: string) => void;
+}
+
+interface InnerErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class SuperAdminInnerErrorBoundary extends React.Component<InnerErrorBoundaryProps, InnerErrorBoundaryState> {
+  constructor(props: InnerErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): InnerErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('SuperAdminDashboard inner render crash caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="space-y-6">
+          <div className="p-6 rounded-3xl bg-amber-50 border-2 border-amber-300 text-amber-950">
+            <div className="flex items-center gap-3 mb-2">
+              <AlertCircle className="h-6 w-6 text-amber-600 shrink-0" />
+              <h2 className="text-lg font-black tracking-tight">Safe Mode: {ultraSafe(this.state.error?.message || 'Render exception')}</h2>
+            </div>
+            <p className="text-xs text-amber-800">
+              A rendering exception occurred inside the inner Super Admin view. Danger Zone and database reset controls remain fully accessible below.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-sm cursor-pointer"
+              >
+                Retry Dashboard
+              </button>
+              <button
+                onClick={this.props.onNavigateHome}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs cursor-pointer"
+              >
+                Return Home
+              </button>
+            </div>
+          </div>
+
+          {/* DANGER ZONE - Fresh Start - Permanent Database Reset */}
+          <div className="mb-6 rounded-3xl bg-rose-50/80 border-2 border-rose-300 p-5 sm:p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="h-10 w-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-rose-600/20">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-rose-950 flex items-center gap-2">
+                    DANGER ZONE — Fresh Start & Permanent Database Reset
+                  </h3>
+                  <p className="text-xs text-rose-700 mt-1 max-w-2xl leading-relaxed">
+                    Current data will be <strong>PERMANENTLY deleted</strong> from Firebase Firestore Database — NOT local storage.
+                    Will NOT come back after refresh. After reset: <strong>0 groups, 0 transactions, 0 members, 4 streams ₦0</strong> so you can test personal & group Ajo flows cleanly from scratch.
+                  </p>
+                  {this.props.resetDone && (
+                    <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      <span>✅ Reset Complete — Database empty — Everything ZERO — Now register fresh to test 600, 60, 33.33%, 1.6%</span>
+                    </div>
+                  )}
+                  {this.props.resetLogs && (
+                    <div className="mt-3">
+                      <div className="text-[11px] font-bold text-slate-700 mb-1">Reset Execution Log:</div>
+                      <pre className="text-[10px] font-mono bg-slate-900 text-emerald-400 p-3 rounded-xl max-h-40 overflow-y-auto whitespace-pre-wrap">
+                        {ultraSafe(this.props.resetLogs)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  this.props.setResetText('');
+                  this.props.setShowResetConfirm(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs transition shadow-md shadow-rose-600/20 cursor-pointer whitespace-nowrap self-start sm:self-center"
+              >
+                RESET EVERYTHING TO ZERO — Delete All Data Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const safeRenderText = (value: any, fallback = '—'): React.ReactNode => {
   if (value === null || value === undefined) return fallback;
@@ -1518,7 +1643,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 px-5 py-3.5 text-xs font-semibold text-white shadow-xl animate-fade-in border border-slate-700">
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-          <span className="flex-1">{toastMessage}</span>
+          <span className="flex-1">{ultraSafe(toastMessage)}</span>
           <button
             onClick={() => setToastMessage(null)}
             className="ml-2 text-slate-400 hover:text-white transition font-bold text-sm cursor-pointer p-0.5"
@@ -1632,7 +1757,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <div className="mt-3">
                   <div className="text-[11px] font-bold text-slate-700 mb-1">Reset Execution Log:</div>
                   <pre className="text-[10px] font-mono bg-slate-900 text-emerald-400 p-3 rounded-xl max-h-40 overflow-y-auto whitespace-pre-wrap">
-                    {resetLogs}
+                    {ultraSafe(resetLogs)}
                   </pre>
                 </div>
               )}
@@ -1650,15 +1775,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         </div>
       </div>
 
+      <SuperAdminInnerErrorBoundary
+        onNavigateHome={onBack}
+        resetLogs={resetLogs}
+        resetDone={resetDone}
+        setShowResetConfirm={setShowResetConfirm}
+        setResetText={setResetText}
+      >
       {/* Metrics Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
         <div className="rounded-2xl bg-white border border-slate-200/80 p-4 shadow-xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
             Total Users
           </span>
-          <span className="text-xl font-black text-slate-900 block">{liveTotalUsers}</span>
+          <span className="text-xl font-black text-slate-900 block">{ultraSafe(liveTotalUsers)}</span>
           <span className="text-[10px] text-slate-500 mt-1 block font-medium">
-            {liveInGroupsCount} in groups
+            {ultraSafe(liveInGroupsCount)} in groups
           </span>
         </div>
 
@@ -1666,9 +1798,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
             Total Groups
           </span>
-          <span className="text-xl font-black text-slate-900 block">{liveGroupsCount}</span>
+          <span className="text-xl font-black text-slate-900 block">{ultraSafe(liveGroupsCount)}</span>
           <span className="text-[10px] text-slate-500 mt-1 block font-medium">
-            {liveInGroupsCount} active members
+            {ultraSafe(liveInGroupsCount)} active members
           </span>
         </div>
 
@@ -1737,7 +1869,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto">
         {[
           { id: 'overview', label: 'Platform Overview' },
-          { id: 'groups', label: `All Groups (${liveGroupsCount})` },
+          { id: 'groups', label: `All Groups (${ultraSafe(liveGroupsCount)})` },
           { id: 'members', label: `All Members (${displayedMembers.length})` },
           { id: 'payments', label: `Payments (${(paymentList || []).length})` },
           { id: 'packings', label: `Packing Payouts (${displayedPackings.length})` },
@@ -1928,7 +2060,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   <option value="personal">Personal Ajo</option>
                   {(groups || []).map((g: any) => (
                     <option key={g.id} value={g.id}>
-                      {g.group_name || g.name} {g.contribution_amount ? `- ₦${Number(g.contribution_amount).toLocaleString()}` : ''}
+                      {ultraSafe(g.group_name || g.name)} {g.contribution_amount ? `- ₦${Number(g.contribution_amount).toLocaleString()}` : ''}
                     </option>
                   ))}
                 </select>
@@ -1995,25 +2127,25 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       return (
                         <tr key={tx?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                            {dateFormatted}
+                            {ultraSafe(dateFormatted)}
                           </td>
                           <td className="py-2.5 px-4">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${typeBadgeClass}`}>
-                              {typeBadgeText}
+                              {ultraSafe(typeBadgeText)}
                             </span>
                           </td>
                           <td className="py-2.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                            {safeText(finalUserName)}
+                            {ultraSafe(finalUserName)}
                           </td>
                           <td className="py-2.5 px-4 text-slate-700 font-medium whitespace-nowrap">
-                            {safeText(finalAjoName)}
+                            {ultraSafe(finalAjoName)}
                           </td>
                           <td className="py-2.5 px-4 font-black text-slate-900 whitespace-nowrap font-mono text-xs">
                             ₦{displayAmount.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-4">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${statusBadgeClass}`}>
-                              {statusText}
+                              {ultraSafe(statusText)}
                             </span>
                           </td>
                         </tr>
@@ -2083,23 +2215,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
                   return (
                     <tr key={g.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-3 px-4 font-bold text-slate-900">{safeText(gName)}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-emerald-700">{safeText(gCode)}</td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{safeText(gAdminName)}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{formatPhone(safeText(gAdminPhone) as string)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{ultraSafe(gName)}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-700">{ultraSafe(gCode)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{ultraSafe(gAdminName)}</td>
+                      <td className="py-3 px-4 font-mono text-slate-500">{formatPhone(ultraSafe(gAdminPhone) as string)}</td>
                       <td className="py-3 px-4">
-                        {safeText(gJoined)} / {safeText(gLimit)}
+                        {ultraSafe(gJoined)} / {ultraSafe(gLimit)}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(Number(g.contribution_amount || 0))}</td>
                       <td className="py-3 px-4 font-bold text-emerald-700">{formatNaira(Number(g.packing_amount || 0))}</td>
                       <td className="py-3 px-4 text-slate-700">{formatNaira(Number(g.packing_fee || 0))}</td>
-                      <td className="py-3 px-4 font-bold">Round {safeText(gRound)}</td>
-                      <td className="py-3 px-4 text-slate-800">{safeText(gCurrPacker)}</td>
-                      <td className="py-3 px-4 text-slate-800">{safeText(gNextPacker)}</td>
-                      <td className="py-3 px-4 text-slate-500 font-mono">{safeText(gNextDate)}</td>
+                      <td className="py-3 px-4 font-bold">Round {ultraSafe(gRound)}</td>
+                      <td className="py-3 px-4 text-slate-800">{ultraSafe(gCurrPacker)}</td>
+                      <td className="py-3 px-4 text-slate-800">{ultraSafe(gNextPacker)}</td>
+                      <td className="py-3 px-4 text-slate-500 font-mono">{ultraSafe(gNextDate)}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {safeText(gStatus)}
+                          {ultraSafe(gStatus)}
                         </span>
                       </td>
                     </tr>
@@ -2159,34 +2291,34 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4 font-bold text-slate-900">{safeText(mName)}</td>
-                        <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(safeText(mPhone) as string)}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">{ultraSafe(mName)}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(ultraSafe(mPhone) as string)}</td>
                         <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
                           {mBankName && mBankName !== 'Not provided' ? (
-                            <span>{safeText(mBankName)} - <strong className="text-slate-900">{safeText(mAccNum)}</strong></span>
+                            <span>{ultraSafe(mBankName)} - <strong className="text-slate-900">{ultraSafe(mAccNum)}</strong></span>
                           ) : (
                             <span className="text-slate-400 italic">Not set</span>
                           )}
                         </td>
                         <td className="py-3 px-4">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            {safeText(mAccStatus)}
+                            {ultraSafe(mAccStatus)}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-bold text-slate-800">{safeText(mGroupName)}</td>
-                        <td className="py-3 px-4 font-bold text-slate-900">Position {safeText(mPos)}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800">{ultraSafe(mGroupName)}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">Position {ultraSafe(mPos)}</td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             mContribStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                           }`}>
-                            {safeText(mContribStatus)}
+                            {ultraSafe(mContribStatus)}
                           </span>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             m.has_packed ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'
                           }`}>
-                            {safeText(mPackStatus)}
+                            {ultraSafe(mPackStatus)}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(Number(m.total_contributed || 0))}</td>
@@ -2266,13 +2398,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     return (
                       <tr key={p?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
                         <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                          {dateFormatted}
+                          {ultraSafe(dateFormatted)}
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
-                          {safeText(userName)}
+                          {ultraSafe(userName)}
                         </td>
                         <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
-                          {safeText(ajoName)}
+                          {ultraSafe(ajoName)}
                         </td>
                         <td className="py-3 px-4">
                           {isPackPayout ? (
@@ -2318,7 +2450,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}>
-                            {safeText(typeof p?.status === 'object' ? p?.status?.status : (p?.status || 'completed'))}
+                            {ultraSafe(typeof p?.status === 'object' ? p?.status?.status : (p?.status || 'completed'))}
                           </span>
                         </td>
                       </tr>
@@ -2371,9 +2503,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
                         {p.date ? new Date(p.date).toLocaleDateString('en-NG') : '10/10/2025'}
                       </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{safeText(pGroupName)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{ultraSafe(pGroupName)}</td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {safeText(pMemberName)} (Pos {safeText(pPosition)})
+                        {ultraSafe(pMemberName)} (Pos {ultraSafe(pPosition)})
                       </td>
                       <td className="py-3 px-4 font-black text-slate-900">{formatNaira(Number(p.packed_amount || 0))}</td>
                       <td className="py-3 px-4 text-slate-700">{formatNaira(Number(p.packing_fee || 0))}</td>
@@ -2381,10 +2513,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <td className="py-3 px-4 font-black text-blue-700">{formatNaira(Number(p.group_admin_share || 0))}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {safeText(pStatus)}
+                          {ultraSafe(pStatus)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{safeText(pRef)}</td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{ultraSafe(pRef)}</td>
                     </tr>
                   );
                 })}
@@ -2411,7 +2543,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
             <div className="flex items-center gap-1.5 flex-wrap">
               {(['all', 'pending', 'processing', 'successful', 'failed'] as const).map((st) => (
                 <button
-                  key={st}
+                  key={ultraSafe(st)}
                   onClick={() => setWithdrawalStatusFilter(st)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold capitalize transition cursor-pointer ${
                     withdrawalStatusFilter === st
@@ -2419,7 +2551,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  {st}
+                  {ultraSafe(st)}
                 </button>
               ))}
             </div>
@@ -2467,7 +2599,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     return (
                       <tr key={w?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
                         <td className="py-3 px-4 font-bold text-slate-900">
-                          {safeText(userName)}
+                          {ultraSafe(userName)}
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
@@ -2477,11 +2609,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-slate-100 text-slate-700'
                           }`}>
-                            {safeText(roleVal)}
+                            {ultraSafe(roleVal)}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-700 font-medium">
-                          {safeText(groupName)}
+                          {ultraSafe(groupName)}
                         </td>
                         <td className="py-3 px-4 font-black text-slate-900">{formatNaira(grossAmt)}</td>
                         <td className="py-3 px-4 font-mono font-bold text-rose-600">
@@ -2489,7 +2621,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                         </td>
                         <td className="py-3 px-4 font-mono font-black text-[#008751]">{formatNaira(netPayout)}</td>
                         <td className="py-3 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                          {dateFormatted}
+                          {ultraSafe(dateFormatted)}
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -2499,7 +2631,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-rose-100 text-rose-800'
                           }`}>
-                            {safeText(statusVal)}
+                            {ultraSafe(statusVal)}
                           </span>
                         </td>
                       </tr>
@@ -2571,23 +2703,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-white via-slate-50/50 to-white">
                       <div className="flex items-start sm:items-center gap-3">
                         <div className="h-11 w-11 rounded-2xl bg-[#E6F3ED] text-[#008751] font-black flex items-center justify-center shrink-0 text-sm">
-                          {gaInitial}
+                          {ultraSafe(gaInitial)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-black text-slate-900">{safeText(gaName)}</h4>
+                            <h4 className="text-sm font-black text-slate-900">{ultraSafe(gaName)}</h4>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              {safeText(gaStatus)}
+                              {ultraSafe(gaStatus)}
                             </span>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                              {safeText(gaOwnedCount)} {gaOwnedCount === 1 ? 'Group' : 'Groups'} Managed
+                              {ultraSafe(gaOwnedCount)} {gaOwnedCount === 1 ? 'Group' : 'Groups'} Managed
                             </span>
                           </div>
                           <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap font-medium">
-                            <span className="font-mono text-slate-700">{formatPhone(safeText(ga.phone) as string)}</span>
+                            <span className="font-mono text-slate-700">{formatPhone(ultraSafe(ga.phone) as string)}</span>
                             <span>•</span>
                             <span className="font-mono text-[11px]">
-                              Bank: <strong className="text-slate-800">{safeText(gaBankName)} ({safeText(gaAccNum)})</strong>
+                              Bank: <strong className="text-slate-800">{ultraSafe(gaBankName)} ({ultraSafe(gaAccNum)})</strong>
                             </span>
                           </div>
                         </div>
@@ -2617,7 +2749,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     {isExpanded && (
                       <div className="border-t border-slate-100 p-5 bg-slate-50/40">
                         <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-3">
-                          Groups Managed by {gaName} ({adminGroups.length})
+                          Groups Managed by {ultraSafe(gaName)} ({ultraSafe(adminGroups.length)})
                         </h5>
 
                         {adminGroups.length > 0 ? (
@@ -2651,9 +2783,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                   return (
                                     <tr key={grp.group_id} className="hover:bg-slate-50/70 transition">
                                       <td className="py-3 px-3">
-                                        <div className="font-bold text-slate-900">{safeText(grpName)}</div>
+                                        <div className="font-bold text-slate-900">{ultraSafe(grpName)}</div>
                                         <div className="font-mono text-[10px] text-emerald-700 font-bold tracking-wider">
-                                          Code: {safeText(grpCode)}
+                                          Code: {ultraSafe(grpCode)}
                                         </div>
                                       </td>
                                       <td className="py-3 px-3">
@@ -2664,19 +2796,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                             ? 'bg-purple-100 text-purple-800'
                                             : 'bg-amber-100 text-amber-800'
                                         }`}>
-                                          {safeText(grpStatus === 'active' ? 'Active' : grpStatus === 'round_completed' ? 'Round Completed' : 'Recruiting')}
+                                          {ultraSafe(grpStatus === 'active' ? 'Active' : grpStatus === 'round_completed' ? 'Round Completed' : 'Recruiting')}
                                         </span>
                                       </td>
                                       <td className="py-3 px-3">
-                                        <span className="font-bold text-slate-800">{safeText(grpJoined)}</span>
-                                        <span className="text-slate-400 font-normal"> / {safeText(grpLimit)} members</span>
+                                        <span className="font-bold text-slate-800">{ultraSafe(grpJoined)}</span>
+                                        <span className="text-slate-400 font-normal"> / {ultraSafe(grpLimit)} members</span>
                                       </td>
                                       <td className="py-3 px-3 font-bold text-slate-900">
                                         {formatNaira(Number(grp.contribution_amount || 0))}
                                       </td>
                                       <td className="py-3 px-3">
                                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
-                                          {safeText(grpCycle)}
+                                          {ultraSafe(grpCycle)}
                                         </span>
                                       </td>
                                       <td className="py-3 px-4 font-bold text-slate-800">
@@ -2687,16 +2819,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                       </td>
                                       <td className="py-3 px-3">
                                         <div className="text-[11px] space-y-0.5">
-                                          <div><span className="text-slate-400">Round:</span> <strong className="text-slate-800">Round {safeText(grpRound)}</strong></div>
+                                          <div><span className="text-slate-400">Round:</span> <strong className="text-slate-800">Round {ultraSafe(grpRound)}</strong></div>
                                           {grpCurrPacker && (
-                                            <div><span className="text-slate-400">Current Packer:</span> <strong className="text-emerald-700">{safeText(grpCurrPacker)}</strong></div>
+                                            <div><span className="text-slate-400">Current Packer:</span> <strong className="text-emerald-700">{ultraSafe(grpCurrPacker)}</strong></div>
                                           )}
                                           {grpNextPacker && (
-                                            <div><span className="text-slate-400">Next Packer:</span> <strong className="text-purple-700">{safeText(grpNextPacker)}</strong></div>
+                                            <div><span className="text-slate-400">Next Packer:</span> <strong className="text-purple-700">{ultraSafe(grpNextPacker)}</strong></div>
                                           )}
                                           {grpNextDate && (
                                             <div className="text-slate-500 text-[10px]">
-                                              Next Pack: <span className="font-mono font-medium">{safeText(grpNextDate)}</span>
+                                              Next Pack: <span className="font-mono font-medium">{ultraSafe(grpNextDate)}</span>
                                             </div>
                                           )}
                                         </div>
@@ -2951,7 +3083,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-2.5 px-4 text-slate-800 font-medium">
-                            {safeText(entryParty)}
+                            {ultraSafe(entryParty)}
                           </td>
                           <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px]">
                             {entry.gross_amount ? formatNaira(Number(entry.gross_amount)) : '—'}
@@ -2963,7 +3095,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             {entry.balance_after != null ? formatNaira(Number(entry.balance_after)) : '—'}
                           </td>
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                            {safeText(entryRef)}
+                            {ultraSafe(entryRef)}
                           </td>
                         </tr>
                       );
@@ -2985,12 +3117,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
                             {b.date ? new Date(b.date).toLocaleDateString('en-NG') : '—'}
                           </td>
-                          <td className="py-2.5 px-4 font-bold text-slate-900">{safeText(bSource)}</td>
-                          <td className="py-2.5 px-4 text-slate-700">{safeText(bDesc)}</td>
+                          <td className="py-2.5 px-4 font-bold text-slate-900">{ultraSafe(bSource)}</td>
+                          <td className="py-2.5 px-4 text-slate-700">{ultraSafe(bDesc)}</td>
                           <td className="py-2.5 px-4 text-slate-500">—</td>
                           <td className="py-2.5 px-4 font-black text-emerald-700">{formatNaira(Number(b.amount || 0))}</td>
                           <td className="py-2.5 px-4 font-mono text-slate-400">—</td>
-                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{safeText(bRef)}</td>
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{ultraSafe(bRef)}</td>
                         </tr>
                       );
                     })
@@ -3044,19 +3176,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {safeText(lType)}
+                          {ultraSafe(lType)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-800 font-medium">{safeText(lDesc)}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900">{safeText(lUserName)}</td>
-                      <td className="py-3 px-4 text-slate-700">{safeText(lGroupName)}</td>
+                      <td className="py-3 px-4 text-slate-800 font-medium">{ultraSafe(lDesc)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{ultraSafe(lUserName)}</td>
+                      <td className="py-3 px-4 text-slate-700">{ultraSafe(lGroupName)}</td>
                       <td className="py-3 px-4 font-black text-slate-900">{formatNaira(Number(l.amount || 0))}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {safeText(lStatus)}
+                          {ultraSafe(lStatus)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{safeText(lRef)}</td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{ultraSafe(lRef)}</td>
                     </tr>
                   );
                 })}
@@ -3070,6 +3202,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       {activeTab === 'live_support' && (
         <SupportSecretaryDashboard secretaryName="Super Admin Support Desk" />
       )}
+
+      </SuperAdminInnerErrorBoundary>
 
       {/* Super Admin Revenue Withdrawal Modal */}
       {showWithdrawModal && (
@@ -3198,7 +3332,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
               {withdrawError && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-700 text-xs font-medium">
                   <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{withdrawError}</span>
+                  <span>{ultraSafe(withdrawError)}</span>
                 </div>
               )}
 
@@ -3443,7 +3577,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 ⚠️ This will <strong>PERMANENTLY DELETE</strong> all groups (Olopa Ajo, ADUGBO JAO etc), all group admins, all members, all contributions (₦50,060/₦250k), all platform transactions (600/60/2000/1000), all personal savings and withdrawals from <strong>Firebase Firestore Database</strong> — NOT local storage.
               </p>
               <p>
-                After delete, you will <strong>NOT</strong> find data again. Firebase Console will show 0 documents. Your Super Admin account (<code>{currentSuperAdminEmail || userPhone}</code>) will be preserved so you stay logged in.
+                After delete, you will <strong>NOT</strong> find data again. Firebase Console will show 0 documents. Your Super Admin account (<code>{ultraSafe(currentSuperAdminEmail || userPhone)}</code>) will be preserved so you stay logged in.
               </p>
               <div>
                 <label className="block text-slate-800 font-bold mb-1.5">
@@ -3463,7 +3597,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 <div className="mt-3">
                   <label className="block text-slate-800 font-bold mb-1">Live Progress Output:</label>
                   <pre className="text-[10px] font-mono bg-slate-900 text-emerald-400 p-3 rounded-xl max-h-36 overflow-y-auto whitespace-pre-wrap">
-                    {resetLogs}
+                    {ultraSafe(resetLogs)}
                   </pre>
                 </div>
               )}
