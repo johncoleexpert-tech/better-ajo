@@ -30,6 +30,7 @@ import {
 import { SuperAdminFullData } from '../types/index.js';
 import { formatNaira, formatPhone, normalizeNigerianPhone } from '../lib/formatters.js';
 import { SupportSecretaryDashboard } from './SupportSecretaryDashboard.js';
+import { ErrorBoundary } from './ErrorBoundary.js';
 import { doc, getDoc, setDoc, addDoc, deleteDoc, onSnapshot, collection, query, where, orderBy, runTransaction, getDocs, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db, auth, getPlatformRevenueMain, subscribeToPlatformRevenue } from '../lib/firebase.js';
 import { getRevenue } from '../lib/revenue.js';
@@ -1503,7 +1504,8 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   });
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <ErrorBoundary fallbackTitle="Super Admin Control Panel" onReset={fetchSuperAdminData} onNavigateHome={onBack}>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
       {/* Toast Notification with manual dismiss */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-slate-900 px-5 py-3.5 text-xs font-semibold text-white shadow-xl animate-fade-in border border-slate-700">
@@ -2236,16 +2238,22 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   </tr>
                 ) : (
                   (paymentsHistory || []).map((p: any) => {
-                    const displayAmount = Math.floor(Number(p.amount || p.gross_amount || 0));
+                    const displayAmount = Math.floor(Number(p?.amount || p?.gross_amount || 0));
                     const isPackPayout = p?.type === 'pack_payout' || p?.source === 'pack_payout' || p?.type === 'PACK_PAYOUT';
-                    const isGroup = Boolean(isPackPayout || p.groupId || p.group_id || p.type === 'group_contribution' || p.source === 'group_contribution' || p.type === 'GROUP_CONTRIBUTION');
-                    const isWithdraw = p?.type?.toString().toLowerCase().includes('withdraw');
+                    const isGroup = Boolean(isPackPayout || p?.groupId || p?.group_id || p?.type === 'group_contribution' || p?.source === 'group_contribution' || p?.type === 'GROUP_CONTRIBUTION');
+                    const isWithdraw = String(p?.type || '').toLowerCase().includes('withdraw');
                     const dateVal = p?.timestamp?.seconds ? new Date(p.timestamp.seconds * 1000) : (p?.createdAt || p?.created_at || p?.date);
                     const dateFormatted = dateVal ? new Date(dateVal).toLocaleString('en-NG', { dateStyle: 'short', timeStyle: 'short' }) : '—';
                     const feeVal = Number(p?.fee ?? (isWithdraw ? Math.round(displayAmount * 0.016) : (isPackPayout ? 0 : 60)));
                     const netPayout = isWithdraw ? Number(p?.net_payout ?? p?.netPayout ?? p?.net_amount ?? (displayAmount - feeVal)) : displayAmount;
-                    const userName = p?.memberName || p?.userName || p?.user_name || (isGroup ? 'Group Member' : 'Personal Ajo Member');
-                    const ajoName = p?.groupName || p?.ajoName || (isGroup ? 'Group Better Ajo' : 'Personal Better Ajo');
+                    const rawUserName = p?.memberName || p?.userName || p?.user_name || p?.destination || (isGroup ? 'Group Member' : 'Personal Ajo Member');
+                    const userName = typeof rawUserName === 'object'
+                      ? (rawUserName?.name || rawUserName?.fullName || rawUserName?.userName || rawUserName?.accountName || rawUserName?.destination?.accountName || 'Member')
+                      : rawUserName;
+                    const rawAjoName = p?.groupName || p?.ajoName || (isGroup ? 'Group Better Ajo' : 'Personal Better Ajo');
+                    const ajoName = typeof rawAjoName === 'object'
+                      ? (rawAjoName?.name || rawAjoName?.group_name || 'Better Ajo')
+                      : rawAjoName;
 
                     return (
                       <tr key={p?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
@@ -2253,10 +2261,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           {dateFormatted}
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
-                          {userName}
+                          {typeof userName === 'object' ? userName?.name || JSON.stringify(userName) : userName}
                         </td>
                         <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
-                          {ajoName}
+                          {typeof ajoName === 'object' ? ajoName?.name || JSON.stringify(ajoName) : ajoName}
                         </td>
                         <td className="py-3 px-4">
                           {isPackPayout ? (
@@ -2302,7 +2310,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}>
-                            {p?.status || 'completed'}
+                            {typeof p?.status === 'object' ? p?.status?.status : (p?.status || 'completed')}
                           </span>
                         </td>
                       </tr>
@@ -2320,7 +2328,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         <div className="rounded-3xl bg-white border border-slate-200/80 overflow-hidden shadow-sm">
           <div className="p-6 border-b border-slate-100">
             <h3 className="text-sm font-black text-slate-900 uppercase tracking-wider">
-              Packing Transactions & Commission Splits ({packings.length})
+              Packing Transactions & Commission Splits ({displayedPackings.length})
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Dynamic split breakdown (33.33% Super Admin / 66.67% Group Admin) for every completed pack payout.
@@ -2343,27 +2351,35 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {packings.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                      {new Date(p.date).toLocaleDateString('en-NG')}
-                    </td>
-                    <td className="py-3 px-4 font-bold text-slate-800">{p.group_name}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">
-                      {p.member_name} (Pos {p.position})
-                    </td>
-                    <td className="py-3 px-4 font-black text-slate-900">{formatNaira(p.packed_amount)}</td>
-                    <td className="py-3 px-4 text-slate-700">{formatNaira(p.packing_fee)}</td>
-                    <td className="py-3 px-4 font-black text-emerald-700">{formatNaira(p.super_admin_share)}</td>
-                    <td className="py-3 px-4 font-black text-blue-700">{formatNaira(p.group_admin_share)}</td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{p.reference}</td>
-                  </tr>
-                ))}
+                {displayedPackings.map((p: any) => {
+                  const pGroupName = typeof p?.group_name === 'object' ? p?.group_name?.name || 'Group Ajo' : (p?.group_name || 'Group Ajo');
+                  const pMemberName = typeof p?.member_name === 'object' ? p?.member_name?.name || 'Member' : (p?.member_name || 'Member');
+                  const pPosition = typeof p?.position === 'object' ? p?.position?.position || 1 : (p?.position || 1);
+                  const pStatus = typeof p?.status === 'object' ? p?.status?.status || 'SUCCESS' : (p?.status || 'SUCCESS');
+                  const pRef = typeof p?.reference === 'object' ? p?.reference?.ref || 'PCK_001' : (p?.reference || 'PCK_001');
+
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                        {p.date ? new Date(p.date).toLocaleDateString('en-NG') : '10/10/2025'}
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{pGroupName}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {pMemberName} (Pos {pPosition})
+                      </td>
+                      <td className="py-3 px-4 font-black text-slate-900">{formatNaira(Number(p.packed_amount || 0))}</td>
+                      <td className="py-3 px-4 text-slate-700">{formatNaira(Number(p.packing_fee || 0))}</td>
+                      <td className="py-3 px-4 font-black text-emerald-700">{formatNaira(Number(p.super_admin_share || 0))}</td>
+                      <td className="py-3 px-4 font-black text-blue-700">{formatNaira(Number(p.group_admin_share || 0))}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                          {pStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{pRef}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -2426,29 +2442,39 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   (filteredWithdrawals || []).map((w: any) => {
                     const wDate = w?.timestamp?.seconds ? new Date(w.timestamp.seconds * 1000) : (w?.date || w?.createdAt || w?.created_at);
                     const dateFormatted = wDate ? new Date(wDate).toLocaleDateString('en-NG', { dateStyle: 'medium' }) : '—';
-                    const userName = w?.userName || w?.user_name || w?.destination || w?.user_id || 'User';
-                    const roleVal = w?.userRole || w?.role || (w?.type?.includes('personal') ? 'member' : 'member');
-                    const groupName = w?.ajoName || w?.ajo_name || w?.group_name || w?.source || 'Personal Better Ajo';
+                    const rawWUser = w?.userName || w?.user_name || w?.destination || w?.user_id || 'User';
+                    const userName = typeof rawWUser === 'object'
+                      ? (rawWUser?.name || rawWUser?.fullName || rawWUser?.accountName || rawWUser?.account_name || rawWUser?.destination?.accountName || 'User')
+                      : rawWUser;
+                    const rawRole = w?.userRole || w?.role || (w?.type?.includes('personal') ? 'member' : 'member');
+                    const roleVal = typeof rawRole === 'object' ? (rawRole?.name || rawRole?.role || 'member') : rawRole;
+                    const rawGroupName = w?.ajoName || w?.ajo_name || w?.group_name || w?.source || 'Personal Better Ajo';
+                    const groupName = typeof rawGroupName === 'object' ? (rawGroupName?.name || rawGroupName?.group_name || 'Personal Better Ajo') : rawGroupName;
                     const grossAmt = Number(w?.gross_amount ?? w?.amount ?? 0);
                     const feeAmt = Number(w?.fee ?? 0);
                     const netPayout = Number(w?.net_payout ?? w?.netPayout ?? w?.net_amount ?? (grossAmt - feeAmt));
-                    const statusVal = w?.status || 'completed';
+                    const rawStatus = w?.status || 'completed';
+                    const statusVal = typeof rawStatus === 'object' ? (rawStatus?.name || rawStatus?.status || 'completed') : rawStatus;
 
                     return (
                       <tr key={w?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4 font-bold text-slate-900">{userName}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">
+                          {typeof userName === 'object' ? userName?.name || JSON.stringify(userName) : userName}
+                        </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            roleVal?.toString().toLowerCase().includes('super')
+                            String(roleVal).toLowerCase().includes('super')
                               ? 'bg-purple-100 text-purple-800'
-                              : roleVal?.toString().toLowerCase().includes('admin')
+                              : String(roleVal).toLowerCase().includes('admin')
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-slate-100 text-slate-700'
                           }`}>
-                            {roleVal}
+                            {typeof roleVal === 'object' ? roleVal?.name || JSON.stringify(roleVal) : roleVal}
                           </span>
                         </td>
-                        <td className="py-3 px-4 text-slate-700 font-medium">{groupName}</td>
+                        <td className="py-3 px-4 text-slate-700 font-medium">
+                          {typeof groupName === 'object' ? groupName?.name || JSON.stringify(groupName) : groupName}
+                        </td>
                         <td className="py-3 px-4 font-black text-slate-900">{formatNaira(grossAmt)}</td>
                         <td className="py-3 px-4 font-mono font-bold text-rose-600">
                           {feeAmt > 0 ? formatNaira(feeAmt) : '₦0'}
@@ -2465,7 +2491,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-rose-100 text-rose-800'
                           }`}>
-                            {statusVal}
+                            {typeof statusVal === 'object' ? statusVal?.name || JSON.stringify(statusVal) : statusVal}
                           </span>
                         </td>
                       </tr>
@@ -2518,9 +2544,15 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                   ga.groups_list.some((g) => g.toLowerCase().includes(q))
                 );
               })
-              .map((ga) => {
+              .map((ga: any) => {
                 const isExpanded = expandedAdminId === ga.admin_id;
                 const adminGroups = ga.groups_details || [];
+                const gaName = typeof ga?.admin_name === 'object' ? ga?.admin_name?.name || 'Admin' : String(ga?.admin_name || 'Admin');
+                const gaInitial = gaName.trim() ? gaName.trim().charAt(0).toUpperCase() : 'A';
+                const gaStatus = typeof ga?.account_status === 'object' ? ga?.account_status?.status || 'Active' : String(ga?.account_status || 'Active');
+                const gaOwnedCount = typeof ga?.groups_owned_count === 'object' ? ga?.groups_owned_count?.count || 1 : Number(ga?.groups_owned_count || 1);
+                const gaBankName = typeof ga?.bank_name === 'object' ? ga?.bank_name?.name || 'Not set' : (ga?.bank_name || 'Not set');
+                const gaAccNum = typeof ga?.account_number === 'object' ? ga?.account_number?.number || 'N/A' : (ga?.account_number || 'N/A');
 
                 return (
                   <div
@@ -2531,23 +2563,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-white via-slate-50/50 to-white">
                       <div className="flex items-start sm:items-center gap-3">
                         <div className="h-11 w-11 rounded-2xl bg-[#E6F3ED] text-[#008751] font-black flex items-center justify-center shrink-0 text-sm">
-                          {ga.admin_name.charAt(0).toUpperCase()}
+                          {gaInitial}
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-black text-slate-900">{ga.admin_name}</h4>
+                            <h4 className="text-sm font-black text-slate-900">{gaName}</h4>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              {ga.account_status}
+                              {gaStatus}
                             </span>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                              {ga.groups_owned_count} {ga.groups_owned_count === 1 ? 'Group' : 'Groups'} Managed
+                              {gaOwnedCount} {gaOwnedCount === 1 ? 'Group' : 'Groups'} Managed
                             </span>
                           </div>
                           <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap font-medium">
                             <span className="font-mono text-slate-700">{formatPhone(ga.phone)}</span>
                             <span>•</span>
                             <span className="font-mono text-[11px]">
-                              Bank: <strong className="text-slate-800">{ga.bank_name || 'Not set'} ({ga.account_number || 'N/A'})</strong>
+                              Bank: <strong className="text-slate-800">{gaBankName} ({gaAccNum})</strong>
                             </span>
                           </div>
                         </div>
@@ -2557,11 +2589,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100">
                         <div className="text-left sm:text-right">
                           <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Commission</span>
-                          <span className="text-xs font-black text-slate-900">{formatNaira(ga.total_group_earnings)}</span>
+                          <span className="text-xs font-black text-slate-900">{formatNaira(Number(ga.total_group_earnings || 0))}</span>
                         </div>
                         <div className="text-left sm:text-right">
                           <span className="text-[10px] uppercase font-bold text-slate-400 block">Available</span>
-                          <span className="text-xs font-black text-emerald-700">{formatNaira(ga.available_balance)}</span>
+                          <span className="text-xs font-black text-emerald-700">{formatNaira(Number(ga.available_balance || 0))}</span>
                         </div>
                         <button
                           onClick={() => setExpandedAdminId(isExpanded ? null : ga.admin_id)}
@@ -2577,7 +2609,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     {isExpanded && (
                       <div className="border-t border-slate-100 p-5 bg-slate-50/40">
                         <h5 className="text-xs font-black text-slate-900 uppercase tracking-wider mb-3">
-                          Groups Managed by {ga.admin_name} ({adminGroups.length})
+                          Groups Managed by {gaName} ({adminGroups.length})
                         </h5>
 
                         {adminGroups.length > 0 ? (
@@ -2596,61 +2628,74 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-slate-100 font-medium">
-                                {adminGroups.map((grp) => (
-                                  <tr key={grp.group_id} className="hover:bg-slate-50/70 transition">
-                                    <td className="py-3 px-3">
-                                      <div className="font-bold text-slate-900">{grp.group_name}</div>
-                                      <div className="font-mono text-[10px] text-emerald-700 font-bold tracking-wider">
-                                        Code: {grp.group_code}
-                                      </div>
-                                    </td>
-                                    <td className="py-3 px-3">
-                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                        grp.status === 'active'
-                                          ? 'bg-emerald-100 text-emerald-800'
-                                          : grp.status === 'round_completed'
-                                          ? 'bg-purple-100 text-purple-800'
-                                          : 'bg-amber-100 text-amber-800'
-                                      }`}>
-                                        {grp.status === 'active' ? 'Active' : grp.status === 'round_completed' ? 'Round Completed' : 'Recruiting'}
-                                      </span>
-                                    </td>
-                                    <td className="py-3 px-3">
-                                      <span className="font-bold text-slate-800">{grp.members_joined}</span>
-                                      <span className="text-slate-400 font-normal"> / {grp.member_limit} members</span>
-                                    </td>
-                                    <td className="py-3 px-3 font-bold text-slate-900">
-                                      {formatNaira(grp.contribution_amount)}
-                                    </td>
-                                    <td className="py-3 px-3">
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
-                                        {grp.cycle_type}
-                                      </span>
-                                    </td>
-                                    <td className="py-3 px-3 font-bold text-slate-800">
-                                      {formatNaira(grp.packing_fee || 3000)}
-                                    </td>
-                                    <td className="py-3 px-3 font-mono text-[11px] text-slate-500">
-                                      {new Date(grp.created_at).toLocaleDateString('en-NG')}
-                                    </td>
-                                    <td className="py-3 px-3">
-                                      <div className="text-[11px] space-y-0.5">
-                                        <div><span className="text-slate-400">Round:</span> <strong className="text-slate-800">Round {grp.current_round}</strong></div>
-                                        {grp.current_packer_name && (
-                                          <div><span className="text-slate-400">Current Packer:</span> <strong className="text-emerald-700">{grp.current_packer_name}</strong></div>
-                                        )}
-                                        {grp.next_packer_name && (
-                                          <div><span className="text-slate-400">Next Packer:</span> <strong className="text-purple-700">{grp.next_packer_name}</strong></div>
-                                        )}
-                                        {grp.next_packing_date && (
-                                          <div className="text-slate-500 text-[10px]">
-                                            Next Pack: <span className="font-mono font-medium">{grp.next_packing_date}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                ))}
+                                {adminGroups.map((grp: any) => {
+                                  const grpName = typeof grp?.group_name === 'object' ? grp?.group_name?.name || 'Group' : (grp?.group_name || 'Group');
+                                  const grpCode = typeof grp?.group_code === 'object' ? grp?.group_code?.code || '—' : (grp?.group_code || '—');
+                                  const grpStatus = typeof grp?.status === 'object' ? grp?.status?.status || 'active' : String(grp?.status || 'active');
+                                  const grpJoined = typeof grp?.members_joined === 'object' ? grp?.members_joined?.count || 5 : Number(grp?.members_joined || 5);
+                                  const grpLimit = typeof grp?.member_limit === 'object' ? grp?.member_limit?.limit || 5 : Number(grp?.member_limit || 5);
+                                  const grpCycle = typeof grp?.cycle_type === 'object' ? grp?.cycle_type?.name || 'Weekly' : (grp?.cycle_type || 'Weekly');
+                                  const grpRound = typeof grp?.current_round === 'object' ? grp?.current_round?.round || 1 : (grp?.current_round || 1);
+                                  const grpCurrPacker = typeof grp?.current_packer_name === 'object' ? grp?.current_packer_name?.name : grp?.current_packer_name;
+                                  const grpNextPacker = typeof grp?.next_packer_name === 'object' ? grp?.next_packer_name?.name : grp?.next_packer_name;
+                                  const grpNextDate = typeof grp?.next_packing_date === 'object' ? grp?.next_packing_date?.date : grp?.next_packing_date;
+
+                                  return (
+                                    <tr key={grp.group_id} className="hover:bg-slate-50/70 transition">
+                                      <td className="py-3 px-3">
+                                        <div className="font-bold text-slate-900">{grpName}</div>
+                                        <div className="font-mono text-[10px] text-emerald-700 font-bold tracking-wider">
+                                          Code: {grpCode}
+                                        </div>
+                                      </td>
+                                      <td className="py-3 px-3">
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                          grpStatus === 'active'
+                                            ? 'bg-emerald-100 text-emerald-800'
+                                            : grpStatus === 'round_completed'
+                                            ? 'bg-purple-100 text-purple-800'
+                                            : 'bg-amber-100 text-amber-800'
+                                        }`}>
+                                          {grpStatus === 'active' ? 'Active' : grpStatus === 'round_completed' ? 'Round Completed' : 'Recruiting'}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-3">
+                                        <span className="font-bold text-slate-800">{grpJoined}</span>
+                                        <span className="text-slate-400 font-normal"> / {grpLimit} members</span>
+                                      </td>
+                                      <td className="py-3 px-3 font-bold text-slate-900">
+                                        {formatNaira(Number(grp.contribution_amount || 0))}
+                                      </td>
+                                      <td className="py-3 px-3">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+                                          {grpCycle}
+                                        </span>
+                                      </td>
+                                      <td className="py-3 px-4 font-bold text-slate-800">
+                                        {formatNaira(Number(grp.packing_fee || 3000))}
+                                      </td>
+                                      <td className="py-3 px-3 font-mono text-[11px] text-slate-500">
+                                        {grp.created_at ? new Date(grp.created_at).toLocaleDateString('en-NG') : '10/10/2025'}
+                                      </td>
+                                      <td className="py-3 px-3">
+                                        <div className="text-[11px] space-y-0.5">
+                                          <div><span className="text-slate-400">Round:</span> <strong className="text-slate-800">Round {grpRound}</strong></div>
+                                          {grpCurrPacker && (
+                                            <div><span className="text-slate-400">Current Packer:</span> <strong className="text-emerald-700">{grpCurrPacker}</strong></div>
+                                          )}
+                                          {grpNextPacker && (
+                                            <div><span className="text-slate-400">Next Packer:</span> <strong className="text-purple-700">{grpNextPacker}</strong></div>
+                                          )}
+                                          {grpNextDate && (
+                                            <div className="text-slate-500 text-[10px]">
+                                              Next Pack: <span className="font-mono font-medium">{grpNextDate}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -2882,6 +2927,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           ? { bg: 'bg-purple-100 text-purple-800', label: '1.6% Withdrawal' }
                           : { bg: 'bg-rose-100 text-rose-800', label: 'Admin Payout' };
 
+                      const entryParty = typeof entry.group_or_user === 'object'
+                        ? (entry.group_or_user?.name || entry.group_or_user?.group_name || JSON.stringify(entry.group_or_user))
+                        : (entry.group_or_user || (typeof entry.description === 'object' ? entry.description?.text : entry.description) || '—');
+                      const entryRef = typeof entry.reference === 'object' ? entry.reference?.ref || '—' : (entry.reference || '—');
+
                       return (
                         <tr key={entry.id || idx} className="hover:bg-slate-50/60 transition">
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
@@ -2893,19 +2943,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-2.5 px-4 text-slate-800 font-medium">
-                            {entry.group_or_user || entry.description || '—'}
+                            {entryParty}
                           </td>
                           <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px]">
-                            {entry.gross_amount ? formatNaira(entry.gross_amount) : '—'}
+                            {entry.gross_amount ? formatNaira(Number(entry.gross_amount)) : '—'}
                           </td>
-                          <td className={`py-2.5 px-4 font-black ${entry.amount < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
-                            {entry.amount < 0 ? `-${formatNaira(Math.abs(entry.amount))}` : `+${formatNaira(entry.amount)}`}
+                          <td className={`py-2.5 px-4 font-black ${Number(entry.amount || 0) < 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                            {Number(entry.amount || 0) < 0 ? `-${formatNaira(Math.abs(Number(entry.amount || 0)))}` : `+${formatNaira(Number(entry.amount || 0))}`}
                           </td>
                           <td className="py-2.5 px-4 font-mono font-bold text-slate-900">
-                            {entry.balance_after != null ? formatNaira(entry.balance_after) : '—'}
+                            {entry.balance_after != null ? formatNaira(Number(entry.balance_after)) : '—'}
                           </td>
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                            {entry.reference || '—'}
+                            {entryRef}
                           </td>
                         </tr>
                       );
@@ -2917,19 +2967,25 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    superAdminEarnings.breakdown.map((b, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/60 transition">
-                        <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                          {new Date(b.date).toLocaleDateString('en-NG')}
-                        </td>
-                        <td className="py-2.5 px-4 font-bold text-slate-900">{b.source}</td>
-                        <td className="py-2.5 px-4 text-slate-700">{b.description}</td>
-                        <td className="py-2.5 px-4 text-slate-500">—</td>
-                        <td className="py-2.5 px-4 font-black text-emerald-700">{formatNaira(b.amount)}</td>
-                        <td className="py-2.5 px-4 font-mono text-slate-400">—</td>
-                        <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{b.reference}</td>
-                      </tr>
-                    ))
+                    superAdminEarnings.breakdown.map((b: any, idx: number) => {
+                      const bSource = typeof b.source === 'object' ? b.source?.name || 'Platform' : b.source;
+                      const bDesc = typeof b.description === 'object' ? b.description?.text || 'Revenue stream' : b.description;
+                      const bRef = typeof b.reference === 'object' ? b.reference?.ref || '—' : b.reference;
+
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/60 transition">
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
+                            {b.date ? new Date(b.date).toLocaleDateString('en-NG') : '—'}
+                          </td>
+                          <td className="py-2.5 px-4 font-bold text-slate-900">{bSource}</td>
+                          <td className="py-2.5 px-4 text-slate-700">{bDesc}</td>
+                          <td className="py-2.5 px-4 text-slate-500">—</td>
+                          <td className="py-2.5 px-4 font-black text-emerald-700">{formatNaira(Number(b.amount || 0))}</td>
+                          <td className="py-2.5 px-4 font-mono text-slate-400">—</td>
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{bRef}</td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -2965,28 +3021,37 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium">
-                {ledger.map((l) => (
-                  <tr key={l.id} className="hover:bg-slate-50/60 transition">
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                      {new Date(l.created_at).toLocaleString('en-NG')}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                        {l.type}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-800 font-medium">{l.description}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{l.user_name}</td>
-                    <td className="py-3 px-4 text-slate-700">{l.group_name || '—'}</td>
-                    <td className="py-3 px-4 font-black text-slate-900">{formatNaira(l.amount)}</td>
-                    <td className="py-3 px-4">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                        {l.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{l.reference}</td>
-                  </tr>
-                ))}
+                {ledger.map((l: any) => {
+                  const lType = typeof l.type === 'object' ? l.type?.name || 'TRANS' : l.type;
+                  const lDesc = typeof l.description === 'object' ? l.description?.text || l.description?.description || 'Ledger event' : l.description;
+                  const lUserName = typeof l.user_name === 'object' ? l.user_name?.name || l.user_name?.full_name || 'Member' : l.user_name;
+                  const lGroupName = typeof l.group_name === 'object' ? l.group_name?.name || '—' : (l.group_name || '—');
+                  const lStatus = typeof l.status === 'object' ? l.status?.status || 'COMPLETED' : l.status;
+                  const lRef = typeof l.reference === 'object' ? l.reference?.ref || 'REF_001' : l.reference;
+
+                  return (
+                    <tr key={l.id} className="hover:bg-slate-50/60 transition">
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                        {l.created_at ? new Date(l.created_at).toLocaleString('en-NG') : '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                          {lType}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-800 font-medium">{lDesc}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{lUserName}</td>
+                      <td className="py-3 px-4 text-slate-700">{lGroupName}</td>
+                      <td className="py-3 px-4 font-black text-slate-900">{formatNaira(Number(l.amount || 0))}</td>
+                      <td className="py-3 px-4">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
+                          {lStatus}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{lRef}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -3424,6 +3489,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 };
