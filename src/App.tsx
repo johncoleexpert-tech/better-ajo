@@ -9,10 +9,24 @@ import PersonalDashboard from './components/PersonalDashboard';
 import { GroupCreation } from './components/GroupCreation';
 import { GroupJoin } from './components/GroupJoin';
 import { GroupDashboard } from './components/GroupDashboard';
-import { GroupAdminDashboard } from './components/GroupAdminDashboard';
-import { SuperAdminDashboard } from './components/SuperAdminDashboard';
-import { DatabaseStatusModal } from './components/DatabaseStatusModal';
-import { InfoModal } from './components/InfoModals';
-import { LiveSupportChat } from './components/LiveSupportChat';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { UserProfile, PersonalAjo, GroupAjo } from './types';
+
+type View = 'home' | 'personal-registration' | 'personal-dashboard' | 'group-creation' | 'group-join' | 'group-dashboard';
+
+export default function App() {
+  const [view, setView] = useState<View>('home');
+  const [showAuth, setShowAuth] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-white">
+      <Navbar onNavigate={setView} onShowAuth={() => setShowAuth(true)} />
+      {view === 'home' && <HomeHero onNavigate={setView} />}
+      {view === 'personal-registration' && <PersonalRegistration onNavigate={setView} />}
+      {view === 'personal-dashboard' && <PersonalDashboard />}
+      {view === 'group-creation' && <GroupCreation />}
+      {view === 'group-join' && <GroupJoin onNavigate={setView} />}
+      {view === 'group-dashboard' && <GroupDashboard />}
+      <Footer />
+      {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
+    </div>
+  );
+}
