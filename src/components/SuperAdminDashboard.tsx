@@ -53,7 +53,7 @@ export function SuperAdminDashboard({ onBack, userPhone, userId }: Props){
           totalUsers: usersSnapshot.data().count,
           totalGroups: groupsSnapshot.data().count,
           totalPersonalSavings: totalSavings,
-          platformRevenue: (revenue as any)?.total || (revenue as any) || 1787,
+          platformRevenue: (() => { const r = revenue as any; if (typeof r === 'number') return r; return r?.total ?? r?.totalRevenue ?? r?.amount ?? r?.revenue ?? 1787; })(),
           loading: false
         });
       } catch (error) {
