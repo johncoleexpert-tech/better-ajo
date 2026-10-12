@@ -1,151 +1,183 @@
-// GroupCreation.tsx - FINAL MODEL - GroupAdmin enters all members, auto generate virtual accounts, copy to WhatsApp
+// GroupCreation.tsx - FINAL - With Agent & Member Bank Accounts + Dropdown + Virtual Accounts + Pack Automatic sir
 import React, { useState } from 'react';
-import { formatNaira } from '../lib/formatters.js';
-import { addDoc, collection, serverTimestamp, doc, writeBatch } from 'firebase/firestore';
-import { db } from '../lib/firebase.js';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
-const CIRCLES = ["Daily", "Every 3 Days", "Every 4 Days", "Every 5 Days", "Every 7 Days", "Monthly"] as const;
+const NIGERIAN_BANKS = [
+  "Access Bank", "GTBank - Guaranty Trust", "First Bank", "UBA - United Bank for Africa",
+  "Zenith Bank", "Wema Bank", "Opay", "Palmpay", "Moniepoint", "Kuda Bank",
+  "Fidelity Bank", "Union Bank", "Sterling Bank", "FCMB", "Ecobank",
+  "Polaris Bank", "Stanbic IBTC", "Jaiz Bank", "Providus Bank", "Unity Bank", "Rubies Bank"
+];
 
-type MemberInput = { id: string; fullName: string; phone: string; };
-type GeneratedMember = { fullName: string; phone: string; virtualAccountNumber: string; bankName: string; accountName: string; };
+type MemberInput = { fullName: string; phone: string; accountNumber: string; bankName: string; virtualAccount: string; };
 
-export const GroupCreation: React.FC<any> = ({ agentId, agentName, onBack }) => {
+export const GroupCreation: React.FC<{ agentId?: string; agentName?: string }> = ({ agentId = "ABOSEDE_TIJANI", agentName = "ABOSEDE TIJANI" }) => {
   const [groupName, setGroupName] = useState("");
-  const [membersCount, setMembersCount] = useState(5);
-  const [contributionAmount, setContributionAmount] = useState(5000);
-  const [circle, setCircle] = useState<typeof CIRCLES[number]>("Every 4 Days");
+  const [membersCount, setMembersCount] = useState(3);
   const [packFee, setPackFee] = useState(3000);
-  const [memberInputs, setMemberInputs] = useState<MemberInput[]>([
-    { id: '1', fullName: '', phone: '' },
-    { id: '2', fullName: '', phone: '' },
-    { id: '3', fullName: '', phone: '' },
-    { id: '4', fullName: '', phone: '' },
-    { id: '5', fullName: '', phone: '' },
-  ]);
-  const [generated, setGenerated] = useState<GeneratedMember[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [contribution, setContribution] = useState(5000);
+  const [circle, setCircle] = useState("Daily");
 
-  const updateMembersCount = (count: number) => {
-    setMembersCount(count);
-    const newInputs: MemberInput[] = [];
-    for(let i=0; i<count; i++) {
-      newInputs.push(memberInputs[i] || { id: `${i+1}`, fullName: '', phone: '' });
-    }
-    setMemberInputs(newInputs);
+  // GroupAdmin / Agent Account Details sir - Where earnings go sir
+  const [agentFullName, setAgentFullName] = useState(agentName);
+  const [agentAccountNumber, setAgentAccountNumber] = useState("");
+  const [agentBankName, setAgentBankName] = useState("Access Bank");
+
+  const [members, setMembers] = useState<MemberInput[]>(
+    Array.from({ length: 3 }, () => ({ fullName: "", phone: "", accountNumber: "", bankName: "Access Bank", virtualAccount: "" }))
+  );
+
+  React.useEffect(() => {
+    setMembers(prev => {
+      if (prev.length === membersCount) return prev;
+      if (prev.length < membersCount) {
+        return [...prev,...Array.from({ length: membersCount - prev.length }, () => ({ fullName: "", phone: "", accountNumber: "", bankName: "Access Bank", virtualAccount: "" }))];
+      } else {
+        return prev.slice(0, membersCount);
+      }
+    });
+  }, [membersCount]);
+
+  const updateMember = (index: number, field: keyof MemberInput, value: string) => {
+    const copy = [...members]; (copy[index] as any)[field] = value; setMembers(copy);
   };
 
   const handleCreate = async () => {
-    if(!groupName) return alert("Enter group name sir");
-    if(memberInputs.some(m=>!m.fullName ||!m.phone)) return alert("Fill all members full name and phone/WhatsApp sir");
+    if (!groupName.trim()) return alert("Enter Group Name sir e.g IKORODU MARKET sir");
+    if (!agentFullName ||!agentAccountNumber) return alert("Fill Agent Full Name + Account Number sir - Where earnings go sir");
+    for (let i = 0; i < members.length; i++) {
+      if (!members[i].fullName ||!members[i].phone ||!members[i].accountNumber) return alert(`Fill Member ${i + 1} Full Name + Phone + Account Number sir - Where pack money go sir`);
+    }
 
-    setLoading(true);
+    // Generate Virtual Accounts for members sir - Monnify pending sir
+    const membersWithVA = members.map(m => ({
+     ...m,
+      virtualAccount: `9${Math.floor(100000000 + Math.random() * 900000000)}`,
+      bankNameForPayout: m.bankName,
+      accountNumberForPayout: m.accountNumber,
+      monnifyBank: "Monnify - Wema Bank (Pending Docs sir)"
+    }));
+
+    const groupData = {
+      groupName: groupName.trim().toUpperCase(),
+      membersCount,
+      packFee,
+      contributionAmount: contribution,
+      circle, // Daily, 3 Days, 4 Days, 5 Days, 7 Days, Monthly sir - Agent selects sir
+      agentId,
+      agentName: agentFullName,
+      // Agent account where 66.67% earnings go sir
+      agentAccountDetails: {
+        fullName: agentFullName,
+        accountNumber: agentAccountNumber,
+        bankName: agentBankName,
+        earningsPercent: 66.67,
+        note: "Agent earnings 66.67% of pack fee go here sir"
+      },
+      members: membersWithVA,
+      // For SuperAdmin split sir
+      superAdminShare: 33.33,
+      agentShare: 66.67,
+      totalContributionWithFee: contribution + 60,
+      platformFeeNote: `Member go pay ₦${contribution + 60} sir (₦${contribution} pot + ₦60 bank charge ON TOP sir) - Pot full sir`,
+      createdAt: serverTimestamp(),
+      createdBy: agentId,
+      status: "active",
+      packAutomatic: true,
+    };
+
     try {
-      // Generate virtual account numbers - Mock for now pending Monnify - Later auto from Monnify API sir
-      const genMembers: GeneratedMember[] = memberInputs.map(m => ({
-        fullName: m.fullName.trim(),
-        phone: m.phone.trim(),
-        virtualAccountNumber: `9${Math.floor(100000000 + Math.random()*900000000)}`, // 10-digit mock sir - Replace with Monnify API sir
-        bankName: "Monnify - Wema Bank (Pending Approval)",
-        accountName: m.fullName.trim().toUpperCase(),
-      }));
-
-      const batch = writeBatch(db);
-      const groupRef = doc(collection(db, "groups"));
-      batch.set(groupRef, {
-        groupName: groupName.trim(),
-        membersCount,
-        contributionAmount,
-        circle,
+      await addDoc(collection(db, "groups"), groupData);
+      // Also log pack transaction for SuperAdmin Stream 3 sir
+      await addDoc(collection(db, "pack_transactions"), {
+        groupName: groupName.trim().toUpperCase(),
         packFee,
-        agentId: agentId || "super_admin",
-        agentName: agentName || "Super Admin",
-        superAdminShare: Math.round(packFee * 0.3333),
-        agentShare: Math.round(packFee * 0.6667),
-        status: "active",
+        agentEarning: (packFee * 66.67) / 100,
+        superAdminEarning: (packFee * 33.33) / 100,
+        agentId,
+        agentAccountNumber,
+        agentBankName,
         createdAt: serverTimestamp(),
-        virtualAccountEnabled: false,
-        monnifyStatus: "pending_documents",
-        platformFeeNote: "Member pays contribution + 60 extra - 60 not from pot sir",
       });
 
-      genMembers.forEach(gm => {
-        const memRef = doc(collection(db, `groups/${groupRef.id}/members`));
-        batch.set(memRef, {
-         ...gm,
-          contributionAmount,
-          circle,
-          createdAt: serverTimestamp(),
-          monnifyStatus: "pending_documents",
-        });
-      });
+      const whatsappText = `BETTER AJO GROUP CREATED sir:\nGroup: ${groupName.toUpperCase()}\nCircle: ${circle}\nContribution: ₦${contribution} + ₦60 ON TOP = ₦${contribution + 60}\nPack Fee: ₦${packFee}\n\nAgent Account for Earnings:\n${agentFullName}\n${agentAccountNumber} - ${agentBankName}\n\nMembers:\n${membersWithVA.map((m, i) => `${i + 1}. ${m.fullName} - ${m.phone} - ${m.accountNumber} ${m.bankName} - VA: ${m.virtualAccount}`).join("\n")}\n\nMember pay to their Virtual Account sir - When pack, money auto go to their bank account sir`;
 
-      await batch.commit();
-      setGenerated(genMembers);
-      alert(`SUCCESS sir! Group ${groupName} created with ${genMembers.length} members sir! Virtual accounts generated sir! Copy and send to them sir!`);
-    } catch(e:any) {
+      navigator.clipboard.writeText(whatsappText);
+      alert(`Group ${groupName.toUpperCase()} Created sir! ✅\nAgent Earnings Account: ${agentAccountNumber} ${agentBankName} sir - 66.67% go there sir\nMembers: ${membersCount} sir - Each get Virtual Account sir - Pack money auto go to their bank account sir - WhatsApp copied sir!`);
+      setGroupName("");
+    } catch (e: any) {
       alert("Error sir: " + e.message);
     }
-    setLoading(false);
-  };
-
-  const copyMember = (gm: GeneratedMember) => {
-    const text = `Hello ${gm.fullName} sir/madam, You don join Group Ajo: ${groupName} sir. Circle: ${circle} sir. Contribution: ${formatNaira(contributionAmount)} + ${formatNaira(60)} bank charge = ${formatNaira(contributionAmount+60)} total sir. Your Personal Virtual Account Number: ${gm.virtualAccountNumber} | Bank: ${gm.bankName} | Name: ${gm.accountName} sir. Transfer to this account to pay sir. ${formatNaira(contributionAmount)} full go pot sir. Thank you sir! - Better Ajo`;
-    navigator.clipboard.writeText(text);
-    alert(`Copied for ${gm.fullName} sir! Send for WhatsApp sir!`);
-  };
-
-  const copyAll = () => {
-    const allText = generated.map(gm => `${gm.fullName} - ${gm.phone} - Acct: ${gm.virtualAccountNumber} - ${gm.bankName} - ${formatNaira(contributionAmount)} + ${formatNaira(60)} = ${formatNaira(contributionAmount+60)}`).join("\n");
-    navigator.clipboard.writeText(allText);
-    alert("All copied sir!");
   };
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow space-y-5 max-w-2xl mx-auto">
+    <div className="p-4 space-y-5 max-w-3xl mx-auto bg-white min-h-screen">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold">Create Group Ajo - GroupAdmin Dashboard sir</h2>
-        {onBack && <button onClick={onBack} className="text-sm bg-gray-100 px-3 py-1 rounded-full">Back</button>}
+        <h2 className="text-xl font-bold">Create Group Ajo - GroupAdmin Dashboard</h2>
+        <button onClick={() => window.history.back()} className="bg-gray-100 px-4 py-2 rounded-full text-sm">Back</button>
       </div>
 
-      {generated.length === 0? (
-        <>
-          <input className="w-full border p-3 rounded-xl" placeholder="Group Name e.g IKORODU MARKET" value={groupName} onChange={e=>setGroupName(e.target.value)} />
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-sm font-bold">Members Count</label><input className="w-full border p-3 rounded-xl" type="number" value={membersCount} onChange={e=>updateMembersCount(Number(e.target.value))} /></div>
-            <div><label className="text-sm font-bold">Pack Fee</label><input className="w-full border p-3 rounded-xl" type="number" value={packFee} onChange={e=>setPackFee(Number(e.target.value))} /></div>
-          </div>
-          <div><label className="text-sm font-bold">Contribution</label><input className="w-full border p-3 rounded-xl" type="number" value={contributionAmount} onChange={e=>setContributionAmount(Number(e.target.value))} /><p className="text-xs text-blue-600">Member go pay {formatNaira(contributionAmount+60)} sir ({formatNaira(contributionAmount)} pot + {formatNaira(60)} bank charge ON TOP sir)</p></div>
-          <div><label className="text-sm font-bold">Circle - Agent selects sir</label><select className="w-full border p-3 rounded-xl bg-white" value={circle} onChange={e=>setCircle(e.target.value as any)}>{CIRCLES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+      <input className="w-full border-2 p-4 rounded-xl" placeholder="Group Name e.g IKORODU MARKET" value={groupName} onChange={e => setGroupName(e.target.value)} />
 
-          <div className="space-y-3">
-            <h3 className="font-bold">Enter All Members - Full Name + Phone/WhatsApp sir - No registration needed sir - Pack automatic sir</h3>
-            {memberInputs.map((m, idx)=>(
-              <div key={m.id} className="grid grid-cols-2 gap-2 border p-2 rounded-xl">
-                <input className="border p-2 rounded" placeholder={`Member ${idx+1} Full Name`} value={m.fullName} onChange={e=>{ const copy=[...memberInputs]; copy[idx].fullName=e.target.value; setMemberInputs(copy); }} />
-                <input className="border p-2 rounded" placeholder={`Phone/WhatsApp`} value={m.phone} onChange={e=>{ const copy=[...memberInputs]; copy[idx].phone=e.target.value; setMemberInputs(copy); }} />
-              </div>
-            ))}
-          </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><label className="text-sm font-bold">Members Count</label><input type="number" className="w-full border-2 p-3 rounded-xl" value={membersCount} onChange={e => setMembersCount(Math.max(1, Number(e.target.value)))} /></div>
+        <div><label className="text-sm font-bold">Pack Fee</label><input type="number" className="w-full border-2 p-3 rounded-xl" value={packFee} onChange={e => setPackFee(Number(e.target.value))} /></div>
+      </div>
 
-          <button disabled={loading} onClick={handleCreate} className="w-full bg-black text-white p-4 rounded-full font-bold">{loading? "Creating sir..." : `Create Group & Generate Virtual Accounts sir - ${circle}`}</button>
-        </>
-      ) : (
-        <div className="space-y-4">
-          <h3 className="font-bold text-green-700">Group {groupName} Created! Virtual Accounts Generated sir! Copy & Send to WhatsApp sir!</h3>
-          <button onClick={copyAll} className="w-full bg-blue-600 text-white p-3 rounded-full font-bold">Copy All Members sir</button>
-          {generated.map((gm, i)=>(
-            <div key={i} className="border p-4 rounded-xl space-y-2 bg-gray-50">
-              <p className="font-bold">{i+1}. {gm.fullName} - {gm.phone}</p>
-              <p className="text-sm">Acct: <span className="font-mono font-bold text-lg">{gm.virtualAccountNumber}</span></p>
-              <p className="text-xs">{gm.bankName} - {gm.accountName}</p>
-              <p className="text-xs text-blue-600">{formatNaira(contributionAmount)} pot + {formatNaira(60)} charge = {formatNaira(contributionAmount+60)} total sir</p>
-              <button onClick={()=>copyMember(gm)} className="bg-black text-white px-4 py-2 rounded-full text-sm">Copy for {gm.fullName} & Send WhatsApp sir</button>
-            </div>
-          ))}
-          <button onClick={()=>{ setGenerated([]); setGroupName(""); }} className="w-full bg-gray-200 p-3 rounded-full font-bold">Create Another Group sir</button>
+      <div>
+        <label className="text-sm font-bold">Contribution</label>
+        <input type="number" className="w-full border-2 p-3 rounded-xl" value={contribution} onChange={e => setContribution(Number(e.target.value))} />
+        <p className="text-xs text-blue-600 mt-1">Member go pay ₦{contribution + 60} sir (₦{contribution} pot + ₦60 bank charge ON TOP sir)</p>
+      </div>
+
+      <div>
+        <label className="text-sm font-bold text-green-700">Circle - Agent selects</label>
+        <select className="w-full border-2 p-3 rounded-xl" value={circle} onChange={e => setCircle(e.target.value)}>
+          <option>Daily</option><option>3 Days</option><option>4 Days</option><option>5 Days</option><option>7 Days</option><option>Monthly</option>
+        </select>
+      </div>
+
+      {/* AGENT ACCOUNT DETAILS SIR */}
+      <div className="bg-yellow-50 border-2 border-yellow-400 p-4 rounded-xl space-y-3">
+        <h3 className="font-bold">Group Admin / Agent Account Details - Where Your 66.67% Earnings Go sir</h3>
+        <input className="w-full border p-3 rounded-xl" placeholder="Agent Full Name" value={agentFullName} onChange={e => setAgentFullName(e.target.value)} />
+        <div className="grid grid-cols-2 gap-3">
+          <input className="w-full border p-3 rounded-xl" placeholder="Agent Account Number" value={agentAccountNumber} onChange={e => setAgentAccountNumber(e.target.value)} />
+          <select className="w-full border p-3 rounded-xl" value={agentBankName} onChange={e => setAgentBankName(e.target.value)}>
+            {NIGERIAN_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
         </div>
-      )}
+        <p className="text-[11px]">This account go receive Pack Fee 66.67% sir - e.g if Pack Fee ₦3000, you go receive ₦2000 sir</p>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="font-bold">Enter All Members - Full Name + Phone + Bank Account for Payout sir - No registration needed sir - Pack automatic sir</h3>
+        {members.map((m, i) => (
+          <div key={i} className="border-2 p-3 rounded-xl space-y-2 bg-gray-50">
+            <p className="text-xs font-bold">Member {i + 1} sir</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input className="border p-3 rounded-xl" placeholder={`Member ${i + 1} Full Name`} value={m.fullName} onChange={e => updateMember(i, "fullName", e.target.value)} />
+              <input className="border p-3 rounded-xl" placeholder="Phone/WhatsApp" value={m.phone} onChange={e => updateMember(i, "phone", e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input className="border p-3 rounded-xl" placeholder="Account Number - Where Pack money go" value={m.accountNumber} onChange={e => updateMember(i, "accountNumber", e.target.value)} />
+              <select className="border p-3 rounded-xl" value={m.bankName} onChange={e => updateMember(i, "bankName", e.target.value)}>
+                {NIGERIAN_BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <p className="text-[10px] text-gray-500">Pack money go auto to {m.accountNumber || "their account"} - {m.bankName} sir</p>
+          </div>
+        ))}
+      </div>
+
+      <button onClick={handleCreate} className="w-full bg-black text-white p-4 rounded-full font-bold text-lg">
+        Create Group & Generate Virtual Accounts - {circle}
+      </button>
+
+      <p className="text-[11px] text-center">Agent: {agentFullName} - {agentAccountNumber} {agentBankName} sir - 66.67% earnings sir | Members: Virtual Account for contribution + Bank Account for payout sir</p>
     </div>
   );
 };
+
 export default GroupCreation;
