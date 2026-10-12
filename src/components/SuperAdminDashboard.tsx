@@ -43,6 +43,14 @@ interface SuperAdminDashboardProps {
 }
 
 // Robust safe text and number renderers to completely eliminate React Error #310 (Objects are not valid as a React child)
+export const safeText = (v: any): React.ReactNode => {
+  if (v === null || v === undefined) return '-';
+  if (typeof v === 'object') {
+    return v?.name || v?.full_name || v?.fullName || v?.accountName || v?.account_name || v?.bankName || v?.bank_name || v?.group_name || v?.groupName || v?.userName || v?.user_name || (typeof v?.destination === 'object' ? (v?.destination?.accountName || v?.destination?.name || JSON.stringify(v?.destination)) : v?.destination) || JSON.stringify(v);
+  }
+  return v;
+};
+
 const safeRenderText = (value: any, fallback = '—'): React.ReactNode => {
   if (value === null || value === undefined) return fallback;
   if (typeof value === 'object') {
@@ -1995,10 +2003,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-2.5 px-4 font-bold text-slate-900 whitespace-nowrap">
-                            {typeof finalUserName === 'object' ? finalUserName?.name || JSON.stringify(finalUserName) : finalUserName}
+                            {safeText(finalUserName)}
                           </td>
                           <td className="py-2.5 px-4 text-slate-700 font-medium whitespace-nowrap">
-                            {typeof finalAjoName === 'object' ? finalAjoName?.name || JSON.stringify(finalAjoName) : finalAjoName}
+                            {safeText(finalAjoName)}
                           </td>
                           <td className="py-2.5 px-4 font-black text-slate-900 whitespace-nowrap font-mono text-xs">
                             ₦{displayAmount.toLocaleString()}
@@ -2075,23 +2083,23 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
                   return (
                     <tr key={g.id} className="hover:bg-slate-50/60 transition">
-                      <td className="py-3 px-4 font-bold text-slate-900">{gName}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-emerald-700">{gCode}</td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{gAdminName}</td>
-                      <td className="py-3 px-4 font-mono text-slate-500">{formatPhone(gAdminPhone)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{safeText(gName)}</td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-700">{safeText(gCode)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{safeText(gAdminName)}</td>
+                      <td className="py-3 px-4 font-mono text-slate-500">{formatPhone(safeText(gAdminPhone) as string)}</td>
                       <td className="py-3 px-4">
-                        {gJoined} / {gLimit}
+                        {safeText(gJoined)} / {safeText(gLimit)}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(Number(g.contribution_amount || 0))}</td>
                       <td className="py-3 px-4 font-bold text-emerald-700">{formatNaira(Number(g.packing_amount || 0))}</td>
                       <td className="py-3 px-4 text-slate-700">{formatNaira(Number(g.packing_fee || 0))}</td>
-                      <td className="py-3 px-4 font-bold">Round {gRound}</td>
-                      <td className="py-3 px-4 text-slate-800">{gCurrPacker}</td>
-                      <td className="py-3 px-4 text-slate-800">{gNextPacker}</td>
-                      <td className="py-3 px-4 text-slate-500 font-mono">{gNextDate}</td>
+                      <td className="py-3 px-4 font-bold">Round {safeText(gRound)}</td>
+                      <td className="py-3 px-4 text-slate-800">{safeText(gCurrPacker)}</td>
+                      <td className="py-3 px-4 text-slate-800">{safeText(gNextPacker)}</td>
+                      <td className="py-3 px-4 text-slate-500 font-mono">{safeText(gNextDate)}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {gStatus}
+                          {safeText(gStatus)}
                         </span>
                       </td>
                     </tr>
@@ -2151,34 +2159,34 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 
                     return (
                       <tr key={m.id} className="hover:bg-slate-50/60 transition">
-                        <td className="py-3 px-4 font-bold text-slate-900">{mName}</td>
-                        <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(mPhone)}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">{safeText(mName)}</td>
+                        <td className="py-3 px-4 font-mono text-slate-600">{formatPhone(safeText(mPhone) as string)}</td>
                         <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
                           {mBankName && mBankName !== 'Not provided' ? (
-                            <span>{mBankName} - <strong className="text-slate-900">{mAccNum}</strong></span>
+                            <span>{safeText(mBankName)} - <strong className="text-slate-900">{safeText(mAccNum)}</strong></span>
                           ) : (
                             <span className="text-slate-400 italic">Not set</span>
                           )}
                         </td>
                         <td className="py-3 px-4">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            {mAccStatus}
+                            {safeText(mAccStatus)}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-bold text-slate-800">{mGroupName}</td>
-                        <td className="py-3 px-4 font-bold text-slate-900">Position {mPos}</td>
+                        <td className="py-3 px-4 font-bold text-slate-800">{safeText(mGroupName)}</td>
+                        <td className="py-3 px-4 font-bold text-slate-900">Position {safeText(mPos)}</td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             mContribStatus === 'Paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
                           }`}>
-                            {mContribStatus}
+                            {safeText(mContribStatus)}
                           </span>
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                             m.has_packed ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-700'
                           }`}>
-                            {mPackStatus}
+                            {safeText(mPackStatus)}
                           </span>
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900">{formatNaira(Number(m.total_contributed || 0))}</td>
@@ -2261,10 +2269,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           {dateFormatted}
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900 whitespace-nowrap">
-                          {typeof userName === 'object' ? userName?.name || JSON.stringify(userName) : userName}
+                          {safeText(userName)}
                         </td>
                         <td className="py-3 px-4 text-slate-700 font-medium whitespace-nowrap">
-                          {typeof ajoName === 'object' ? ajoName?.name || JSON.stringify(ajoName) : ajoName}
+                          {safeText(ajoName)}
                         </td>
                         <td className="py-3 px-4">
                           {isPackPayout ? (
@@ -2310,7 +2318,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}>
-                            {typeof p?.status === 'object' ? p?.status?.status : (p?.status || 'completed')}
+                            {safeText(typeof p?.status === 'object' ? p?.status?.status : (p?.status || 'completed'))}
                           </span>
                         </td>
                       </tr>
@@ -2363,9 +2371,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
                         {p.date ? new Date(p.date).toLocaleDateString('en-NG') : '10/10/2025'}
                       </td>
-                      <td className="py-3 px-4 font-bold text-slate-800">{pGroupName}</td>
+                      <td className="py-3 px-4 font-bold text-slate-800">{safeText(pGroupName)}</td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {pMemberName} (Pos {pPosition})
+                        {safeText(pMemberName)} (Pos {safeText(pPosition)})
                       </td>
                       <td className="py-3 px-4 font-black text-slate-900">{formatNaira(Number(p.packed_amount || 0))}</td>
                       <td className="py-3 px-4 text-slate-700">{formatNaira(Number(p.packing_fee || 0))}</td>
@@ -2373,10 +2381,10 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       <td className="py-3 px-4 font-black text-blue-700">{formatNaira(Number(p.group_admin_share || 0))}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {pStatus}
+                          {safeText(pStatus)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{pRef}</td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{safeText(pRef)}</td>
                     </tr>
                   );
                 })}
@@ -2459,7 +2467,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     return (
                       <tr key={w?.id || Math.random().toString()} className="hover:bg-slate-50/60 transition">
                         <td className="py-3 px-4 font-bold text-slate-900">
-                          {typeof userName === 'object' ? userName?.name || JSON.stringify(userName) : userName}
+                          {safeText(userName)}
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
@@ -2469,11 +2477,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-slate-100 text-slate-700'
                           }`}>
-                            {typeof roleVal === 'object' ? roleVal?.name || JSON.stringify(roleVal) : roleVal}
+                            {safeText(roleVal)}
                           </span>
                         </td>
                         <td className="py-3 px-4 text-slate-700 font-medium">
-                          {typeof groupName === 'object' ? groupName?.name || JSON.stringify(groupName) : groupName}
+                          {safeText(groupName)}
                         </td>
                         <td className="py-3 px-4 font-black text-slate-900">{formatNaira(grossAmt)}</td>
                         <td className="py-3 px-4 font-mono font-bold text-rose-600">
@@ -2491,7 +2499,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                               ? 'bg-blue-100 text-blue-800'
                               : 'bg-rose-100 text-rose-800'
                           }`}>
-                            {typeof statusVal === 'object' ? statusVal?.name || JSON.stringify(statusVal) : statusVal}
+                            {safeText(statusVal)}
                           </span>
                         </td>
                       </tr>
@@ -2567,19 +2575,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                         </div>
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-sm font-black text-slate-900">{gaName}</h4>
+                            <h4 className="text-sm font-black text-slate-900">{safeText(gaName)}</h4>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              {gaStatus}
+                              {safeText(gaStatus)}
                             </span>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                              {gaOwnedCount} {gaOwnedCount === 1 ? 'Group' : 'Groups'} Managed
+                              {safeText(gaOwnedCount)} {gaOwnedCount === 1 ? 'Group' : 'Groups'} Managed
                             </span>
                           </div>
                           <div className="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap font-medium">
-                            <span className="font-mono text-slate-700">{formatPhone(ga.phone)}</span>
+                            <span className="font-mono text-slate-700">{formatPhone(safeText(ga.phone) as string)}</span>
                             <span>•</span>
                             <span className="font-mono text-[11px]">
-                              Bank: <strong className="text-slate-800">{gaBankName} ({gaAccNum})</strong>
+                              Bank: <strong className="text-slate-800">{safeText(gaBankName)} ({safeText(gaAccNum)})</strong>
                             </span>
                           </div>
                         </div>
@@ -2643,9 +2651,9 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                   return (
                                     <tr key={grp.group_id} className="hover:bg-slate-50/70 transition">
                                       <td className="py-3 px-3">
-                                        <div className="font-bold text-slate-900">{grpName}</div>
+                                        <div className="font-bold text-slate-900">{safeText(grpName)}</div>
                                         <div className="font-mono text-[10px] text-emerald-700 font-bold tracking-wider">
-                                          Code: {grpCode}
+                                          Code: {safeText(grpCode)}
                                         </div>
                                       </td>
                                       <td className="py-3 px-3">
@@ -2656,19 +2664,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                             ? 'bg-purple-100 text-purple-800'
                                             : 'bg-amber-100 text-amber-800'
                                         }`}>
-                                          {grpStatus === 'active' ? 'Active' : grpStatus === 'round_completed' ? 'Round Completed' : 'Recruiting'}
+                                          {safeText(grpStatus === 'active' ? 'Active' : grpStatus === 'round_completed' ? 'Round Completed' : 'Recruiting')}
                                         </span>
                                       </td>
                                       <td className="py-3 px-3">
-                                        <span className="font-bold text-slate-800">{grpJoined}</span>
-                                        <span className="text-slate-400 font-normal"> / {grpLimit} members</span>
+                                        <span className="font-bold text-slate-800">{safeText(grpJoined)}</span>
+                                        <span className="text-slate-400 font-normal"> / {safeText(grpLimit)} members</span>
                                       </td>
                                       <td className="py-3 px-3 font-bold text-slate-900">
                                         {formatNaira(Number(grp.contribution_amount || 0))}
                                       </td>
                                       <td className="py-3 px-3">
                                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
-                                          {grpCycle}
+                                          {safeText(grpCycle)}
                                         </span>
                                       </td>
                                       <td className="py-3 px-4 font-bold text-slate-800">
@@ -2679,16 +2687,16 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                                       </td>
                                       <td className="py-3 px-3">
                                         <div className="text-[11px] space-y-0.5">
-                                          <div><span className="text-slate-400">Round:</span> <strong className="text-slate-800">Round {grpRound}</strong></div>
+                                          <div><span className="text-slate-400">Round:</span> <strong className="text-slate-800">Round {safeText(grpRound)}</strong></div>
                                           {grpCurrPacker && (
-                                            <div><span className="text-slate-400">Current Packer:</span> <strong className="text-emerald-700">{grpCurrPacker}</strong></div>
+                                            <div><span className="text-slate-400">Current Packer:</span> <strong className="text-emerald-700">{safeText(grpCurrPacker)}</strong></div>
                                           )}
                                           {grpNextPacker && (
-                                            <div><span className="text-slate-400">Next Packer:</span> <strong className="text-purple-700">{grpNextPacker}</strong></div>
+                                            <div><span className="text-slate-400">Next Packer:</span> <strong className="text-purple-700">{safeText(grpNextPacker)}</strong></div>
                                           )}
                                           {grpNextDate && (
                                             <div className="text-slate-500 text-[10px]">
-                                              Next Pack: <span className="font-mono font-medium">{grpNextDate}</span>
+                                              Next Pack: <span className="font-mono font-medium">{safeText(grpNextDate)}</span>
                                             </div>
                                           )}
                                         </div>
@@ -2943,7 +2951,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             </span>
                           </td>
                           <td className="py-2.5 px-4 text-slate-800 font-medium">
-                            {entryParty}
+                            {safeText(entryParty)}
                           </td>
                           <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px]">
                             {entry.gross_amount ? formatNaira(Number(entry.gross_amount)) : '—'}
@@ -2955,7 +2963,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                             {entry.balance_after != null ? formatNaira(Number(entry.balance_after)) : '—'}
                           </td>
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                            {entryRef}
+                            {safeText(entryRef)}
                           </td>
                         </tr>
                       );
@@ -2977,12 +2985,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                           <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
                             {b.date ? new Date(b.date).toLocaleDateString('en-NG') : '—'}
                           </td>
-                          <td className="py-2.5 px-4 font-bold text-slate-900">{bSource}</td>
-                          <td className="py-2.5 px-4 text-slate-700">{bDesc}</td>
+                          <td className="py-2.5 px-4 font-bold text-slate-900">{safeText(bSource)}</td>
+                          <td className="py-2.5 px-4 text-slate-700">{safeText(bDesc)}</td>
                           <td className="py-2.5 px-4 text-slate-500">—</td>
                           <td className="py-2.5 px-4 font-black text-emerald-700">{formatNaira(Number(b.amount || 0))}</td>
                           <td className="py-2.5 px-4 font-mono text-slate-400">—</td>
-                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{bRef}</td>
+                          <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">{safeText(bRef)}</td>
                         </tr>
                       );
                     })
@@ -3036,19 +3044,19 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {lType}
+                          {safeText(lType)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-800 font-medium">{lDesc}</td>
-                      <td className="py-3 px-4 font-bold text-slate-900">{lUserName}</td>
-                      <td className="py-3 px-4 text-slate-700">{lGroupName}</td>
+                      <td className="py-3 px-4 text-slate-800 font-medium">{safeText(lDesc)}</td>
+                      <td className="py-3 px-4 font-bold text-slate-900">{safeText(lUserName)}</td>
+                      <td className="py-3 px-4 text-slate-700">{safeText(lGroupName)}</td>
                       <td className="py-3 px-4 font-black text-slate-900">{formatNaira(Number(l.amount || 0))}</td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {lStatus}
+                          {safeText(lStatus)}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{lRef}</td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-400">{safeText(lRef)}</td>
                     </tr>
                   );
                 })}

@@ -51,6 +51,15 @@ interface GroupAdminDashboardProps {
   onSwitchGroup?: (groupId: string) => void;
 }
 
+// Robust safe text extractor to eliminate React Error #310 (Objects are not valid as a React child)
+export const safeText = (v: any): React.ReactNode => {
+  if (v === null || v === undefined) return '-';
+  if (typeof v === 'object') {
+    return v?.name || v?.full_name || v?.fullName || v?.accountName || v?.account_name || v?.bankName || v?.bank_name || v?.group_name || v?.groupName || v?.userName || v?.user_name || (typeof v?.destination === 'object' ? (v?.destination?.accountName || v?.destination?.name || JSON.stringify(v?.destination)) : v?.destination) || JSON.stringify(v);
+  }
+  return v;
+};
+
 export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
   groupId,
   currentUser,
@@ -1069,14 +1078,14 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                  {group.group_name}
+                  {safeText(group.group_name)}
                 </h1>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800">
                   Group Admin Portal
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Admin: <strong className="text-slate-700">{group.admin_name}</strong> • Managed exclusively by creator (Non-contributor position)
+                Admin: <strong className="text-slate-700">{safeText(group.admin_name)}</strong> • Managed exclusively by creator (Non-contributor position)
               </p>
 
               {/* Multi-Group Switcher & Create New Group */}
@@ -1093,7 +1102,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 >
                   {(adminGroups.length > 0 ? adminGroups : [{ id: group.id, group_name: group.group_name, membersCount: members.length }]).map((ag: any) => (
                     <option key={ag.id} value={ag.id}>
-                      {ag.group_name} ({ag.membersCount ?? ag.member_limit ?? members.length} members)
+                      {safeText(ag.group_name)} ({ag.membersCount ?? ag.member_limit ?? members.length} members)
                     </option>
                   ))}
                 </select>
@@ -1652,20 +1661,20 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                           </div>
                         </td>
                         <td className="py-3 px-4 font-bold text-slate-900">
-                          {m.full_name}
+                          {safeText(m.full_name)}
                         </td>
                         <td className="py-3 px-4 font-mono text-slate-600">
-                          <div>{formatPhone(m.phone)}</div>
+                          <div>{formatPhone(safeText(m.phone) as string)}</div>
                         </td>
                         <td className="py-3 px-4 text-slate-600 font-mono text-[11px]">
-                          {m.bank_name ? `${m.bank_name} • ${m.account_number}` : 'Not provided'}
+                          {m.bank_name ? `${safeText(m.bank_name)} • ${safeText(m.account_number)}` : 'Not provided'}
                         </td>
                         <td className="py-3 px-4">
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-950 font-mono font-black text-xs border border-emerald-200">
-                            <span>{accNum}</span>
+                            <span>{safeText(accNum)}</span>
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(accNum);
+                                navigator.clipboard.writeText(String(accNum));
                                 setCopiedVaNumId(m.id);
                                 showToast(`Copied Account Number: ${accNum}`);
                                 setTimeout(() => setCopiedVaNumId(null), 2000);
@@ -1679,7 +1688,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         </td>
                         <td className="py-3 px-4">
                           <div className="inline-flex items-center gap-1 font-mono font-bold text-[#008751] text-xs">
-                            <span>{accName}</span>
+                            <span>{safeText(accName)}</span>
                             <button
                               onClick={() => {
                                 navigator.clipboard.writeText(accName);
@@ -1896,7 +1905,7 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         {new Date(e.date).toLocaleDateString('en-NG', { dateStyle: 'medium' })}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {e.member_name} (Pos {e.member_position})
+                        {safeText(e.member_name)} (Pos {safeText(e.member_position)})
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
                         {formatNaira(e.packed_amount)}
@@ -1912,11 +1921,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                          {e.status}
+                          {safeText(e.status)}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {e.reference}
+                        {safeText(e.reference)}
                       </td>
                     </tr>
                   ))
@@ -1982,13 +1991,13 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         {formatNaira(w?.gross_amount ?? w?.amount ?? 0)}
                       </td>
                       <td className="py-3 px-4 text-slate-700">
-                        {w?.bank_name || '-'}
+                        {safeText(w?.bank_name || '-')}
                       </td>
                       <td className="py-3 px-4 font-mono text-slate-700">
-                        {w?.account_number || '-'}
+                        {safeText(w?.account_number || '-')}
                       </td>
                       <td className="py-3 px-4 text-slate-700">
-                        {w?.account_name || w?.userName || group?.admin_name || '-'}
+                        {safeText(w?.account_name || w?.userName || group?.admin_name || '-')}
                       </td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
@@ -1998,11 +2007,11 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                             ? 'bg-blue-100 text-blue-800'
                             : 'bg-rose-100 text-rose-800'
                         }`}>
-                          {w?.status || 'completed'}
+                          {safeText(w?.status || 'completed')}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {w?.reference || w?.id || '-'}
+                        {safeText(w?.reference || w?.id || '-')}
                       </td>
                     </tr>
                   ))
@@ -2063,25 +2072,25 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                             ? 'bg-rose-50 text-rose-800'
                             : 'bg-blue-50 text-blue-800'
                         }`}>
-                          {t?.type || 'TRANSACTION'}
+                          {safeText(t?.type || 'TRANSACTION')}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-medium text-slate-800">
-                        {t?.description || (typeof t?.type === 'string' && t?.type.includes('withdraw') ? `Withdrawal - ${t?.source || 'Group'}` : 'Contribution')}
+                        {safeText(t?.description || (typeof t?.type === 'string' && t?.type.includes('withdraw') ? `Withdrawal - ${safeText(t?.source) || 'Group'}` : 'Contribution'))}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
-                        {t?.user_name || t?.userName || t?.destination || 'Member'}
+                        {safeText(t?.user_name || t?.userName || t?.destination || 'Member')}
                       </td>
                       <td className="py-3 px-4 font-bold text-slate-900">
                         {formatNaira(t?.gross_amount ?? t?.amount ?? 0)}
                       </td>
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 uppercase">
-                          {t?.status || 'completed'}
+                          {safeText(t?.status || 'completed')}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                        {t?.reference || t?.id || '-'}
+                        {safeText(t?.reference || t?.id || '-')}
                       </td>
                     </tr>
                   ))
@@ -2139,9 +2148,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#008751] block mb-1">
                   Destination Bank Account
                 </span>
-                <div className="font-bold text-slate-900">{adminBankDetails.bank_name || 'Bank Not Set'}</div>
-                <div className="font-mono text-slate-600">{adminBankDetails.account_number || 'No Account Number'}</div>
-                <div className="text-slate-500 text-[11px] mt-0.5">{adminBankDetails.account_name || group.admin_name}</div>
+                <div className="font-bold text-slate-900">{safeText(adminBankDetails.bank_name || 'Bank Not Set')}</div>
+                <div className="font-mono text-slate-600">{safeText(adminBankDetails.account_number || 'No Account Number')}</div>
+                <div className="text-slate-500 text-[11px] mt-0.5">{safeText(adminBankDetails.account_name || group.admin_name)}</div>
               </div>
 
               <div>
@@ -2472,9 +2481,9 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                 <span className="text-[11px] text-slate-500 font-medium block mb-1">Bank Payout Destination</span>
                 {selectedMemberDetails.bank_name ? (
                   <div>
-                    <div className="font-bold text-slate-900">{selectedMemberDetails.bank_name}</div>
-                    <div className="font-mono text-slate-700 font-bold">{selectedMemberDetails.account_number}</div>
-                    <div className="text-[11px] text-slate-500">{selectedMemberDetails.full_name}</div>
+                    <div className="font-bold text-slate-900">{safeText(selectedMemberDetails.bank_name)}</div>
+                    <div className="font-mono text-slate-700 font-bold">{safeText(selectedMemberDetails.account_number)}</div>
+                    <div className="text-[11px] text-slate-500">{safeText(selectedMemberDetails.full_name)}</div>
                   </div>
                 ) : (
                   <div className="text-slate-400 italic">No bank payout account provided yet.</div>
@@ -2488,10 +2497,10 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                   <ShieldCheck className="h-4 w-4 text-[#008751]" />
                   <span className="font-bold text-slate-800">
                     {selectedMemberDetails.verification_type ? `${selectedMemberDetails.verification_type}: ` : ''}
-                    {selectedMemberDetails.verification_masked || 'Verified ID On File'}
+                    {safeText(selectedMemberDetails.verification_masked || 'Verified ID On File')}
                   </span>
                   <span className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    {selectedMemberDetails.verification_status || 'Verified'}
+                    {safeText(selectedMemberDetails.verification_status || 'Verified')}
                   </span>
                 </div>
               </div>
@@ -2676,8 +2685,8 @@ export const GroupAdminDashboard: React.FC<GroupAdminDashboardProps> = ({
                         <Coins className="h-5 w-5" />
                       </div>
                       <div>
-                        <h3 className="font-extrabold text-slate-900 text-base">{currentGroupName}</h3>
-                        <p className="text-xs text-slate-500 font-medium">Member: <strong className="text-slate-800">{memberName}</strong></p>
+                        <h3 className="font-extrabold text-slate-900 text-base">{safeText(currentGroupName)}</h3>
+                        <p className="text-xs text-slate-500 font-medium">Member: <strong className="text-slate-800">{safeText(memberName)}</strong></p>
                       </div>
                     </div>
                     <button
