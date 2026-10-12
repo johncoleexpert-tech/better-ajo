@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, ArrowLeft, Users, Coins, Clock, Loader2, CheckCircle2, AlertTriangle, KeyRound, Mail, Lock, User, Eye, EyeOff, Phone } from 'lucide-react';
-import { UserProfile, GroupAjo } from '../types/index.js';
-import { NIGERIAN_BANKS, formatNaira, formatPhone } from '../lib/formatters.js';
-import { apiRequest } from '../lib/api.js';
+import { UserProfile, GroupAjo } from '../types/index';
+import { NIGERIAN_BANKS, formatNaira, formatPhone } from '../lib/formatters';
+import { apiRequest } from '../lib/api';
 
 interface GroupJoinProps {
   initialCode?: string;
