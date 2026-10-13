@@ -86,7 +86,7 @@ export default function App() {
 
       {view === 'personal-registration' && <PersonalRegistration onNavigate={setView as any} />}
       {view === 'personal-dashboard' && <PersonalDashboard />}
-      {view === 'group-creation' && <GroupCreation />}
+           {view === 'group-creation' && <GroupCreation onNavigate={setView as any} />}
       {view === 'group-join' && <GroupJoin onNavigate={setView as any} />}
       {view === 'group-dashboard' && <GroupDashboard />}
 
