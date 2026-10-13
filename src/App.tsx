@@ -8,6 +8,8 @@ import PersonalDashboard from './components/PersonalDashboard';
 import { GroupCreation } from './components/GroupCreation';
 import { GroupJoin } from './components/GroupJoin';
 import { GroupDashboard } from './components/GroupDashboard';
+import { GroupAdminDashboard } from './components/GroupAdminDashboard'; // <- ADDED SIR
+import { auth } from './lib/firebase';
 
 type View = 'home' | 'personal-registration' | 'personal-dashboard' | 'group-creation' | 'group-join' | 'group-dashboard' | 'super_admin' | 'group_admin_dashboard' | 'personal';
 
@@ -16,7 +18,6 @@ export default function App() {
   const [showAuth, setShowAuth] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
 
-  // Fix: Make body scroll work sir
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
@@ -86,9 +87,12 @@ export default function App() {
 
       {view === 'personal-registration' && <PersonalRegistration onNavigate={setView as any} />}
       {view === 'personal-dashboard' && <PersonalDashboard />}
-           {view === 'group-creation' && <GroupCreation onNavigate={setView as any} />}
+      {view === 'group-creation' && <GroupCreation onNavigate={setView as any} />}
       {view === 'group-join' && <GroupJoin onNavigate={setView as any} />}
       {view === 'group-dashboard' && <GroupDashboard />}
+
+      {/* THIS WAS MISSING SIR - NOW ADDED SIR 🟢 */}
+      {view === 'group_admin_dashboard' && <GroupAdminDashboard onBack={() => setView('home')} />}
 
       <Footer />
 
